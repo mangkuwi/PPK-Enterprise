@@ -88,7 +88,7 @@ export const templateFilter = z.object({
 });
 
 const NUMERIC: Record<string, [number, number]> = {
-  default_font_size: [6, 72], line_height: [0.8, 3], margin_top: [0, 80], margin_right: [0, 80], margin_bottom: [0, 80], margin_left: [0, 80]
+  default_font_size: [6, 72], line_height: [0.8, 3], margin_top: [0, 80], margin_right: [0, 80], margin_bottom: [0, 80], margin_left: [0, 80], auto_backup_keep: [1, 365]
 };
 
 export const settingsInput = z.record(z.string().max(3_000_000)).superRefine((v, ctx) => {

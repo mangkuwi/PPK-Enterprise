@@ -1,6 +1,9 @@
 import { app, BrowserWindow, Menu, dialog } from 'electron';
 import path from 'node:path';
-import { initDatabase } from './database';
+import fs from 'node:fs';
+import { defaultBackupDir, getDb, initDatabase } from './database';
+import { runAutoBackup } from './autoBackup';
+import { getSettings } from './repo';
 import { log } from './logger';
 import { createMainWindow, getMainWindow } from './window';
 import { registerIpc } from '../ipc';
@@ -34,8 +37,19 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc();
     if (app.isPackaged) Menu.setApplicationMenu(null);
     createMainWindow();
+    // Cek backup otomatis 1 menit setelah mulai lalu tiap jam; backup dibuat bila yang terakhir sudah lewat 24 jam.
+    const tick = () => autoBackup().catch((e) => log('error', 'Backup otomatis', e));
+    setTimeout(tick, 60_000); setInterval(tick, 3600_000);
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createMainWindow(); });
   });
 
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+}
+
+async function autoBackup() {
+  const s = getSettings(getDb());
+  if (s.auto_backup !== 'true') return;
+  const dir = s.backup_dir && fs.existsSync(s.backup_dir) ? s.backup_dir : defaultBackupDir();
+  const r = await runAutoBackup(getDb(), dir, Number(s.auto_backup_keep) || 14);
+  if (r) log('info', `Backup otomatis: ${r.path}${r.pruned.length ? `, dihapus ${r.pruned.length} lama` : ''}`);
 }

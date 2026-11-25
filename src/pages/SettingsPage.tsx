@@ -12,7 +12,7 @@ import { formatBytes, formatDateTime, readFileAsDataUrl } from '@/lib/utils';
 import { FONT_FAMILIES } from '@shared/settings';
 import type { BackupType } from '@shared/types';
 
-const BACKUP_LABEL: Record<string, string> = { full: 'Backup lengkap', templates: 'Template', documents: 'Arsip dokumen', 'pre-restore': 'Otomatis (sebelum restore)' };
+const BACKUP_LABEL: Record<string, string> = { full: 'Backup lengkap', templates: 'Template', documents: 'Arsip dokumen', 'pre-restore': 'Otomatis (sebelum restore)', auto: 'Otomatis harian' };
 
 export default function SettingsPage() {
   const { settings, update, refresh } = useSettings();
@@ -120,6 +120,12 @@ export default function SettingsPage() {
             <Button variant="destructive" onClick={restore} disabled={!!busy}>Restore dari Backup…</Button>
           </div>
           <p className="text-xs text-slate-500">Berkas backup (.zip) dapat dipindahkan ke komputer Windows lain lalu di-restore dari menu ini.</p>
+          <div className="flex flex-wrap items-end gap-4 rounded border border-slate-200 p-3">
+            <Switch checked={form.auto_backup === 'true'} onChange={(v) => set('auto_backup', String(v))} label="Backup lengkap otomatis setiap hari" />
+            <Field label="Simpan backup otomatis terakhir" hint="Yang lebih lama dihapus otomatis">
+              <Input type="number" min={1} max={365} className="w-28" value={form.auto_backup_keep ?? '14'} onChange={(e) => set('auto_backup_keep', e.target.value)} /></Field>
+            <p className="text-xs text-slate-500">Disimpan di subfolder "otomatis" pada folder backup. Setiap backup diperiksa keutuhannya (dibuka ulang dan dicek integritas) sebelum backup lama dihapus. Klik Simpan di atas setelah mengubah.</p>
+          </div>
           <table className="w-full text-sm"><thead className="text-left text-xs uppercase text-slate-500"><tr><th className="py-1">Waktu</th><th>Jenis</th><th>Ukuran</th><th>Lokasi</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {history.data?.map((h) => <tr key={h.id}><td className="py-1.5 whitespace-nowrap">{formatDateTime(h.created_at)}</td><td>{BACKUP_LABEL[h.type] ?? h.type}</td><td>{formatBytes(h.size_bytes)}</td><td className="break-all text-xs text-slate-500">{h.path}</td></tr>)}

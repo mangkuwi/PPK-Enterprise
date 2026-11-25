@@ -18,6 +18,8 @@ export const DEFAULT_SETTINGS: Settings = {
   show_page_number: 'false',
   export_dir: '',
   backup_dir: '',
+  auto_backup: 'true',
+  auto_backup_keep: '14',
   ai_enabled: 'false',
   ai_endpoint: '',
   ai_model: ''
