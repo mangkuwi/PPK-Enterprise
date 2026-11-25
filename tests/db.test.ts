@@ -9,6 +9,7 @@ import * as repo from '../electron/main/repo';
 import { commitFullRestore, createBackup, prepareFullRestore, readManifest, restorePartial } from '../electron/main/backup';
 import { generateContent } from '@shared/placeholder';
 import { DEFAULT_SETTINGS, layoutFromSettings } from '@shared/settings';
+import { settingsInput } from '../electron/ipc/schemas';
 import type { DocumentInput, TipTapNode } from '@shared/types';
 
 let dir: string;
@@ -48,6 +49,15 @@ describe('skema & seed', () => {
     const keys = full.fields.map((f) => f.key);
     expect(keys).toEqual(expect.arrayContaining(['NOMOR_SURAT', 'TUJUAN_SURAT', 'PENGIRIM', 'PERIHAL', 'TANGGAL', 'NAMA_PEJABAT', 'JABATAN_PEJABAT']));
     expect(full.fields.find((f) => f.key === 'SIFAT')).toMatchObject({ type: 'select', required: false });
+  });
+
+  it('pengaturan yang dibaca bisa disimpan kembali: penanda internal tidak ikut', () => {
+    seedDefaults(db);
+    repo.setSettings(db, { active_user_id: 'u1', ai_api_key_enc: 'rahasia' });
+    const s = repo.getSettings(db);
+    expect(Object.keys(s).sort()).toEqual(Object.keys(DEFAULT_SETTINGS).sort());
+    expect(settingsInput.safeParse(s).success).toBe(true);
+    expect(repo.getRawSetting(db, 'seeded_v1')).toBe('true');
   });
 
   it('migrasi memanggil beforeMigrate hanya untuk DB lama yang berisi data', () => {

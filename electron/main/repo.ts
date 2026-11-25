@@ -289,7 +289,8 @@ export function importDocuments(db: DB, payload: DocumentExport): number {
 // ---------- settings ----------
 export function getSettings(db: DB): Settings {
   const out: Settings = { ...DEFAULT_SETTINGS };
-  for (const r of db.prepare('SELECT key, value FROM settings').all() as Array<{ key: string; value: string }>) out[r.key] = r.value;
+  // Hanya kunci publik: penanda internal (seeded_v1, active_user_id, ...) dan kunci API terenkripsi tidak ikut ke renderer.
+  for (const r of db.prepare('SELECT key, value FROM settings').all() as Array<{ key: string; value: string }>) if (r.key in DEFAULT_SETTINGS) out[r.key] = r.value;
   return out;
 }
 export function setSettings(db: DB, values: Record<string, string>) {

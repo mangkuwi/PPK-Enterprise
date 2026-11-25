@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Page } from '@/components/layout/Page';
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,8 @@ const TABS = [['register', 'Format & nomor'], ['map', 'Pemetaan'], ['users', 'Pe
 type Tab = (typeof TABS)[number][0];
 
 export default function NumberingSettingsPage() {
-  const [tab, setTab] = useState<Tab>('register');
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => (TABS.some(([k]) => k === params.get('tab')) ? params.get('tab') as Tab : 'register'));
   const { isAdmin, actor } = useActor();
   return (
     <Page>
