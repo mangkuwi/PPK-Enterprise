@@ -8,6 +8,8 @@ import type { CompareView, DocxTemplateInfo, ImportReview, ImportSaveInput, Impo
 import type { AiAction } from '@shared/ai-guard';
 import type { PpkAccess, PpkRole, PpkUserRow } from '@shared/ppk/access';
 import type { MasterKey, MasterRow } from '@shared/ppk/master';
+import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, Warned } from '@shared/ppk/budget';
+import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow } from '@shared/ppk/contracts';
 import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
 import type {
   Actor, AppUser, AuditRow, CategoryMapRow, ConfigHistoryRow, DocNumbering, ImportCommitInput, ImportPreview, ImportRecordRow, ImportReport, ImportResult, NextInfo,
@@ -156,6 +158,24 @@ export const api = {
       update: (id: string, version: number, values: VendorInput) => call<Vendor>('ppk:vendors:update', { id, version, values }),
       setStatus: (id: string, status: VendorStatus, reason: string) => call<Vendor>('ppk:vendors:setStatus', { id, status, reason }),
       exportXlsx: (status: VendorStatus | 'semua' = 'semua') => call<SaveResult>('ppk:vendors:export', { status })
+    },
+    budget: {
+      list: (f: { fiscal_year_id?: string; include_inactive?: boolean } = {}) => call<BudgetLine[]>('ppk:budget:list', f),
+      create: (line: BudgetLineInput, pagu: BudgetAmountInput) => call<BudgetLine>('ppk:budget:create', { line, pagu }),
+      update: (id: string, version: number, description: string, is_active: boolean) => call<BudgetLine>('ppk:budget:update', { id, version, description, is_active }),
+      revise: (id: string, revision: BudgetAmountInput) => call<Warned<BudgetLine>>('ppk:budget:revise', { id, revision }),
+      versions: (id: string) => call<BudgetVersion[]>('ppk:budget:versions', { id })
+    },
+    contracts: {
+      list: (f: ContractFilter = {}) => call<Contract[]>('ppk:contracts:list', f),
+      get: (id: string) => call<ContractDetail>('ppk:contracts:get', { id }),
+      create: (v: ContractInput) => call<Contract>('ppk:contracts:create', v),
+      update: (id: string, version: number, values: ContractInput) => call<Contract>('ppk:contracts:update', { id, version, values }),
+      setStatus: (id: string, status: ContractStatus, reason: string) => call<Contract>('ppk:contracts:setStatus', { id, status, reason }),
+      addAddendum: (id: string, addendum: AddendumInput) => call<Warned<Contract>>('ppk:contracts:addAddendum', { id, addendum }),
+      voidAddendum: (id: string, reason: string) => call<Warned<Contract>>('ppk:contracts:voidAddendum', { id, reason }),
+      setSchedule: (id: string, rows: ScheduleRow[]) => call<Warned<Contract>>('ppk:contracts:setSchedule', { id, rows }),
+      setAllocations: (id: string, rows: AllocationRow[]) => call<Warned<Contract>>('ppk:contracts:setAllocations', { id, rows })
     }
   },
   ai: {

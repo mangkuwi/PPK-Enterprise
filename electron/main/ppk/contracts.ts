@@ -1,14 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { Actor } from '@shared/numbering';
 import { formatRupiah } from '@shared/ppk/money';
-import type { Warned } from '@shared/ppk/budget';
+import { budgetLabel, type Warned } from '@shared/ppk/budget';
 import {
   CONTRACT_NEXT, CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, type Addendum, type AddendumInput, type AllocationRow, type AllocationView,
   type Contract, type ContractDetail, type ContractFilter, type ContractInput, type ContractStatus, type ScheduleRow
 } from '@shared/ppk/contracts';
 import type { PpkStore } from './store';
 import { PpkError, ppkAudit, requirePpk } from './access';
-import { budgetLabel } from './budget';
 import { constraintError, date, rupiah, text } from './validate';
 
 const now = () => new Date().toISOString();
@@ -44,6 +43,7 @@ export async function listContracts(s: PpkStore, actor: Actor, f: ContractFilter
     const q = `%${f.search.trim().toLowerCase().replace(/[\\%_]/g, (x) => `\\${x}`)}%`;
     w.push(`(lower(c.contract_number) LIKE ? ESCAPE '\\' OR lower(c.description) LIKE ? ESCAPE '\\' OR lower(v.name) LIKE ? ESCAPE '\\')`); p.push(q, q, q);
   }
+  // shortcut: daftar dibatasi 5000 kontrak per filter tanpa paging, tambah paging bila satu TA melebihi itu.
   return (await s.all<Contract>(`${SELECT} ${w.length ? `WHERE ${w.join(' AND ')}` : ''} ORDER BY fy.year DESC, v.name, c.start_date LIMIT 5000`, p)).map(withLatest);
 }
 
@@ -219,6 +219,7 @@ export async function setSchedule(s: PpkStore, actor: Actor, contractId: string,
  * Ganti seluruh pembebanan kontrak ke baris anggaran. Ditolak bila total melebihi nilai kontrak terakhir atau baris anggaran
  * beda tahun/nonaktif. Pagu yang terlampaui hanya diperingatkan (keputusan PPK, jawaban no. 4).
  */
+// shortcut: jadwal dan pembebanan diganti utuh tanpa kunci versi (simpan terakhir menang, tercatat di audit); tambah versi bila multiuser PostgreSQL.
 export async function setAllocations(s: PpkStore, actor: Actor, contractId: string, rows: AllocationRow[]): Promise<Warned<Contract>> {
   const ids = new Set<string>();
   const clean = rows.map((r) => {

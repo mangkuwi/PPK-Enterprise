@@ -18,6 +18,8 @@ import RegisterPage from './pages/RegisterPage';
 import RegisterImportPage from './pages/RegisterImportPage';
 import VendorsPage from './pages/ppk/VendorsPage';
 import PpkSettingsPage from './pages/ppk/PpkSettingsPage';
+import BudgetPage from './pages/ppk/BudgetPage';
+import ContractsPage from './pages/ppk/ContractsPage';
 
 export default function App() {
   return (
@@ -44,6 +46,8 @@ export default function App() {
           <Route path="/penomoran/pengaturan" element={<NumberingSettingsPage />} />
           <Route path="/penomoran/impor" element={<RegisterImportPage />} />
           <Route path="/register/:slug" element={<RegisterPage />} />
+          <Route path="/ppk/anggaran" element={<BudgetPage />} />
+          <Route path="/ppk/kontrak" element={<ContractsPage />} />
           <Route path="/ppk/penyedia" element={<VendorsPage />} />
           <Route path="/ppk/pengaturan" element={<PpkSettingsPage />} />
           <Route path="/settings" element={<SettingsPage />} />

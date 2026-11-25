@@ -22,9 +22,6 @@ const SELECT = `SELECT bl.*, fy.year, u.name AS unit_name, p.code AS program_cod
   JOIN ppk_budget_accounts ba ON ba.id = bl.budget_account_id JOIN ppk_funding_sources fs ON fs.id = bl.funding_source_id`;
 const withSisa = (r: BudgetLine): BudgetLine => ({ ...r, sisa: r.pagu_terakhir - r.allocated });
 
-export const budgetLabel = (b: Pick<BudgetLine, 'mak' | 'output_detail' | 'source_code'> & { kind: string }) =>
-  `${b.mak}${b.output_detail ? ` · ${b.output_detail}` : ''} · ${b.source_code} · ${BUDGET_KIND_LABEL[b.kind as keyof typeof BUDGET_KIND_LABEL] ?? b.kind}`;
-
 export async function listBudgetLines(s: PpkStore, actor: Actor, f: { fiscal_year_id?: string; include_inactive?: boolean } = {}): Promise<BudgetLine[]> {
   await requirePpk(s, actor, 'read');
   const w: string[] = []; const p: string[] = [];

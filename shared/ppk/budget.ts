@@ -19,3 +19,6 @@ export interface BudgetLine extends BudgetLineInput {
 export interface BudgetVersion { id: string; version_no: number; kind: 'awal' | 'revisi'; amount: number; effective_date: string; source_document: string; notes: string; created_by: string; created_at: string }
 
 export interface Warned<T> { data: T; warnings: string[] }
+
+export const budgetLabel = (b: Pick<BudgetLine, 'mak' | 'output_detail' | 'source_code'> & { kind: string }) =>
+  `${b.mak}${b.output_detail ? ` · ${b.output_detail}` : ''} · ${b.source_code} · ${BUDGET_KIND_LABEL[b.kind as BudgetKind] ?? b.kind}`;

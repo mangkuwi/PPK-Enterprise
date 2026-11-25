@@ -21,6 +21,9 @@ export const CHANNELS = [
   'numbering:importPick', 'numbering:importPreview', 'numbering:importValidate', 'numbering:importCommit', 'numbering:imports', 'numbering:exportXlsx', 'numbering:exportPdf',
   'ppk:access', 'ppk:users', 'ppk:setRole', 'ppk:master:list', 'ppk:master:save', 'ppk:taxRates',
   'ppk:vendors:list', 'ppk:vendors:get', 'ppk:vendors:similar', 'ppk:vendors:create', 'ppk:vendors:update', 'ppk:vendors:setStatus', 'ppk:vendors:export',
+  'ppk:budget:list', 'ppk:budget:create', 'ppk:budget:update', 'ppk:budget:revise', 'ppk:budget:versions',
+  'ppk:contracts:list', 'ppk:contracts:get', 'ppk:contracts:create', 'ppk:contracts:update', 'ppk:contracts:setStatus',
+  'ppk:contracts:addAddendum', 'ppk:contracts:voidAddendum', 'ppk:contracts:setSchedule', 'ppk:contracts:setAllocations',
   'ai:run'
 ] as const;
 export type Channel = (typeof CHANNELS)[number];
