@@ -30,8 +30,8 @@ describe('laporan prognosis', () => {
   const base: ReportInput = {
     year: 2026, cutoff: '2026-03', extend: false,
     lines: [
-      { id: 'blu', label: 'BLU', source_code: 'BLU', kind: 'dipa', pagu_terakhir: 1000, allocated: 0, billed: 0, paid: 0 },
-      { id: 'rm', label: 'RM', source_code: 'RM', kind: 'dipa', pagu_terakhir: 350, allocated: 0, billed: 300, paid: 200 }
+      { id: 'blu', label: 'BLU', mak: 'M', detail: 'D', source_code: 'BLU', kind: 'dipa', pagu_terakhir: 1000, allocated: 0, billed: 0, paid: 0 },
+      { id: 'rm', label: 'RM', mak: 'M', detail: 'D', source_code: 'RM', kind: 'dipa', pagu_terakhir: 350, allocated: 0, billed: 300, paid: 200 }
     ],
     actuals: [{ budget_line_id: 'rm', month: '2026-01', amount: 100 }, { budget_line_id: 'rm', month: '2026-02', amount: 200 }],
     contracts: [c(), c({ id: 'k2', contract_number: 'KTR-2', sisa_kontrak: 50, effective_end: '2026-04-30' })],

@@ -56,12 +56,12 @@ export function contractEstimate(c: ForecastContract, schedule: Record<string, n
 }
 
 export interface ForecastLine {
-  id: string; label: string; source_code: string; kind: string; pagu_terakhir: number; allocated: number; billed: number; paid: number;
+  id: string; label: string; mak: string; detail: string; source_code: string; kind: string; pagu_terakhir: number; allocated: number; billed: number; paid: number;
 }
 export interface ReportMonth { month: string; actual: number; estimate: number }
 export interface ReportLine {
   /** null = estimasi kontrak yang belum punya baris anggaran (belum ada tagihan atau pembebanan). */
-  id: string | null; label: string; source_code: string; kind: string;
+  id: string | null; label: string; mak: string; detail: string; source_code: string; kind: string;
   pagu: number; allocated: number; billed: number; paid: number; months: ReportMonth[];
   estimate: number; prognosis: number;
   /** Prognosis − pagu: positif = kekurangan pagu, negatif = sisa. */
@@ -91,7 +91,7 @@ export function buildReport(i: ReportInput): PpkReport {
   const months = monthRange(`${i.year}-01`, `${i.year}-12`);
   const yearEnd = `${i.year}-12`;
   const row = (l: ForecastLine | null): ReportLine => ({
-    id: l?.id ?? null, label: l?.label ?? 'Belum terbebankan ke baris anggaran', source_code: l?.source_code ?? '', kind: l?.kind ?? '',
+    id: l?.id ?? null, label: l?.label ?? 'Belum terbebankan ke baris anggaran', mak: l?.mak ?? '', detail: l?.detail ?? 'Estimasi kontrak yang belum punya tagihan atau pembebanan', source_code: l?.source_code ?? '', kind: l?.kind ?? '',
     pagu: l?.pagu_terakhir ?? 0, allocated: l?.allocated ?? 0, billed: l?.billed ?? 0, paid: l?.paid ?? 0,
     months: months.map((month) => ({ month, actual: 0, estimate: 0 })), estimate: 0, prognosis: 0, kebutuhan: 0
   });

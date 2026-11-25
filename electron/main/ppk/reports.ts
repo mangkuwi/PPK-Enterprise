@@ -29,7 +29,7 @@ export async function ppkReport(s: PpkStore, actor: Actor, fiscal_year_id: strin
     [fiscal_year_id, fiscal_year_id]);
   return buildReport({
     year: fy.year, cutoff, extend, actuals, schedules, contractLines,
-    lines: lines.map((l) => ({ id: l.id, label: budgetLabel(l), source_code: l.source_code, kind: l.kind, pagu_terakhir: l.pagu_terakhir, allocated: l.allocated, billed: l.billed, paid: l.paid })),
+    lines: lines.map((l) => ({ id: l.id, label: budgetLabel(l), mak: l.mak, detail: l.output_detail, source_code: l.source_code, kind: l.kind, pagu_terakhir: l.pagu_terakhir, allocated: l.allocated, billed: l.billed, paid: l.paid })),
     contracts, bills
   });
 }
