@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+body { @apply bg-slate-100 text-slate-900 antialiased; font-family: Inter, 'Segoe UI', Arial, sans-serif; overflow: hidden; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { @apply rounded bg-slate-300; }
+::-webkit-scrollbar-thumb:hover { @apply bg-slate-400; }
+
+/* ---------- Kertas A4 pada editor ---------- */
+.paper-wrap { @apply flex-1 overflow-auto bg-slate-300 py-6; }
+.paper {
+  width: 210mm; min-height: 297mm; margin: 0 auto; box-sizing: border-box; background: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .25); color: #000;
+  /* garis putus-putus penanda batas halaman (297mm) */
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(297mm - 2px), #94a3b8 calc(297mm - 2px), #94a3b8 297mm);
+}
+.paper .ProseMirror { outline: none; min-height: 240mm; }
+.paper .ProseMirror p { margin: 0 0 .5em; }
+.paper .ProseMirror h1 { font-size: 1.5em; font-weight: 700; margin: 0 0 .5em; }
+.paper .ProseMirror h2 { font-size: 1.25em; font-weight: 700; margin: 0 0 .5em; }
+.paper .ProseMirror h3 { font-size: 1.1em; font-weight: 700; margin: 0 0 .5em; }
+.paper .ProseMirror ul { list-style: disc; padding-left: 1.6em; margin: 0 0 .5em; }
+.paper .ProseMirror ol { list-style: decimal; padding-left: 1.6em; margin: 0 0 .5em; }
+.paper .ProseMirror img { display: inline-block; max-width: 100%; }
+.paper .ProseMirror img.ProseMirror-selectednode { outline: 2px solid #3f63a0; }
+.paper .ProseMirror table { border-collapse: collapse; table-layout: fixed; width: 100%; margin: 0 0 .5em; overflow: hidden; }
+.paper .ProseMirror td, .paper .ProseMirror th { border: 1px solid #000; padding: 3px 6px; vertical-align: top; position: relative; word-wrap: break-word; }
+.paper .ProseMirror th { background: #e5e7eb; text-align: left; }
+.paper .ProseMirror td p, .paper .ProseMirror th p { margin: 0 0 .15em; }
+.paper .ProseMirror table[data-borderless='true'] td, .paper .ProseMirror table[data-borderless='true'] th { border: 1px dashed #e2e8f0; background: none; }
+.paper .ProseMirror .selectedCell:after { content: ''; position: absolute; inset: 0; background: rgba(63, 99, 160, .18); pointer-events: none; }
+.paper .ProseMirror .column-resize-handle { position: absolute; right: -2px; top: 0; bottom: 0; width: 4px; background: #3f63a0; pointer-events: none; }
+.paper .ProseMirror.resize-cursor { cursor: col-resize; }
+.paper .ProseMirror .tableWrapper { overflow-x: auto; }
+.page-break { border-top: 2px dashed #64748b; margin: 14px 0; position: relative; height: 0; }
+.page-break::after { content: 'Pemisah halaman'; position: absolute; top: -9px; left: 50%; transform: translateX(-50%); background: #fff; padding: 0 8px; font: 10px 'Segoe UI', sans-serif; color: #64748b; }
+.ph-unfilled { background: #fef08a; border-bottom: 2px solid #eab308; border-radius: 2px; }
+.search-match { background: #bfdbfe; }
+.search-current { background: #fb923c; }

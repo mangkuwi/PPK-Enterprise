@@ -1,0 +1,24 @@
+/** Daftar putih channel IPC. Dipakai oleh preload (pembatasan) dan renderer (tipe). */
+export const CHANNELS = [
+  'app:info', 'app:showInFolder',
+  'stats:get', 'categories:list',
+  'templates:list', 'templates:get', 'templates:save', 'templates:delete', 'templates:duplicate',
+  'templates:favorite', 'templates:export', 'templates:import', 'templates:importDocx',
+  'documents:list', 'documents:get', 'documents:save', 'documents:delete', 'documents:duplicate',
+  'documents:setStatus', 'documents:versions', 'documents:version', 'documents:restoreVersion',
+  'export:docx', 'export:pdf', 'export:print',
+  'backup:create', 'backup:restore', 'backup:history',
+  'settings:get', 'settings:set', 'settings:chooseDir', 'settings:setAiKey',
+  'importer:upload', 'importer:list', 'importer:review', 'importer:saveReview', 'importer:reanalyze', 'importer:saveTemplate', 'importer:compare',
+  'importer:restoreSource', 'importer:delete', 'importer:saveOriginal', 'importer:docxInfo', 'importer:generate', 'importer:regenerate',
+  'importer:exportDocx', 'importer:exportPdf', 'importer:capabilities', 'importer:validation', 'importer:aiDraft', 'importer:visualCompare', 'importer:restoreVersion', 'importer:variantDecision', 'importer:variantPdf', 'importer:variantRegistry',
+  'numbering:whoami', 'numbering:login', 'numbering:logout', 'numbering:users', 'numbering:createUser', 'numbering:updateUser', 'numbering:setPin',
+  'numbering:summary', 'numbering:registers', 'numbering:updateRegister', 'numbering:configHistory', 'numbering:next', 'numbering:setNext',
+  'numbering:records', 'numbering:record', 'numbering:createManual', 'numbering:updateMeta', 'numbering:void', 'numbering:release', 'numbering:issue', 'numbering:search',
+  'numbering:forTemplate', 'numbering:assign', 'numbering:releaseDraft', 'numbering:available', 'numbering:documentInfo',
+  'numbering:previewBatch', 'numbering:generateBatch', 'numbering:batches', 'numbering:migrationReview', 'numbering:resolveLegacy',
+  'numbering:mappings', 'numbering:setCategoryMap', 'numbering:setTemplateMap', 'numbering:audit',
+  'numbering:importPick', 'numbering:importPreview', 'numbering:importValidate', 'numbering:importCommit', 'numbering:imports', 'numbering:exportXlsx', 'numbering:exportPdf',
+  'ai:run'
+] as const;
+export type Channel = (typeof CHANNELS)[number];
