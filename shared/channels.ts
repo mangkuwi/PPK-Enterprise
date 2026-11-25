@@ -25,7 +25,7 @@ export const CHANNELS = [
   'ppk:contracts:list', 'ppk:contracts:get', 'ppk:contracts:create', 'ppk:contracts:update', 'ppk:contracts:setStatus',
   'ppk:contracts:addAddendum', 'ppk:contracts:voidAddendum', 'ppk:contracts:setSchedule', 'ppk:contracts:setAllocations',
   'ppk:bills:list', 'ppk:bills:get', 'ppk:bills:save', 'ppk:bills:setStatus', 'ppk:bills:addPayment', 'ppk:bills:voidPayment',
-  'ppk:import:pick', 'ppk:import:run',
+  'ppk:import:pick', 'ppk:import:run', 'ppk:reports:get', 'ppk:reports:export',
   'ai:run'
 ] as const;
 export type Channel = (typeof CHANNELS)[number];

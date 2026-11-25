@@ -11,6 +11,7 @@ import { currentActor, peekActor } from '../main/numbering/session';
 import { readXlsx, writeXlsx, type Sheet } from '../main/numbering/xlsx';
 import { getMainWindow } from '../main/window';
 import { runPpkImport } from '../main/ppk/import';
+import { ppkReport, reportSheets } from '../main/ppk/reports';
 import { sqliteStore } from '../main/ppk/store';
 import { listPpkUsers, ppkAccess, setPpkRole } from '../main/ppk/access';
 import { listMaster, listTaxRates, saveMaster } from '../main/ppk/master';
@@ -131,6 +132,13 @@ export function registerPpkHandlers() {
     const r = await runPpkImport(st(), actor(), f.sheets, { fiscal_year_id, program_id, file_name: f.name }, commit);
     if (commit) importFiles.delete(token);
     return r;
+  });
+
+  const reportArgs = z.object({ fiscal_year_id: S.id, cutoff: z.string().regex(/^\d{4}-\d{2}$/), extend: z.boolean() });
+  handle('ppk:reports:get', reportArgs, (a) => ppkReport(st(), actor(), a.fiscal_year_id, a.cutoff, a.extend));
+  handle('ppk:reports:export', reportArgs, async (a) => {
+    const r = await ppkReport(st(), actor(), a.fiscal_year_id, a.cutoff, a.extend);
+    return saveFile(writeXlsx(reportSheets(r)), `Prognosis-PPK-${r.year}-sd-${r.cutoff}.xlsx`, 'xlsx');
   });
 }
 

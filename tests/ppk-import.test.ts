@@ -6,6 +6,7 @@ import { setPin } from '../electron/main/numbering/users';
 import { sqliteStore, type PpkStore } from '../electron/main/ppk/store';
 import { saveMaster } from '../electron/main/ppk/master';
 import { runPpkImport } from '../electron/main/ppk/import';
+import { ppkReport } from '../electron/main/ppk/reports';
 import { parseIdDate, parsePpkWorkbook, splitNumberDate, type Cell, type ImportSheet } from '@shared/ppk/import';
 import type { Actor } from '@shared/numbering';
 
@@ -111,6 +112,16 @@ describe('impor ke database', () => {
     const r = await run(true);
     expect(r.counts).toMatchObject({ contracts: 0, contracts_existing: 2, budget_lines: 0, budget_lines_existing: 3, bills_verified: 0 });
     expect([n('ppk_bills'), n('ppk_vendors'), n('ppk_budget_lines')]).toEqual([bills, 2, 3]);
+  });
+
+  it('laporan prognosis dari data impor: aktual + sisa kontrak dibagi ke bulan tersisa', async () => {
+    await run(true);
+    const r = await ppkReport(s, admin, fy, '2026-03', false);
+    expect(r.total).toMatchObject({ pagu: 2_800_000_000, billed: 1_650_000_000, estimate: 250_000_000, prognosis: 1_900_000_000, kebutuhan: -900_000_000 });
+    const rmLine = r.lines.find((l) => l.source_code === 'RM')!;
+    expect(rmLine.months.slice(0, 6).map((m) => m.actual + m.estimate)).toEqual([400_000_000, 800_000_000, 0, 433_333_333, 83_333_333, 83_333_334]);
+    expect(r.bills).toMatchObject({ draft: 1, unpaid: 4 });
+    await expect(ppkReport(s, admin, fy, '2025-12', false)).rejects.toThrow(/tahun 2026/);
   });
 
   it('tagihan yang gagal tidak membatalkan sisa impor', async () => {

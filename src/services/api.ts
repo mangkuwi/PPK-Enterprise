@@ -9,6 +9,7 @@ import type { AiAction } from '@shared/ai-guard';
 import type { PpkAccess, PpkRole, PpkUserRow } from '@shared/ppk/access';
 import type { MasterKey, MasterRow } from '@shared/ppk/master';
 import type { PpkImportReport } from '@shared/ppk/import';
+import type { PpkReport } from '@shared/ppk/forecast';
 import type { Bill, BillDetail, BillFilter, BillInput, PaymentInput } from '@shared/ppk/bills';
 import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, Warned } from '@shared/ppk/budget';
 import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow } from '@shared/ppk/contracts';
@@ -190,6 +191,10 @@ export const api = {
     import: {
       pick: () => call<{ canceled: true } | { canceled: false; token: string; file_name: string }>('ppk:import:pick', {}),
       run: (token: string, fiscal_year_id: string, program_id: string, commit: boolean) => call<PpkImportReport>('ppk:import:run', { token, fiscal_year_id, program_id, commit })
+    },
+    reports: {
+      get: (fiscal_year_id: string, cutoff: string, extend: boolean) => call<PpkReport>('ppk:reports:get', { fiscal_year_id, cutoff, extend }),
+      exportXlsx: (fiscal_year_id: string, cutoff: string, extend: boolean) => call<SaveResult>('ppk:reports:export', { fiscal_year_id, cutoff, extend })
     }
   },
   ai: {
