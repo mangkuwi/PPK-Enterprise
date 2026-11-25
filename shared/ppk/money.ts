@@ -12,6 +12,9 @@ export function formatRupiah(n: number): string {
   return `${n < 0 ? '-' : ''}Rp${fmt.format(Math.abs(n))}`;
 }
 
+/** Untuk tampilan: nilai bukan rupiah bulat (kosong, NaN, isian setengah jadi) → "" alih-alih galat yang menjatuhkan halaman. */
+export const rupiahText = (n: unknown): string => (typeof n === 'number' && Number.isSafeInteger(n) ? formatRupiah(n) : '');
+
 /**
  * Teks isian pengguna → rupiah. Menerima "Rp 1.234.567", "1.234.567,00", "1234567", "-5.000".
  * Menolak sen selain ",00" dan teks lain, agar salah ketik tidak diam-diam dibulatkan.

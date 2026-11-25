@@ -5,7 +5,7 @@ import { Field, Input, Textarea } from '@/components/ui/form';
 import { useFeedback } from '@/components/ui/feedback';
 import { useAsync } from '@/hooks/useAsync';
 import { api } from '@/services/api';
-import { formatRupiah, parseRupiah } from '@shared/ppk/money';
+import { parseRupiah, rupiahText } from '@shared/ppk/money';
 
 const tryParse = (t: string) => { try { return parseRupiah(t); } catch { return null; } };
 
@@ -13,19 +13,19 @@ const tryParse = (t: string) => { try { return parseRupiah(t); } catch { return 
 export function RupiahInput({ value, onChange, allowNegative = false, ...p }: {
   value: number | null; onChange: (v: number | null) => void; allowNegative?: boolean; 'aria-label'?: string; autoFocus?: boolean; className?: string;
 }) {
-  const [text, setText] = useState(value == null ? '' : formatRupiah(value));
-  useEffect(() => { if (value != null && Number.isSafeInteger(value) && tryParse(text) !== value) setText(formatRupiah(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [text, setText] = useState(rupiahText(value));
+  useEffect(() => { if (rupiahText(value) && tryParse(text) !== value) setText(rupiahText(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   const n = text.trim() ? tryParse(text) : null;
   const bad = !!text.trim() && (n == null || (!allowNegative && n < 0));
   return <>
     <Input {...p} inputMode="numeric" value={text} aria-invalid={bad}
       onChange={(e) => { setText(e.target.value); const v = tryParse(e.target.value); onChange(v != null && (allowNegative || v >= 0) ? v : null); }}
-      onBlur={() => { if (n != null && !bad) setText(formatRupiah(n)); }} className={`text-right tabular-nums ${p.className ?? ''}`} />
+      onBlur={() => { if (n != null && !bad) setText(rupiahText(n)); }} className={`text-right tabular-nums ${p.className ?? ''}`} />
     {bad && <p className="mt-1 text-xs text-red-600">Isi rupiah bulat{allowNegative ? '' : ' tanpa minus'}, mis. 1.250.000.</p>}
   </>;
 }
 
-export const rp = (n: number | null | undefined) => (n == null ? '—' : formatRupiah(n));
+export const rp = (n: number | null | undefined) => rupiahText(n) || '—';
 
 /** Tampilkan peringatan dari server (bukan galat) satu per satu. */
 export function useWarnings() {

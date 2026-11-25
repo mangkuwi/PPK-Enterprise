@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { divRound, formatRupiah, parseRupiah, terbilang } from '../shared/ppk/money';
+import { divRound, formatRupiah, parseRupiah, rupiahText, terbilang } from '../shared/ppk/money';
 import { proposeTax } from '../shared/ppk/tax';
 
 const RATES = { ppn_bp: 1100, pph23_bp: 200 };
 
 describe('rupiah', () => {
+  it('rupiahText tidak pernah melempar galat untuk isian setengah jadi', () => {
+    expect([NaN, null, undefined, 1.5, '12', Infinity, 2 ** 60].map(rupiahText)).toEqual(['', '', '', '', '', '', '']);
+    expect(rupiahText(0)).toBe('Rp0');
+    expect(rupiahText(-1250000)).toBe('-Rp1.250.000');
+  });
   it('format dan parse', () => {
     expect(formatRupiah(1890127634275)).toBe('Rp1.890.127.634.275');
     expect(formatRupiah(-5000)).toBe('-Rp5.000');

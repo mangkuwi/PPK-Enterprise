@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Component, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Empty } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,23 @@ export function PpkGate({ children }: { children: ReactNode }) {
         <Link to="/penomoran/pengaturan?tab=users" className="font-semibold underline">Atur PIN sekarang</Link>
       </div>
     )}
-    {children}
+    <PpkErrorBoundary>{children}</PpkErrorBoundary>
   </>;
+}
+
+/** Galat tak terduga di halaman PPK tidak boleh mengosongkan seluruh aplikasi; data tetap aman di database. */
+class PpkErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error) { console.error('[PPK]', error); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <Empty>
+        <p className="mb-1 font-medium text-red-700">Halaman ini mengalami galat: {this.state.error.message}</p>
+        <p className="mb-3 text-sm">Data yang sudah tersimpan tidak terpengaruh. Kirim pesan ini ke pengembang bila terulang.</p>
+        <Button onClick={() => this.setState({ error: null })}>Coba lagi</Button>
+      </Empty>
+    );
+  }
 }
