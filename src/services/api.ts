@@ -10,6 +10,7 @@ import type { PpkAccess, PpkRole, PpkUserRow } from '@shared/ppk/access';
 import type { MasterKey, MasterRow } from '@shared/ppk/master';
 import type { PpkImportReport } from '@shared/ppk/import';
 import type { PpkReport } from '@shared/ppk/forecast';
+import type { RelatedDocument } from '@shared/ppk/documents';
 import type { ReconRow, Sp2dInput, Sp2dRecord } from '@shared/ppk/sp2d';
 import type { Bill, BillDetail, BillFilter, BillInput, PaymentInput } from '@shared/ppk/bills';
 import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, PlanRow, Warned } from '@shared/ppk/budget';
@@ -206,7 +207,8 @@ export const api = {
       report: (fiscal_year_id: string) => call<{ records: Sp2dRecord[]; rows: ReconRow[] }>('ppk:sp2d:report', { fiscal_year_id }),
       add: (fiscal_year_id: string, record: Sp2dInput) => call<Sp2dRecord>('ppk:sp2d:add', { fiscal_year_id, record }),
       void: (id: string, reason: string) => call<void>('ppk:sp2d:void', { id, reason })
-    }
+    },
+    relatedDocuments: (numbers: string[]) => call<RelatedDocument[]>('ppk:documents:related', { numbers })
   },
   ai: {
     run: (action: AiAction, text: string) => call<{ text: string; warnings: string[] }>('ai:run', { action, text, consent: true })

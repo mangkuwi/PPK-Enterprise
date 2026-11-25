@@ -12,6 +12,10 @@ import { usePpkAccess } from '@/features/ppk/usePpkAccess';
 import { PpkGate } from '@/features/ppk/PpkGate';
 import { ReasonDialog, RupiahInput, rp, useFiscalYears, useWarnings } from '@/features/ppk/inputs';
 import { api } from '@/services/api';
+import { RelatedDocs } from '@/features/ppk/RelatedDocs';
+import { Num, UNITS } from '@/features/ppk/Num';
+import { billMatrix } from '@shared/ppk/matrix';
+import { MONTH_LABEL } from '@shared/ppk/forecast';
 import { budgetLabel } from '@shared/ppk/budget';
 import { proposeTax, type FakturCode } from '@shared/ppk/tax';
 import {
@@ -31,6 +35,7 @@ export default function BillsPage() {
   const list = useAsync(() => (fyId ? api.ppk.bills.list({ fiscal_year_id: fyId, status, search: q }) : Promise.resolve([])), [fyId, status, q]);
   const [form, setForm] = useState<Bill | 'new' | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [view, setView] = useState<'daftar' | 'matriks'>('daftar');
   const rows = list.data ?? [];
   const live = rows.filter((b) => b.status !== 'dibatalkan');
   const sum = (k: 'total' | 'net' | 'paid') => live.reduce((a, b) => a + b[k], 0);
@@ -49,10 +54,15 @@ export default function BillsPage() {
             {Object.entries(BILL_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
           <Input className="max-w-sm" placeholder="Cari nomor tagihan, kontrak, atau penyedia" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Cari tagihan" />
+          <div className="ml-auto flex rounded-md border border-slate-300 bg-white p-0.5 text-sm" role="tablist" aria-label="Tampilan">
+            {(['daftar', 'matriks'] as const).map((v) => <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)}
+              className={cn('rounded px-3 py-1', view === v ? 'bg-navy-800 text-white' : 'text-slate-600 hover:bg-slate-100')}>{v === 'daftar' ? 'Daftar' : 'Matriks bulanan'}</button>)}
+          </div>
         </div>
+        {view === 'matriks' && fyId && <BillMatrix fiscalYearId={fyId} year={Number(years.find((y) => String(y.id) === fyId)?.year)} bills={rows} onOpen={setOpen} />}
         {list.error && <Empty>{list.error}</Empty>}
-        {list.data && !rows.length && <Empty>Belum ada tagihan{search ? ' yang cocok' : ''} untuk tahun ini.</Empty>}
-        {!!rows.length && (
+        {view === 'daftar' && list.data && !rows.length && <Empty>Belum ada tagihan{search ? ' yang cocok' : ''} untuk tahun ini.</Empty>}
+        {view === 'daftar' && !!rows.length && (
           <Card className="overflow-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-xs text-slate-600"><tr>
@@ -266,6 +276,7 @@ function BillDetailDialog({ id, canWrite, onClose, onEdit, onChanged }: { id: st
               {row(<strong>Diterima penyedia</strong>, <strong>{rp(b.net)}</strong>)}
             </div>
           </dl>
+          <RelatedDocs numbers={[b.ba_number, b.bill_number]} />
           <h3 className="mb-2 mt-5 text-sm font-semibold text-navy-900">Sumber dana dan pembayaran</h3>
           <div className="space-y-3">{d.data.funding.map((f) => <FundingPayments key={f.id} f={f} canPay={canWrite && b.status === 'diverifikasi'} onChanged={refresh} />)}</div>
           {b.status === 'draft' && <p className="mt-3 text-xs text-slate-500">Pembayaran dapat dicatat setelah tagihan diverifikasi.</p>}
@@ -326,4 +337,60 @@ function FundingPayments({ f, canPay, onChanged }: { f: BillFundingView; canPay:
         onSubmit={async (r) => { try { await api.ppk.bills.voidPayment(voiding, r); toast('Pembayaran dibatalkan.', 'success'); setVoiding(null); onChanged(); } catch (e) { toast(errMsg(e), 'error'); } }} />}
     </Card>
   );
+}
+
+const CELL_TONE: Record<string, string> = {
+  Lunas: 'bg-emerald-50 text-emerald-900', 'Dibayar sebagian': 'bg-amber-50 text-amber-900', 'Menunggu bayar': 'bg-sky-50 text-sky-900', Draf: 'bg-slate-100 text-slate-600'
+};
+
+/** Kontrak × bulan layanan: nilai tagihan per bulan dengan warna tahap pembayaran; klik sel untuk membuka tagihan. */
+function BillMatrix({ fiscalYearId, year, bills, onOpen }: { fiscalYearId: string; year: number; bills: Bill[]; onOpen: (id: string) => void }) {
+  const contracts = useAsync(() => api.ppk.contracts.list({ fiscal_year_id: fiscalYearId }), [fiscalYearId]);
+  const [unit, setUnit] = useState<number>(1e6);
+  const rows = useMemo(() => billMatrix(contracts.data ?? [], bills, year), [contracts.data, bills, year]);
+  if (contracts.error) return <Empty>{contracts.error}</Empty>;
+  if (!contracts.data) return null;
+  if (!rows.length) return <Empty>Belum ada kontrak untuk tahun ini.</Empty>;
+  const totals = MONTH_LABEL.map((_, i) => rows.reduce((a, r) => a + (r.months[i]?.total ?? 0), 0));
+  const first = 'sticky left-0 z-10 w-72 min-w-72 max-w-72 border-r border-slate-200 bg-white px-3 py-1.5 text-left';
+  return <>
+    <div className="mb-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+      {Object.entries(CELL_TONE).map(([k, cls]) => <span key={k} className={cn('rounded px-2 py-0.5', cls)}>{k}</span>)}
+      <span>Filter status dan pencarian di atas ikut berlaku.</span>
+      <Select className="ml-auto w-32" value={unit} onChange={(e) => setUnit(Number(e.target.value))} aria-label="Satuan angka">
+        {UNITS.map(([u, label]) => <option key={u} value={u}>{label}</option>)}
+      </Select>
+    </div>
+    <Card className="max-h-[70vh] overflow-auto">
+      <table className="w-full border-separate border-spacing-0 text-xs">
+        <thead className="sticky top-0 z-20 bg-slate-50 text-slate-600"><tr>
+          <th className={cn(first, 'z-30 bg-slate-50')}>Kontrak / penyedia</th>
+          {MONTH_LABEL.map((m) => <th key={m} className="border-b border-slate-200 px-2 py-2 text-right">{m}</th>)}
+          <th className="border-b border-l border-slate-200 px-2 py-2 text-right">Nilai kontrak</th><th className="border-b border-slate-200 px-2 py-2 text-right">Tertagih</th>
+          <th className="border-b border-slate-200 px-2 py-2 text-right">Sisa</th>
+        </tr></thead>
+        <tbody>{rows.map((r) => (
+          <tr key={r.contract_id}>
+            <td className={cn(first, 'border-b border-slate-100')} title={`${r.contract_number} · ${r.vendor_name}`}>
+              <div className="truncate font-medium text-slate-800">{r.vendor_name}</div><div className="truncate text-[11px] text-slate-500">{r.contract_number}</div>
+            </td>
+            {r.months.map((m, i) => <td key={i} className="border-b border-slate-100 p-0.5">
+              {m ? <button className={cn('w-full rounded px-1.5 py-1 text-right tabular-nums hover:ring-1 hover:ring-navy-700', CELL_TONE[m.stage])}
+                onClick={() => onOpen(m.bill_ids[0])} title={`${m.stage}${m.count > 1 ? ` · ${m.count} tagihan` : ''}`}>
+                <Num n={m.total} unit={unit} />{m.count > 1 && <sup className="ml-0.5">{m.count}</sup>}</button>
+                : <span className="block px-1.5 text-right text-slate-300">–</span>}
+            </td>)}
+            <td className="whitespace-nowrap border-b border-l border-slate-100 border-l-slate-200 px-2 text-right tabular-nums"><Num n={r.latest_value} unit={unit} /></td>
+            <td className="whitespace-nowrap border-b border-slate-100 px-2 text-right tabular-nums"><Num n={r.billed} unit={unit} /></td>
+            <td className={cn('whitespace-nowrap border-b border-slate-100 px-2 text-right tabular-nums', r.sisa_kontrak < 0 && 'text-red-700')}><Num n={r.sisa_kontrak} unit={unit} /></td>
+          </tr>))}
+        </tbody>
+        <tfoot className="sticky bottom-0 z-20 bg-slate-50 font-semibold"><tr>
+          <td className={cn(first, 'border-t-2 bg-slate-50')}>Total</td>
+          {totals.map((v, i) => <td key={i} className="whitespace-nowrap border-t-2 border-slate-200 px-2 py-1.5 text-right tabular-nums"><Num n={v} unit={unit} /></td>)}
+          {(['latest_value', 'billed', 'sisa_kontrak'] as const).map((k) => <td key={k} className="whitespace-nowrap border-t-2 border-slate-200 px-2 text-right tabular-nums"><Num n={rows.reduce((a, r) => a + r[k], 0)} unit={unit} /></td>)}
+        </tr></tfoot>
+      </table>
+    </Card>
+  </>;
 }

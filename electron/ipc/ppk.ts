@@ -13,6 +13,7 @@ import { getMainWindow } from '../main/window';
 import { runPpkImport } from '../main/ppk/import';
 import { ppkReport, reportSheets } from '../main/ppk/reports';
 import { addSp2d, sp2dReport, voidSp2d } from '../main/ppk/sp2d';
+import { relatedDocuments } from '../main/ppk/documents';
 import { sqliteStore } from '../main/ppk/store';
 import { listPpkUsers, ppkAccess, setPpkRole } from '../main/ppk/access';
 import { listMaster, listTaxRates, saveMaster } from '../main/ppk/master';
@@ -148,6 +149,7 @@ export function registerPpkHandlers() {
   handle('ppk:sp2d:report', z.object({ fiscal_year_id: S.id }), ({ fiscal_year_id }) => sp2dReport(st(), actor(), fiscal_year_id));
   handle('ppk:sp2d:add', z.object({ fiscal_year_id: S.id, record: z.object({ sp2d_number: text(100), sp2d_date: day, amount: money, notes: text(1000) }) }),
     ({ fiscal_year_id, record }) => addSp2d(st(), actor(), fiscal_year_id, record));
+  handle('ppk:documents:related', z.object({ numbers: z.array(text(300)).max(20) }), ({ numbers }) => relatedDocuments(st(), actor(), numbers));
   handle('ppk:sp2d:void', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidSp2d(st(), actor(), id, reason));
 }
 

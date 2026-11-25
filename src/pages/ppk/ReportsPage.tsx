@@ -9,6 +9,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { cn } from '@/lib/utils';
 import { PpkGate } from '@/features/ppk/PpkGate';
 import { rp, useFiscalYears } from '@/features/ppk/inputs';
+import { Num, UNITS } from '@/features/ppk/Num';
 import { api } from '@/services/api';
 import { BUDGET_KIND_LABEL, type BudgetKind } from '@shared/ppk/budget';
 import { MONTH_LABEL, type PpkReport, type ReportLine, type ReportTotal } from '@shared/ppk/forecast';
@@ -113,16 +114,7 @@ export default function ReportsPage() {
   );
 }
 
-const UNITS = [[1e9, 'Miliar Rp'], [1e6, 'Juta Rp'], [1, 'Rupiah']] as const;
 const SOURCE_ORDER = ['RM', 'PNBP', 'BLU'];
-/** Angka ringkas sesuai satuan; nilai persis tampil saat kursor diarahkan. */
-function Num({ n, unit, signed = false, className }: { n: number; unit: number; signed?: boolean; className?: string }) {
-  if (!n) return <span className="text-slate-300">–</span>;
-  const v = Math.abs(n) / unit;
-  const t = v.toLocaleString('id-ID', { minimumFractionDigits: unit === 1e9 ? 2 : 0, maximumFractionDigits: unit === 1e9 ? 2 : unit === 1e6 ? 1 : 0 });
-  const tiny = /^0(,0*)?$/.test(t); // nilai kecil jangan tampil 0
-  return <span title={rp(n)} className={cn(signed && (n > 0 ? 'text-red-700' : 'text-emerald-700'), className)}>{signed ? (n > 0 ? '+' : '−') : n < 0 ? '−' : ''}{tiny ? `<${unit === 1e9 ? '0,01' : '0,1'}` : t}</span>;
-}
 
 /** Jumlah beberapa baris: pagu, tiap bulan (aktual + estimasi), realisasi, estimasi, prognosis, kebutuhan. */
 const sumLines = (ls: ReportLine[]) => ({

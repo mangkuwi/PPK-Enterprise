@@ -12,6 +12,7 @@ import { usePpkAccess } from '@/features/ppk/usePpkAccess';
 import { PpkGate } from '@/features/ppk/PpkGate';
 import { ReasonDialog, RupiahInput, rp, useFiscalYears, useWarnings } from '@/features/ppk/inputs';
 import { api } from '@/services/api';
+import { RelatedDocs } from '@/features/ppk/RelatedDocs';
 import type { MasterRow } from '@shared/ppk/master';
 import { budgetLabel } from '@shared/ppk/budget';
 import {
@@ -240,6 +241,7 @@ function Summary({ c }: { c: Contract }) {
       </div>
       <div className="mt-3 md:col-span-2"><dt className="text-slate-500">Uraian</dt><dd className="whitespace-pre-wrap">{c.description}</dd></div>
       {c.notes && <div className="mt-3 md:col-span-2"><dt className="text-slate-500">Catatan</dt><dd className="whitespace-pre-wrap">{c.notes}</dd></div>}
+      <div className="md:col-span-2"><RelatedDocs numbers={[c.contract_number, c.vendor_contract_number]} /></div>
       <p className="mt-3 text-xs text-slate-400 md:col-span-2">Dibuat {c.created_by}, {c.created_at.slice(0, 10)} · diubah {c.updated_by}, {c.updated_at.slice(0, 10)}</p>
     </dl>
   );
