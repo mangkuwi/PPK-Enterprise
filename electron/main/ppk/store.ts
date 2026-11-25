@@ -10,7 +10,7 @@ export interface PpkStore {
   all<T>(sql: string, params?: Param[]): Promise<T[]>;
   get<T>(sql: string, params?: Param[]): Promise<T | undefined>;
   run(sql: string, params?: Param[]): Promise<{ changes: number }>;
-  /** Semua tulis di dalam fn atomik: gagal = tidak ada yang tersimpan. */
+  /** Semua tulis di dalam fn atomik: gagal = tidak ada yang tersimpan. Bersarang = savepoint, gagal hanya membatalkan bagian dalam. */
   tx<T>(fn: (s: PpkStore) => Promise<T>): Promise<T>;
 }
 
@@ -26,7 +26,15 @@ export function sqliteStore(db: DB): PpkStore {
     get: async <T>(sql: string, p: Param[] = []) => db.prepare(sql).get(...p) as T | undefined,
     run: async (sql, p = []) => ({ changes: db.prepare(sql).run(...p).changes }),
     tx: async (fn) => {
-      if (depth > 0) return fn(s);
+      if (depth > 0) {
+        // Transaksi bersarang = savepoint: gagal di dalam hanya membatalkan bagian itu (dipakai impor per baris).
+        const sp = `sp_${depth}`;
+        db.exec(`SAVEPOINT ${sp}`);
+        depth++;
+        try { const out = await fn(s); db.exec(`RELEASE ${sp}`); return out; }
+        catch (e) { db.exec(`ROLLBACK TO ${sp}`); db.exec(`RELEASE ${sp}`); throw e; }
+        finally { depth--; }
+      }
       db.exec('BEGIN IMMEDIATE');
       depth++;
       try {

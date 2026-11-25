@@ -8,6 +8,7 @@ import type { CompareView, DocxTemplateInfo, ImportReview, ImportSaveInput, Impo
 import type { AiAction } from '@shared/ai-guard';
 import type { PpkAccess, PpkRole, PpkUserRow } from '@shared/ppk/access';
 import type { MasterKey, MasterRow } from '@shared/ppk/master';
+import type { PpkImportReport } from '@shared/ppk/import';
 import type { Bill, BillDetail, BillFilter, BillInput, PaymentInput } from '@shared/ppk/bills';
 import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, Warned } from '@shared/ppk/budget';
 import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow } from '@shared/ppk/contracts';
@@ -185,6 +186,10 @@ export const api = {
       setStatus: (id: string, status: 'diverifikasi' | 'dibatalkan', reason = '') => call<Bill>('ppk:bills:setStatus', { id, status, reason }),
       addPayment: (bill_funding_id: string, payment: PaymentInput) => call<Warned<Bill>>('ppk:bills:addPayment', { bill_funding_id, payment }),
       voidPayment: (id: string, reason: string) => call<Bill>('ppk:bills:voidPayment', { id, reason })
+    },
+    import: {
+      pick: () => call<{ canceled: true } | { canceled: false; token: string; file_name: string }>('ppk:import:pick', {}),
+      run: (token: string, fiscal_year_id: string, program_id: string, commit: boolean) => call<PpkImportReport>('ppk:import:run', { token, fiscal_year_id, program_id, commit })
     }
   },
   ai: {

@@ -1,10 +1,16 @@
+import { dialog } from 'electron';
+import fs from 'node:fs';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { handle } from './handle';
 import * as S from './schemas';
 import { saveFile } from './numbering';
 import { getDb } from '../main/database';
 import { currentActor, peekActor } from '../main/numbering/session';
-import { writeXlsx } from '../main/numbering/xlsx';
+import { readXlsx, writeXlsx, type Sheet } from '../main/numbering/xlsx';
+import { getMainWindow } from '../main/window';
+import { runPpkImport } from '../main/ppk/import';
 import { sqliteStore } from '../main/ppk/store';
 import { listPpkUsers, ppkAccess, setPpkRole } from '../main/ppk/access';
 import { listMaster, listTaxRates, saveMaster } from '../main/ppk/master';
@@ -105,4 +111,27 @@ export function registerPpkHandlers() {
   handle('ppk:bills:addPayment', z.object({ bill_funding_id: S.id, payment: z.object({ channel: z.enum(PAYMENT_CHANNELS), reference_number: text(100), payment_date: day, amount: money, notes: text(1000) }) }),
     ({ bill_funding_id, payment }) => addPayment(st(), actor(), bill_funding_id, payment));
   handle('ppk:bills:voidPayment', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidPayment(st(), actor(), id, reason));
+
+  // Impor spreadsheet PPK lama: pilih berkas → pratinjau (commit=false, semua dibatalkan) → simpan.
+  handle('ppk:import:pick', S.empty, async () => {
+    await ppkAccess(st(), actor());
+    const res = await dialog.showOpenDialog(getMainWindow()!, { properties: ['openFile'], filters: [{ name: 'Excel', extensions: ['xlsx'] }] });
+    if (res.canceled || !res.filePaths[0]) return { canceled: true as const };
+    const file = res.filePaths[0];
+    if (fs.statSync(file).size > 25 * 1024 * 1024) throw new Error('Berkas terlalu besar (maks. 25 MB).');
+    const sheets = readXlsx(fs.readFileSync(file));
+    const token = randomUUID();
+    importFiles.set(token, { sheets, name: path.basename(file) });
+    while (importFiles.size > 3) importFiles.delete(importFiles.keys().next().value as string);
+    return { canceled: false as const, token, file_name: path.basename(file) };
+  });
+  handle('ppk:import:run', z.object({ token: S.id, fiscal_year_id: S.id, program_id: S.id, commit: z.boolean() }), async ({ token, fiscal_year_id, program_id, commit }) => {
+    const f = importFiles.get(token);
+    if (!f) throw new Error('Berkas impor sudah tidak tersedia. Pilih ulang berkas Excel.');
+    const r = await runPpkImport(st(), actor(), f.sheets, { fiscal_year_id, program_id, file_name: f.name }, commit);
+    if (commit) importFiles.delete(token);
+    return r;
+  });
 }
+
+const importFiles = new Map<string, { sheets: Sheet[]; name: string }>();
