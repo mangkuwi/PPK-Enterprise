@@ -420,6 +420,90 @@ CREATE TRIGGER trg_ne_noupd BEFORE UPDATE ON number_events BEGIN SELECT RAISE(AB
 CREATE TRIGGER trg_ne_nodel BEFORE DELETE ON number_events BEGIN SELECT RAISE(ABORT, 'Riwayat penomoran bersifat append-only.'); END;
 CREATE TRIGGER trg_nb_noupd BEFORE UPDATE ON number_batches BEGIN SELECT RAISE(ABORT, 'Catatan batch bersifat append-only.'); END;
 CREATE TRIGGER trg_nb_nodel BEFORE DELETE ON number_batches BEGIN SELECT RAISE(ABORT, 'Catatan batch bersifat append-only.'); END;`
+  },
+  {
+    version: 8,
+    name: 'ppk_master_data',
+    sql: `
+-- Modul PPK, tahap 1: data master. Hanya menambah tabel ppk_*; tabel modul dokumen dan penomoran tidak diubah.
+-- SQL dijaga portabel (rencana PostgreSQL): tanpa AUTOINCREMENT, tanggal TEXT ISO, boolean 0/1, rupiah INTEGER.
+CREATE TABLE ppk_user_roles (
+  user_id TEXT PRIMARY KEY REFERENCES app_users(id),
+  role TEXT NOT NULL CHECK (role IN ('admin','ppk','staf','pembaca')),
+  assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL
+);
+CREATE TABLE ppk_fiscal_years (
+  id TEXT PRIMARY KEY, year INTEGER NOT NULL UNIQUE CHECK (year BETWEEN 2000 AND 2100),
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE ppk_units (
+  id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE CHECK (length(trim(code)) > 0), name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+-- Riwayat pejabat PPK per unit (jawaban no. 7: pergantian pejabat tidak memindahkan kontrak/anggaran).
+CREATE TABLE ppk_officials (
+  id TEXT PRIMARY KEY, unit_id TEXT NOT NULL REFERENCES ppk_units(id), name TEXT NOT NULL CHECK (length(trim(name)) > 0), nip TEXT NOT NULL DEFAULT '',
+  start_date TEXT NOT NULL, end_date TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  CHECK (end_date IS NULL OR end_date >= start_date)
+);
+CREATE INDEX idx_ppk_officials_unit ON ppk_officials(unit_id, start_date);
+CREATE TABLE ppk_programs (
+  id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE CHECK (length(trim(code)) > 0), name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE ppk_activities (
+  id TEXT PRIMARY KEY, program_id TEXT NOT NULL REFERENCES ppk_programs(id), code TEXT NOT NULL CHECK (length(trim(code)) > 0), name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  UNIQUE (program_id, code)
+);
+-- Kanal pembayaran: RM/PNBP lewat SAKTI, BLU lewat FO BAKTI (jawaban B).
+CREATE TABLE ppk_funding_sources (
+  id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE CHECK (length(trim(code)) > 0), name TEXT NOT NULL,
+  payment_channel TEXT NOT NULL CHECK (payment_channel IN ('SAKTI','FO','LAINNYA')),
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE ppk_budget_accounts (
+  id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE CHECK (length(trim(code)) > 0), name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE ppk_service_categories (
+  id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE CHECK (length(trim(code)) > 0), name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+-- Penanda proyek/paket (kode hub H58, H73, ...; jawaban no. 14).
+CREATE TABLE ppk_service_packages (
+  id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE CHECK (length(trim(code)) > 0), name TEXT NOT NULL,
+  location TEXT NOT NULL DEFAULT '', capacity TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+-- Tarif pajak berlaku per tanggal (basis poin: 1100 = 11%).
+CREATE TABLE ppk_tax_rates (
+  id TEXT PRIMARY KEY, valid_from TEXT NOT NULL UNIQUE, ppn_bp INTEGER NOT NULL CHECK (ppn_bp BETWEEN 0 AND 5000),
+  pph23_bp INTEGER NOT NULL CHECK (pph23_bp BETWEEN 0 AND 5000), note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+);
+-- Penyedia: satu master untuk semua modul. name_key = nama dinormalisasi (huruf kecil, tanpa PT/CV/tanda baca) untuk cegah ganda.
+CREATE TABLE ppk_vendors (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL CHECK (length(trim(name)) > 0), name_key TEXT NOT NULL UNIQUE,
+  npwp TEXT NOT NULL DEFAULT '', nib TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '',
+  contact_person TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '',
+  bank_name TEXT NOT NULL DEFAULT '', account_number TEXT NOT NULL DEFAULT '', account_holder TEXT NOT NULL DEFAULT '',
+  service_category_id TEXT REFERENCES ppk_service_categories(id),
+  status TEXT NOT NULL DEFAULT 'aktif' CHECK (status IN ('aktif','nonaktif','arsip')), notes TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX ux_ppk_vendors_npwp ON ppk_vendors(npwp) WHERE npwp <> '';
+CREATE INDEX idx_ppk_vendors_status ON ppk_vendors(status);
+-- Master tidak dihapus permanen (arsipkan/nonaktifkan), agar riwayat kontrak/tagihan tetap utuh.
+CREATE TRIGGER trg_ppk_vendors_nodel BEFORE DELETE ON ppk_vendors BEGIN SELECT RAISE(ABORT, 'Penyedia tidak boleh dihapus; arsipkan saja.'); END;
+
+INSERT INTO ppk_funding_sources (id, code, name, payment_channel, created_at, updated_at) VALUES
+ (lower(hex(randomblob(16))), 'RM', 'Rupiah Murni', 'SAKTI', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ (lower(hex(randomblob(16))), 'PNBP', 'Penerimaan Negara Bukan Pajak', 'SAKTI', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ (lower(hex(randomblob(16))), 'BLU', 'Badan Layanan Umum', 'FO', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+INSERT INTO ppk_tax_rates (id, valid_from, ppn_bp, pph23_bp, note, created_at) VALUES
+ (lower(hex(randomblob(16))), '2022-04-01', 1100, 200, 'PPN 11% (UU HPP), PPh 23 2%', strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+INSERT INTO ppk_fiscal_years (id, year, created_at, updated_at) VALUES
+ (lower(hex(randomblob(16))), 2026, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));`
   }
 ];
 

@@ -6,6 +6,9 @@ import type {
 import type { ValidationReport, VisualCompareResult } from '@shared/importer';
 import type { CompareView, DocxTemplateInfo, ImportReview, ImportSaveInput, ImportSummary } from '@shared/importer';
 import type { AiAction } from '@shared/ai-guard';
+import type { PpkAccess, PpkRole, PpkUserRow } from '@shared/ppk/access';
+import type { MasterKey, MasterRow } from '@shared/ppk/master';
+import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
 import type {
   Actor, AppUser, AuditRow, CategoryMapRow, ConfigHistoryRow, DocNumbering, ImportCommitInput, ImportPreview, ImportRecordRow, ImportReport, ImportResult, NextInfo,
   AvailableQuery, BatchPreview, MigrationReview, NumberBatch, NumberEvent, NumberRecord, NumberRef, NumberingContext, RecordPage, RecordQuery, Register, RegisterSummary, Role, TemplateMapRow
@@ -137,6 +140,23 @@ export const api = {
     variantPdf: (id: string, variantId: string) => call<{ pdf: string }>('importer:variantPdf', { id, variantId }),
     variantRegistry: (id: string) => call<{ master_templates: number; document_categories: number; template_variants: number; shared_placeholder_configurations: number; mappings: number; duplicated_in_variants: number }>('importer:variantRegistry', { id }),
     capabilities: () => call<{ libreoffice: boolean }>('importer:capabilities')
+  },
+  ppk: {
+    access: () => call<PpkAccess | null>('ppk:access'),
+    users: () => call<PpkUserRow[]>('ppk:users'),
+    setRole: (user_id: string, role: PpkRole | null) => call<boolean>('ppk:setRole', { user_id, role }),
+    masterList: (key: MasterKey) => call<MasterRow[]>('ppk:master:list', { key }),
+    masterSave: (key: MasterKey, values: Record<string, string | number | boolean | null>) => call<MasterRow>('ppk:master:save', { key, values }),
+    taxRates: () => call<Array<{ id: string; valid_from: string; ppn_bp: number; pph23_bp: number; note: string }>>('ppk:taxRates'),
+    vendors: {
+      list: (f: VendorFilter = {}) => call<Vendor[]>('ppk:vendors:list', f),
+      get: (id: string) => call<Vendor>('ppk:vendors:get', { id }),
+      similar: (name: string, npwp: string, except_id?: string) => call<Array<{ id: string; name: string; npwp: string; status: VendorStatus; score: number }>>('ppk:vendors:similar', { name, npwp, except_id }),
+      create: (v: VendorInput) => call<Vendor>('ppk:vendors:create', v),
+      update: (id: string, version: number, values: VendorInput) => call<Vendor>('ppk:vendors:update', { id, version, values }),
+      setStatus: (id: string, status: VendorStatus, reason: string) => call<Vendor>('ppk:vendors:setStatus', { id, status, reason }),
+      exportXlsx: (status: VendorStatus | 'semua' = 'semua') => call<SaveResult>('ppk:vendors:export', { status })
+    }
   },
   ai: {
     run: (action: AiAction, text: string) => call<{ text: string; warnings: string[] }>('ai:run', { action, text, consent: true })

@@ -12,6 +12,8 @@ import { closeDatabase, dataDir, dbPath, defaultBackupDir, getDb, reopenDatabase
 import { backupFileName, commitFullRestore, createBackup, prepareFullRestore, readManifest, restorePartial } from '../main/backup';
 import { addBackupHistory, getSettings, listBackupHistory } from '../main/repo';
 import { getMainWindow } from '../main/window';
+import { currentActor } from '../main/numbering/session';
+import { requireAdmin } from '../main/numbering/users';
 
 function toExportInput(doc: ExportDoc): ExportInput {
   const s = getSettings(getDb());
@@ -63,6 +65,8 @@ export function registerFileHandlers() {
   });
 
   handle('backup:restore', S.empty, async () => {
+    // Restore mengganti/menggabungkan seluruh data (termasuk keuangan PPK): hanya administrator.
+    requireAdmin(currentActor(getDb()));
     const win = getMainWindow()!;
     const s = getSettings(getDb());
     const pick = await dialog.showOpenDialog(win, {

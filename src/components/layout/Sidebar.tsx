@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Archive, BookOpen, ChevronsLeft, ChevronsRight, FileClock, FilePlus2, FileSearch, FileText, FileUp, Files, Hash, History, LayoutDashboard, Library, Mail, Settings, UserCircle2, Wand2, type LucideIcon } from 'lucide-react';
+import { Archive, BookOpen, Building2, SlidersHorizontal, ChevronsLeft, ChevronsRight, FileClock, FilePlus2, FileSearch, FileText, FileUp, Files, Hash, History, LayoutDashboard, Library, Mail, Settings, UserCircle2, Wand2, type LucideIcon } from 'lucide-react';
 import { useActor } from '@/features/numbering/NumberingContext';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +25,10 @@ const groups: Array<{ title: string; items: Item[] }> = [
     { to: '/register/surat-keluar', label: 'Register Surat Keluar', icon: Mail },
     { to: '/penomoran', label: 'Register Lainnya & Impor', icon: BookOpen, end: true },
     { to: '/archive?status=final', label: 'Arsip Dokumen', icon: Archive }
+  ] },
+  { title: 'PPK Management', items: [
+    { to: '/ppk/penyedia', label: 'Database Penyedia', icon: Building2 },
+    { to: '/ppk/pengaturan', label: 'Pengaturan PPK', icon: SlidersHorizontal }
   ] },
   { title: 'Settings', items: [
     { to: '/settings', label: 'Pengaturan', icon: Settings }

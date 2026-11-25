@@ -16,6 +16,8 @@ import NumberingDashboardPage from './pages/NumberingDashboardPage';
 import NumberingSettingsPage from './pages/NumberingSettingsPage';
 import RegisterPage from './pages/RegisterPage';
 import RegisterImportPage from './pages/RegisterImportPage';
+import VendorsPage from './pages/ppk/VendorsPage';
+import PpkSettingsPage from './pages/ppk/PpkSettingsPage';
 
 export default function App() {
   return (
@@ -42,6 +44,8 @@ export default function App() {
           <Route path="/penomoran/pengaturan" element={<NumberingSettingsPage />} />
           <Route path="/penomoran/impor" element={<RegisterImportPage />} />
           <Route path="/register/:slug" element={<RegisterPage />} />
+          <Route path="/ppk/penyedia" element={<VendorsPage />} />
+          <Route path="/ppk/pengaturan" element={<PpkSettingsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<DashboardPage />} />
         </Routes>

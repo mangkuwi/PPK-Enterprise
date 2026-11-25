@@ -39,7 +39,7 @@ const files = new Map<string, { buf: Buffer; name: string }>();
 const MAX_XLSX = 25 * 1024 * 1024;
 const fileOf = (token: string) => { const f = files.get(token); if (!f) throw new Error('Berkas impor sudah tidak tersedia. Pilih ulang berkas Excel.'); return f; };
 
-async function saveFile(buf: Buffer, name: string, ext: 'xlsx' | 'pdf') {
+export async function saveFile(buf: Buffer, name: string, ext: 'xlsx' | 'pdf') {
   const s = repo.getSettings(getDb());
   let dir = '';
   try { if (s.export_dir && fs.statSync(s.export_dir).isDirectory()) dir = s.export_dir; } catch { /* abaikan */ }
