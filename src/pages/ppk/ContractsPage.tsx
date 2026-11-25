@@ -169,7 +169,7 @@ function ContractForm({ fiscalYearId, contract, onClose, onSaved }: { fiscalYear
   );
 }
 
-type Tab = 'ringkas' | 'addendum' | 'jadwal' | 'beban';
+type Tab = 'ringkas' | 'addendum' | 'jadwal' | 'beban' | 'tahunan';
 
 function ContractDetailDialog({ id, canWrite, onClose, onEdit, onChanged }: { id: string; canWrite: boolean; onClose: () => void; onEdit: (c: Contract) => void; onChanged: () => void }) {
   const { toast } = useFeedback();
@@ -182,7 +182,7 @@ function ContractDetailDialog({ id, canWrite, onClose, onEdit, onChanged }: { id
   const move = async (to: ContractStatus, reason = '') => {
     try { await api.ppk.contracts.setStatus(id, to, reason); toast(`Status kontrak: ${CONTRACT_STATUS_LABEL[to]}.`, 'success'); setCancel(false); refresh(); } catch (e) { toast(errMsg(e), 'error'); }
   };
-  const tabs: Array<[Tab, string]> = [['ringkas', 'Ringkasan'], ['addendum', `Addendum (${c?.addendum_count ?? 0})`], ['jadwal', 'Jadwal nilai'], ['beban', 'Pembebanan anggaran']];
+  const tabs: Array<[Tab, string]> = [['ringkas', 'Ringkasan'], ['addendum', `Addendum (${c?.addendum_count ?? 0})`], ['jadwal', 'Jadwal nilai'], ['beban', 'Pembebanan anggaran'], ...(c?.is_multi_year ? [['tahunan', 'Nilai per tahun'] as [Tab, string]] : [])];
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -205,6 +205,7 @@ function ContractDetailDialog({ id, canWrite, onClose, onEdit, onChanged }: { id
           {tab === 'addendum' && <Addendums detail={d.data} canWrite={editable} onChanged={refresh} />}
           {tab === 'jadwal' && <Schedule detail={d.data} canWrite={editable} onChanged={refresh} />}
           {tab === 'beban' && <Allocations detail={d.data} canWrite={editable} onChanged={refresh} />}
+          {tab === 'tahunan' && <YearValues detail={d.data} canWrite={editable} onChanged={refresh} />}
         </>}
         {cancel && <ReasonDialog title="Batalkan kontrak?" message="Kontrak yang dibatalkan tidak dihitung sebagai komitmen anggaran dan tidak dapat diaktifkan lagi."
           confirmLabel="Batalkan Kontrak" onClose={() => setCancel(false)} onSubmit={(r) => move('dibatalkan', r)} />}
@@ -390,5 +391,38 @@ function Allocations({ detail, canWrite, onChanged }: { detail: ContractDetail; 
       <Button disabled={busy || !ok} onClick={save}><FileText size={15} />Simpan Pembebanan</Button>
     </div>}
     {!lines.data?.length && lines.data && <p className="mt-2 text-xs text-amber-700">Belum ada baris anggaran TA {c.year}. Tambahkan di Database Anggaran.</p>}
+  </>;
+}
+
+/** Kontrak tahun jamak: nilai estimasi per tahun anggaran (dipakai prognosis tahun itu). */
+function YearValues({ detail, canWrite, onChanged }: { detail: ContractDetail; canWrite: boolean; onChanged: () => void }) {
+  const { toast } = useFeedback(); const warn = useWarnings();
+  const c = detail.contract;
+  const [rows, setRows] = useState(detail.year_values.length ? detail.year_values : [{ year: c.year, amount: NaN }]);
+  const [busy, setBusy] = useState(false);
+  const ok = rows.every((r) => Number.isSafeInteger(r.amount) && r.amount >= 0) && new Set(rows.map((r) => r.year)).size === rows.length;
+  const save = async () => {
+    setBusy(true);
+    try { const r = await api.ppk.contracts.setYearValues(c.id, rows); warn('Nilai per tahun disimpan.', r.warnings); onChanged(); } catch (e) { toast(errMsg(e), 'error'); } finally { setBusy(false); }
+  };
+  return <>
+    <p className="mb-3 text-sm text-slate-600">Masa kontrak {c.term_start ?? c.start_date} s.d. {c.term_end ?? c.effective_end}. Nilai tahun anggaran berjalan dipakai laporan prognosis sebagai pengganti nilai kontrak keseluruhan.</p>
+    <table className="w-full max-w-xl text-sm">
+      <thead className="bg-slate-50 text-xs text-slate-600"><tr><th className="px-3 py-2 text-left">Tahun</th><th className="px-3 py-2 text-right">Nilai estimasi</th><th /></tr></thead>
+      <tbody>{rows.map((r, i) => (
+        <tr key={i} className="border-t border-slate-100">
+          <td className="px-3 py-1.5">{canWrite
+            ? <Input type="number" className="w-28" aria-label="Tahun" value={r.year} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, year: Number(e.target.value) } : x)))} />
+            : r.year}</td>
+          <td className="px-3 py-1.5">{canWrite
+            ? <RupiahInput aria-label={`Nilai ${r.year}`} value={Number.isNaN(r.amount) ? null : r.amount} onChange={(n) => setRows(rows.map((x, j) => (j === i ? { ...x, amount: n ?? NaN } : x)))} />
+            : <div className="text-right tabular-nums">{rp(r.amount)}</div>}</td>
+          <td className="px-1">{canWrite && <Button size="icon" variant="ghost" aria-label={`Hapus tahun ${r.year}`} onClick={() => setRows(rows.filter((_, j) => j !== i))}><Trash2 size={15} /></Button>}</td>
+        </tr>))}</tbody>
+    </table>
+    {canWrite && <div className="mt-3 flex gap-2">
+      <Button variant="outline" onClick={() => setRows([...rows, { year: Math.max(c.year - 1, ...rows.map((r) => r.year)) + 1, amount: NaN }])}><Plus size={15} />Tambah tahun</Button>
+      <Button disabled={busy || !ok} onClick={save}>Simpan Nilai per Tahun</Button>
+    </div>}
   </>;
 }

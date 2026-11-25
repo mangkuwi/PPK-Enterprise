@@ -33,6 +33,7 @@ export default function ReportsPage() {
   const cutoff = picked.startsWith(String(year)) ? picked : year ? defaultCutoff(year) : '';
   const [extend, setExtend] = useState(false);
   const [unit, setUnit] = useState<number>(1e9);
+  const [showPlan, setShowPlan] = useState(false);
   const rep = useAsync(() => (fyId && cutoff ? api.ppk.reports.get(fyId, cutoff, extend) : Promise.resolve(null)), [fyId, cutoff, extend]);
   const r = rep.data;
   const exportXlsx = async () => {
@@ -61,6 +62,7 @@ export default function ReportsPage() {
           <Select className="w-36" value={unit} onChange={(e) => setUnit(Number(e.target.value))} aria-label="Satuan angka">
             {UNITS.map(([u, label]) => <option key={u} value={u}>{label}</option>)}
           </Select>
+          <Switch checked={showPlan} onChange={setShowPlan} label="Tampilkan RPD" />
           <Switch checked={extend} onChange={setExtend} label="Anggap kontrak yang selesai sebelum Desember diperpanjang" />
         </div>
         {rep.error && <Empty>{rep.error}</Empty>}
@@ -87,7 +89,7 @@ export default function ReportsPage() {
             </table>
           </Card>
 
-          <PrognosisTable r={r} unit={unit} />
+          <PrognosisTable r={r} unit={unit} showPlan={showPlan} />
 
           {!!r.ending.length && <>
             <h2 className="mb-2 text-sm font-semibold text-slate-700">Kontrak aktif yang selesai s.d. 2 bulan ke depan</h2>
@@ -129,7 +131,7 @@ const sumLines = (ls: ReportLine[]) => ({
   months: (ls[0]?.months ?? []).map((_, i) => ls.reduce((a, l) => a + l.months[i].actual + l.months[i].estimate, 0))
 });
 
-function PrognosisTable({ r, unit }: { r: PpkReport; unit: number }) {
+function PrognosisTable({ r, unit, showPlan }: { r: PpkReport; unit: number; showPlan: boolean }) {
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const months = r.lines[0].months.map((m) => m.month);
   const nActual = months.filter((m) => m <= r.cutoff).length;
@@ -154,7 +156,7 @@ function PrognosisTable({ r, unit }: { r: PpkReport; unit: number }) {
         <h2 className="text-sm font-semibold text-slate-700">Prognosis per baris anggaran</h2>
         <p className="text-xs text-slate-500">
           Kolom putih = realisasi aktual s.d. {MONTH_LABEL[nActual - 1] ?? '—'}; kolom <span className="rounded bg-amber-100 px-1">kuning</span> = estimasi.
-          Kebutuhan: <span className="text-red-700">+ kurang pagu</span>, <span className="text-emerald-700">− sisa pagu</span>. Arahkan kursor ke angka untuk nilai rupiah lengkap.
+          Kebutuhan: <span className="text-red-700">+ kurang pagu</span>, <span className="text-emerald-700">− sisa pagu</span>. Baris RPD: deviasi + = realisasi di atas rencana. Arahkan kursor ke angka untuk nilai rupiah lengkap.
         </p>
       </div>
     </div>
@@ -187,8 +189,8 @@ function PrognosisTable({ r, unit }: { r: PpkReport; unit: number }) {
                 {t.months.map((v, i) => <td key={i} className={cn(cell, est(months[i]) && 'bg-amber-100/60', i === 0 && 'border-l border-slate-200')}><Num n={v} unit={unit} /></td>)}
                 {tail(t, true)}
               </tr>
-              {open && g.lines.map((l) => (
-                <tr key={l.id ?? 'none'} className="group">
+              {open && g.lines.map((l) => (<Fragment key={l.id ?? 'none'}>
+                <tr className="group">
                   <td className={cn(first, 'border-b border-slate-100 bg-white group-hover:bg-slate-50')} title={l.label}>
                     <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-500">{l.mak || '—'}
                       {l.kind === 'saldo_kas' && <span className="rounded bg-sky-100 px-1 font-sans text-[10px] text-sky-800">{BUDGET_KIND_LABEL[l.kind as BudgetKind]}</span>}</div>
@@ -197,7 +199,17 @@ function PrognosisTable({ r, unit }: { r: PpkReport; unit: number }) {
                   <td className={cn(cell, 'border-b border-slate-100')}><Num n={l.pagu} unit={unit} /></td>
                   {l.months.map((m, i) => <td key={m.month} className={cn(cell, 'border-b border-slate-100', est(m.month) && 'bg-amber-50 text-amber-900', i === 0 && 'border-l border-slate-200')}><Num n={m.actual + m.estimate} unit={unit} /></td>)}
                   {tail(sumLines([l]))}
-                </tr>))}
+                </tr>
+                {showPlan && l.id && <tr className="text-[11px] text-slate-500">
+                  <td className={cn(first, 'border-b border-slate-100 bg-slate-50 py-1 pl-6')}>{l.plan ? <>RPD · deviasi s.d. {MONTH_LABEL[nActual - 1] ?? '—'}: <Num n={l.actual_to_cutoff - l.plan_to_cutoff} unit={unit} signed /></> : <span className="italic">RPD belum diisi</span>}</td>
+                  <td className="border-b border-slate-100 bg-slate-50" />
+                  {l.months.map((m, i) => <td key={m.month} className={cn(cell, 'border-b border-slate-100 bg-slate-50 py-1', i === 0 && 'border-l border-slate-200')}><Num n={m.plan} unit={unit} /></td>)}
+                  <td className={cn(cell, 'border-b border-l border-slate-100 border-l-slate-200 bg-slate-50 py-1')}><Num n={l.plan_to_cutoff} unit={unit} /></td>
+                  <td className="border-b border-slate-100 bg-slate-50" />
+                  <td className={cn(cell, 'border-b border-slate-100 bg-slate-50 py-1')}><Num n={l.plan} unit={unit} /></td>
+                  <td className="border-b border-slate-100 bg-slate-50" />
+                </tr>}
+              </Fragment>))}
             </Fragment>;
           })}
         </tbody>

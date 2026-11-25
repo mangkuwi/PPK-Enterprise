@@ -28,6 +28,8 @@ export function spreadEven(total: number, n: number): number[] {
 export interface ForecastContract {
   id: string; contract_number: string; vendor_name: string; status: string;
   start_date: string; effective_end: string; latest_value: number; sisa_kontrak: number;
+  /** Kontrak tahun jamak: nilai estimasi tahun ini; bila ada, estimasi memakai nilai ini dikurangi tagihan tahun ini. */
+  billed?: number; year_value?: number | null;
 }
 
 /**
@@ -58,12 +60,14 @@ export function contractEstimate(c: ForecastContract, schedule: Record<string, n
 export interface ForecastLine {
   id: string; label: string; mak: string; detail: string; source_code: string; kind: string; pagu_terakhir: number; allocated: number; billed: number; paid: number;
 }
-export interface ReportMonth { month: string; actual: number; estimate: number }
+export interface ReportMonth { month: string; actual: number; estimate: number; /** RPD bulan ini. */ plan: number }
 export interface ReportLine {
   /** null = estimasi kontrak yang belum punya baris anggaran (belum ada tagihan atau pembebanan). */
   id: string | null; label: string; mak: string; detail: string; source_code: string; kind: string;
   pagu: number; allocated: number; billed: number; paid: number; months: ReportMonth[];
   estimate: number; prognosis: number;
+  /** Total RPD setahun dan s.d. bulan laporan. */
+  plan: number; plan_to_cutoff: number; actual_to_cutoff: number;
   /** Prognosis − pagu: positif = kekurangan pagu, negatif = sisa. */
   kebutuhan: number;
 }
@@ -82,6 +86,7 @@ export interface ReportInput {
   actuals: Array<{ budget_line_id: string; month: string; amount: number }>;
   contracts: ForecastContract[];
   schedules: Array<{ contract_id: string; month: string; planned_amount: number }>;
+  plans: Array<{ budget_line_id: string; month: string; amount: number }>;
   /** Baris anggaran yang pernah dipakai kontrak (tagihan atau pembebanan). */
   contractLines: Array<{ contract_id: string; budget_line_id: string }>;
   bills: Array<{ status: string; total: number; paid: number }>;
@@ -93,18 +98,21 @@ export function buildReport(i: ReportInput): PpkReport {
   const row = (l: ForecastLine | null): ReportLine => ({
     id: l?.id ?? null, label: l?.label ?? 'Belum terbebankan ke baris anggaran', mak: l?.mak ?? '', detail: l?.detail ?? 'Estimasi kontrak yang belum punya tagihan atau pembebanan', source_code: l?.source_code ?? '', kind: l?.kind ?? '',
     pagu: l?.pagu_terakhir ?? 0, allocated: l?.allocated ?? 0, billed: l?.billed ?? 0, paid: l?.paid ?? 0,
-    months: months.map((month) => ({ month, actual: 0, estimate: 0 })), estimate: 0, prognosis: 0, kebutuhan: 0
+    months: months.map((month) => ({ month, actual: 0, estimate: 0, plan: 0 })), estimate: 0, prognosis: 0, kebutuhan: 0, plan: 0, plan_to_cutoff: 0, actual_to_cutoff: 0
   });
   const rows = new Map<string, ReportLine>(i.lines.map((l) => [l.id, row(l)]));
   const unassigned = row(null);
   const idx = (m: string) => months.indexOf(m);
   for (const a of i.actuals) { const r = rows.get(a.budget_line_id); const k = idx(a.month); if (r && k >= 0) r.months[k].actual += a.amount; }
+  for (const p of i.plans) { const r = rows.get(p.budget_line_id); const k = idx(p.month); if (r && k >= 0) r.months[k].plan += p.amount; }
 
   // Estimasi dibebankan seperti tagihan sungguhan: per bulan, menghabiskan sisa pagu baris kontrak sesuai urutan DIPA → saldo kas, RM → PNBP → BLU.
   const remaining = new Map(i.lines.map((l) => [l.id, l.pagu_terakhir - l.billed]));
   const byLine = new Map(i.lines.map((l) => [l.id, l]));
   const events: Array<{ month: string; c: ForecastContract; amount: number }> = [];
-  for (const c of i.contracts.filter((x) => x.status === 'aktif')) {
+  for (const raw of i.contracts.filter((x) => x.status === 'aktif')) {
+    const c = raw.year_value == null ? raw : { ...raw, latest_value: raw.year_value, sisa_kontrak: Math.max(0, raw.year_value - (raw.billed ?? 0)),
+      start_date: raw.start_date < `${i.year}-01-01` ? `${i.year}-01-01` : raw.start_date, effective_end: raw.effective_end > `${i.year}-12-31` ? `${i.year}-12-31` : raw.effective_end };
     const sched = Object.fromEntries(i.schedules.filter((s) => s.contract_id === c.id).map((s) => [s.month, s.planned_amount]));
     for (const [month, amount] of Object.entries(contractEstimate(c, sched, i.cutoff, yearEnd, i.extend))) events.push({ month, c, amount });
   }
@@ -125,6 +133,9 @@ export function buildReport(i: ReportInput): PpkReport {
     r.estimate = r.months.reduce((a, m) => a + m.estimate, 0);
     r.prognosis = r.billed + r.estimate;
     r.kebutuhan = r.prognosis - r.pagu;
+    r.plan = r.months.reduce((a, m) => a + m.plan, 0);
+    r.plan_to_cutoff = r.months.filter((m) => m.month <= i.cutoff).reduce((a, m) => a + m.plan, 0);
+    r.actual_to_cutoff = r.months.filter((m) => m.month <= i.cutoff).reduce((a, m) => a + m.actual, 0);
   }
   const sum = (source_code: string, rs: ReportLine[]): ReportTotal => {
     const t = { source_code, pagu: 0, billed: 0, paid: 0, estimate: 0, prognosis: 0, kebutuhan: 0 };

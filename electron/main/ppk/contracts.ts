@@ -4,7 +4,7 @@ import { formatRupiah } from '@shared/ppk/money';
 import { budgetLabel, type Warned } from '@shared/ppk/budget';
 import {
   CONTRACT_NEXT, CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, type Addendum, type AddendumInput, type AllocationRow, type AllocationView,
-  type Contract, type ContractDetail, type ContractFilter, type ContractInput, type ContractStatus, type ScheduleRow
+  type Contract, type ContractDetail, type ContractFilter, type ContractInput, type ContractStatus, type ScheduleRow, type YearValueRow
 } from '@shared/ppk/contracts';
 import type { PpkStore } from './store';
 import { PpkError, ppkAudit, requirePpk } from './access';
@@ -63,7 +63,8 @@ export async function getContract(s: PpkStore, actor: Actor, id: string): Promis
     FROM ppk_contract_funding_allocations fa JOIN ppk_budget_lines bl ON bl.id = fa.budget_line_id
     JOIN ppk_budget_accounts ba ON ba.id = bl.budget_account_id JOIN ppk_funding_sources fs ON fs.id = bl.funding_source_id
     WHERE fa.contract_id = ? ORDER BY ba.code, fs.code`, [id]);
-  return { contract, addendums, schedule, allocations };
+  const year_values = await s.all<YearValueRow>('SELECT year, amount FROM ppk_contract_year_values WHERE contract_id = ? ORDER BY year', [id]);
+  return { contract, addendums, schedule, allocations, year_values };
 }
 
 function clean(i: ContractInput) {
@@ -222,6 +223,29 @@ export async function setSchedule(s: PpkStore, actor: Actor, contractId: string,
     const ts = now();
     for (const r of clean) await t.run('INSERT INTO ppk_contract_schedules (contract_id, month, planned_amount, updated_by, updated_at) VALUES (?,?,?,?,?)', [contractId, r.month, r.planned_amount, actor.name, ts]);
     await ppkAudit(t, actor, 'schedule.set', 'ppk_contracts', contractId, { before, after: clean });
+  });
+  return checked(s, actor, contractId);
+}
+
+/** Kontrak tahun jamak: nilai estimasi per tahun anggaran, dipakai prognosis tahun itu. Diganti utuh, tercatat di audit. */
+export async function setYearValues(s: PpkStore, actor: Actor, contractId: string, rows: YearValueRow[]): Promise<Warned<Contract>> {
+  const seen = new Set<number>();
+  const clean = rows.map((r) => {
+    if (!Number.isInteger(r.year) || r.year < 2000 || r.year > 2100) throw new PpkError('INVALID', `Tahun "${r.year}" tidak valid.`);
+    if (seen.has(r.year)) throw new PpkError('INVALID', `Tahun ${r.year} tercantum dua kali.`);
+    seen.add(r.year);
+    return { year: r.year, amount: rupiah(r.amount, `Nilai tahun ${r.year}`) };
+  });
+  await s.tx(async (t) => {
+    await requirePpk(t, actor, 'write');
+    await writable(t, contractId);
+    const c = await t.get<{ is_multi_year: number }>('SELECT is_multi_year FROM ppk_contracts WHERE id = ?', [contractId]);
+    if (clean.length && !c?.is_multi_year) throw new PpkError('INVALID', 'Nilai per tahun hanya untuk kontrak tahun jamak. Tandai kontrak sebagai tahun jamak dulu.');
+    const before = await t.all<YearValueRow>('SELECT year, amount FROM ppk_contract_year_values WHERE contract_id = ? ORDER BY year', [contractId]);
+    await t.run('DELETE FROM ppk_contract_year_values WHERE contract_id = ?', [contractId]);
+    const ts = now();
+    for (const r of clean) await t.run('INSERT INTO ppk_contract_year_values (contract_id, year, amount, updated_by, updated_at) VALUES (?,?,?,?,?)', [contractId, r.year, r.amount, actor.name, ts]);
+    await ppkAudit(t, actor, 'contract.year_values', 'ppk_contracts', contractId, { before, after: clean });
   });
   return checked(s, actor, contractId);
 }

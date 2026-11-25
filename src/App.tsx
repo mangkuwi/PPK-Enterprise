@@ -23,6 +23,7 @@ import ContractsPage from './pages/ppk/ContractsPage';
 import BillsPage from './pages/ppk/BillsPage';
 import ImportPage from './pages/ppk/ImportPage';
 import ReportsPage from './pages/ppk/ReportsPage';
+import Sp2dPage from './pages/ppk/Sp2dPage';
 
 export default function App() {
   return (
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="/ppk/tagihan" element={<BillsPage />} />
           <Route path="/ppk/impor" element={<ImportPage />} />
           <Route path="/ppk/laporan" element={<ReportsPage />} />
+          <Route path="/ppk/rekonsiliasi" element={<Sp2dPage />} />
           <Route path="/ppk/penyedia" element={<VendorsPage />} />
           <Route path="/ppk/pengaturan" element={<PpkSettingsPage />} />
           <Route path="/settings" element={<SettingsPage />} />

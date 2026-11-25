@@ -10,9 +10,10 @@ import type { PpkAccess, PpkRole, PpkUserRow } from '@shared/ppk/access';
 import type { MasterKey, MasterRow } from '@shared/ppk/master';
 import type { PpkImportReport } from '@shared/ppk/import';
 import type { PpkReport } from '@shared/ppk/forecast';
+import type { ReconRow, Sp2dInput, Sp2dRecord } from '@shared/ppk/sp2d';
 import type { Bill, BillDetail, BillFilter, BillInput, PaymentInput } from '@shared/ppk/bills';
-import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, Warned } from '@shared/ppk/budget';
-import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow } from '@shared/ppk/contracts';
+import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, PlanRow, Warned } from '@shared/ppk/budget';
+import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow, YearValueRow } from '@shared/ppk/contracts';
 import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
 import type {
   Actor, AppUser, AuditRow, CategoryMapRow, ConfigHistoryRow, DocNumbering, ImportCommitInput, ImportPreview, ImportRecordRow, ImportReport, ImportResult, NextInfo,
@@ -178,7 +179,8 @@ export const api = {
       addAddendum: (id: string, addendum: AddendumInput) => call<Warned<Contract>>('ppk:contracts:addAddendum', { id, addendum }),
       voidAddendum: (id: string, reason: string) => call<Warned<Contract>>('ppk:contracts:voidAddendum', { id, reason }),
       setSchedule: (id: string, rows: ScheduleRow[]) => call<Warned<Contract>>('ppk:contracts:setSchedule', { id, rows }),
-      setAllocations: (id: string, rows: AllocationRow[]) => call<Warned<Contract>>('ppk:contracts:setAllocations', { id, rows })
+      setAllocations: (id: string, rows: AllocationRow[]) => call<Warned<Contract>>('ppk:contracts:setAllocations', { id, rows }),
+      setYearValues: (id: string, rows: YearValueRow[]) => call<Warned<Contract>>('ppk:contracts:setYearValues', { id, rows })
     },
     bills: {
       list: (f: BillFilter = {}) => call<Bill[]>('ppk:bills:list', f),
@@ -195,6 +197,15 @@ export const api = {
     reports: {
       get: (fiscal_year_id: string, cutoff: string, extend: boolean) => call<PpkReport>('ppk:reports:get', { fiscal_year_id, cutoff, extend }),
       exportXlsx: (fiscal_year_id: string, cutoff: string, extend: boolean) => call<SaveResult>('ppk:reports:export', { fiscal_year_id, cutoff, extend })
+    },
+    plans: {
+      get: (id: string) => call<PlanRow[]>('ppk:budget:plan', { id }),
+      set: (id: string, rows: PlanRow[]) => call<Warned<PlanRow[]>>('ppk:budget:setPlan', { id, rows })
+    },
+    sp2d: {
+      report: (fiscal_year_id: string) => call<{ records: Sp2dRecord[]; rows: ReconRow[] }>('ppk:sp2d:report', { fiscal_year_id }),
+      add: (fiscal_year_id: string, record: Sp2dInput) => call<Sp2dRecord>('ppk:sp2d:add', { fiscal_year_id, record }),
+      void: (id: string, reason: string) => call<void>('ppk:sp2d:void', { id, reason })
     }
   },
   ai: {

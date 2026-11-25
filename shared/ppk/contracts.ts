@@ -34,7 +34,8 @@ export type AddendumInput = Pick<Addendum, 'addendum_number' | 'addendum_date' |
 export interface ScheduleRow { month: string; planned_amount: number }
 export interface AllocationRow { budget_line_id: string; amount: number }
 export interface AllocationView extends AllocationRow { mak: string; output_detail: string; source_code: string; kind: string; pagu_terakhir: number }
-export interface ContractDetail { contract: Contract; addendums: Addendum[]; schedule: ScheduleRow[]; allocations: AllocationView[] }
+export interface YearValueRow { year: number; amount: number }
+export interface ContractDetail { contract: Contract; addendums: Addendum[]; schedule: ScheduleRow[]; allocations: AllocationView[]; year_values: YearValueRow[] }
 export interface ContractFilter { fiscal_year_id?: string; status?: ContractStatus | 'semua'; vendor_id?: string; search?: string }
 
 /** Bulan YYYY-MM dari tanggal mulai sampai tanggal selesai (inklusif). */

@@ -12,12 +12,13 @@ import { readXlsx, writeXlsx, type Sheet } from '../main/numbering/xlsx';
 import { getMainWindow } from '../main/window';
 import { runPpkImport } from '../main/ppk/import';
 import { ppkReport, reportSheets } from '../main/ppk/reports';
+import { addSp2d, sp2dReport, voidSp2d } from '../main/ppk/sp2d';
 import { sqliteStore } from '../main/ppk/store';
 import { listPpkUsers, ppkAccess, setPpkRole } from '../main/ppk/access';
 import { listMaster, listTaxRates, saveMaster } from '../main/ppk/master';
 import { VENDOR_EXPORT_HEADER, createVendor, getVendor, listVendors, setVendorStatus, similarVendors, updateVendor, vendorExportRow } from '../main/ppk/vendors';
-import { addBudgetRevision, createBudgetLine, listBudgetLines, listBudgetVersions, updateBudgetLine } from '../main/ppk/budget';
-import { addAddendum, createContract, getContract, listContracts, setAllocations, setContractStatus, setSchedule, updateContract, voidAddendum } from '../main/ppk/contracts';
+import { addBudgetRevision, createBudgetLine, getBudgetPlan, listBudgetLines, listBudgetVersions, setBudgetPlan, updateBudgetLine } from '../main/ppk/budget';
+import { addAddendum, createContract, getContract, listContracts, setAllocations, setContractStatus, setSchedule, setYearValues, updateContract, voidAddendum } from '../main/ppk/contracts';
 import { BUDGET_KIND_LABEL, type BudgetKind } from '@shared/ppk/budget';
 import { CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, type ContractStatus, type ContractType } from '@shared/ppk/contracts';
 import { addPayment, getBill, listBills, saveBill, setBillStatus, voidPayment } from '../main/ppk/bills';
@@ -140,6 +141,14 @@ export function registerPpkHandlers() {
     const r = await ppkReport(st(), actor(), a.fiscal_year_id, a.cutoff, a.extend);
     return saveFile(writeXlsx(reportSheets(r)), `Prognosis-PPK-${r.year}-sd-${r.cutoff}.xlsx`, 'xlsx');
   });
+
+  handle('ppk:budget:plan', z.object({ id: S.id }), ({ id }) => getBudgetPlan(st(), actor(), id));
+  handle('ppk:budget:setPlan', z.object({ id: S.id, rows: z.array(z.object({ month: z.string().max(7), amount: money })).max(12) }), ({ id, rows }) => setBudgetPlan(st(), actor(), id, rows));
+  handle('ppk:contracts:setYearValues', z.object({ id: S.id, rows: z.array(z.object({ year: z.number().int(), amount: money })).max(60) }), ({ id, rows }) => setYearValues(st(), actor(), id, rows));
+  handle('ppk:sp2d:report', z.object({ fiscal_year_id: S.id }), ({ fiscal_year_id }) => sp2dReport(st(), actor(), fiscal_year_id));
+  handle('ppk:sp2d:add', z.object({ fiscal_year_id: S.id, record: z.object({ sp2d_number: text(100), sp2d_date: day, amount: money, notes: text(1000) }) }),
+    ({ fiscal_year_id, record }) => addSp2d(st(), actor(), fiscal_year_id, record));
+  handle('ppk:sp2d:void', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidSp2d(st(), actor(), id, reason));
 }
 
 const importFiles = new Map<string, { sheets: Sheet[]; name: string }>();

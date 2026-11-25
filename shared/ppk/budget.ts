@@ -24,3 +24,6 @@ export interface Warned<T> { data: T; warnings: string[] }
 
 export const budgetLabel = (b: Pick<BudgetLine, 'mak' | 'output_detail' | 'source_code'> & { kind: string }) =>
   `${b.mak}${b.output_detail ? ` · ${b.output_detail}` : ''} · ${b.source_code} · ${BUDGET_KIND_LABEL[b.kind as BudgetKind] ?? b.kind}`;
+
+/** RPD: rencana penarikan dana per bulan untuk satu baris anggaran. */
+export interface PlanRow { month: string; amount: number }

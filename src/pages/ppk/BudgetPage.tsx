@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { History, Pencil, Plus, TrendingUp } from 'lucide-react';
+import { CalendarRange, History, Pencil, Plus, TrendingUp } from 'lucide-react';
 import { Page } from '@/components/layout/Page';
 import { Badge, Card, Empty, PageHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { PpkGate } from '@/features/ppk/PpkGate';
 import { RupiahInput, rp, useFiscalYears, useWarnings } from '@/features/ppk/inputs';
 import { api } from '@/services/api';
 import type { MasterRow } from '@shared/ppk/master';
+import { spreadEven, MONTH_LABEL } from '@shared/ppk/forecast';
 import { BUDGET_KIND_LABEL, type BudgetAmountInput, type BudgetKind, type BudgetLine, type BudgetLineInput } from '@shared/ppk/budget';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -22,7 +23,7 @@ export default function BudgetPage() {
   const { years, id: fyId, setId: setFy } = useFiscalYears();
   const [inactive, setInactive] = useState(false);
   const list = useAsync(() => (fyId ? api.ppk.budget.list({ fiscal_year_id: fyId, include_inactive: inactive }) : Promise.resolve([])), [fyId, inactive]);
-  const [dlg, setDlg] = useState<{ kind: 'new' } | { kind: 'revise' | 'history' | 'edit'; line: BudgetLine } | null>(null);
+  const [dlg, setDlg] = useState<{ kind: 'new' } | { kind: 'revise' | 'history' | 'edit' | 'plan'; line: BudgetLine } | null>(null);
   const done = () => { setDlg(null); list.reload(); };
   const rows = list.data ?? [];
   const sum = (k: 'pagu_terakhir' | 'allocated' | 'sisa' | 'billed' | 'sisa_realisasi') => rows.filter((r) => r.is_active).reduce((a, r) => a + r[k], 0);
@@ -63,6 +64,7 @@ export default function BudgetPage() {
                   <td className={`px-3 py-2 text-right font-medium tabular-nums ${b.sisa_realisasi < 0 ? 'text-red-700' : ''}`}>{rp(b.sisa_realisasi)}</td>
                   <td className="sticky right-0 whitespace-nowrap bg-white px-3 py-2 text-right">
                     <Button size="icon" variant="ghost" title="Riwayat pagu" aria-label={`Riwayat pagu ${b.mak}`} onClick={() => setDlg({ kind: 'history', line: b })}><History size={15} /></Button>
+                    <Button size="icon" variant="ghost" title="RPD (rencana penarikan dana)" aria-label={`RPD ${b.mak}`} onClick={() => setDlg({ kind: 'plan', line: b })}><CalendarRange size={15} /></Button>
                     {can('write') && <>
                       <Button size="icon" variant="ghost" title="Revisi pagu" aria-label={`Revisi pagu ${b.mak}`} onClick={() => setDlg({ kind: 'revise', line: b })}><TrendingUp size={15} /></Button>
                       <Button size="icon" variant="ghost" title="Ubah uraian/status" aria-label={`Ubah ${b.mak}`} onClick={() => setDlg({ kind: 'edit', line: b })}><Pencil size={15} /></Button>
@@ -82,6 +84,7 @@ export default function BudgetPage() {
         {dlg?.kind === 'revise' && <ReviseDialog line={dlg.line} onClose={() => setDlg(null)} onSaved={done} />}
         {dlg?.kind === 'edit' && <EditLineDialog line={dlg.line} onClose={() => setDlg(null)} onSaved={done} />}
         {dlg?.kind === 'history' && <HistoryDialog line={dlg.line} onClose={() => setDlg(null)} />}
+        {dlg?.kind === 'plan' && <PlanDialog line={dlg.line} canWrite={can('write')} onClose={() => setDlg(null)} />}
       </PpkGate>
     </Page>
   );
@@ -197,6 +200,47 @@ function HistoryDialog({ line, onClose }: { line: BudgetLine; onClose: () => voi
               <td className="px-3 py-2">{x.notes || '—'}</td><td className="px-3 py-2 text-xs text-slate-500">{x.created_by}, {x.created_at.slice(0, 10)}</td>
             </tr>))}</tbody>
         </table>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** RPD per bulan untuk satu baris anggaran; kosong = 0. */
+function PlanDialog({ line, canWrite, onClose }: { line: BudgetLine; canWrite: boolean; onClose: () => void }) {
+  const { toast } = useFeedback(); const warn = useWarnings();
+  const months = MONTH_LABEL.map((_, i) => `${line.year}-${String(i + 1).padStart(2, '0')}`);
+  const plan = useAsync(() => api.ppk.plans.get(line.id), [line.id]);
+  const [vals, setVals] = useState<Record<string, number | null> | null>(null);
+  const cur = vals ?? Object.fromEntries((plan.data ?? []).map((r) => [r.month, r.amount]));
+  const [busy, setBusy] = useState(false);
+  const ok = Object.values(cur).every((v) => v == null || (Number.isSafeInteger(v) && v >= 0));
+  const total = Object.values(cur).reduce<number>((a, v) => a + (v ?? 0), 0);
+  const save = async () => {
+    setBusy(true);
+    try {
+      const r = await api.ppk.plans.set(line.id, months.map((month) => ({ month, amount: cur[month] ?? 0 })));
+      warn('RPD disimpan.', r.warnings); onClose();
+    } catch (e) { toast(errMsg(e), 'error'); } finally { setBusy(false); }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent wide title={`RPD — ${line.mak}${line.output_detail ? ` · ${line.output_detail}` : ''}`}
+        description={`Rencana penarikan dana per bulan · ${line.source_code} · ${BUDGET_KIND_LABEL[line.kind]} · pagu ${rp(line.pagu_terakhir)}`}
+        footer={canWrite && <>
+          <Button variant="outline" onClick={() => setVals(Object.fromEntries(spreadEven(line.pagu_terakhir, 12).map((v, i) => [months[i], v])))}>Bagi rata pagu ke 12 bulan</Button>
+          <Button disabled={busy || !ok || !plan.data} onClick={save}>Simpan RPD</Button>
+        </>}>
+        {plan.error && <Empty>{plan.error}</Empty>}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-2 md:grid-cols-3">
+          {months.map((m, i) => (
+            <Field key={m} label={`${MONTH_LABEL[i]} ${line.year}`}>
+              {canWrite ? <RupiahInput aria-label={`RPD ${MONTH_LABEL[i]}`} value={cur[m] ?? null} onChange={(n) => setVals({ ...cur, [m]: n })} />
+                : <div className="text-right tabular-nums">{rp(cur[m] ?? 0)}</div>}
+            </Field>))}
+        </div>
+        <div className={`mt-4 text-right text-sm font-semibold tabular-nums ${total > line.pagu_terakhir ? 'text-red-700' : ''}`}>
+          Total RPD {rp(total)} {total !== line.pagu_terakhir && <span className="font-normal text-slate-500">({total > line.pagu_terakhir ? 'lebih' : 'kurang'} {rp(Math.abs(line.pagu_terakhir - total))} dari pagu)</span>}
+        </div>
       </DialogContent>
     </Dialog>
   );

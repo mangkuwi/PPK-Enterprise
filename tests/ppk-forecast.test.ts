@@ -35,7 +35,7 @@ describe('laporan prognosis', () => {
     ],
     actuals: [{ budget_line_id: 'rm', month: '2026-01', amount: 100 }, { budget_line_id: 'rm', month: '2026-02', amount: 200 }],
     contracts: [c(), c({ id: 'k2', contract_number: 'KTR-2', sisa_kontrak: 50, effective_end: '2026-04-30' })],
-    schedules: [], contractLines: [{ contract_id: 'k1', budget_line_id: 'rm' }, { contract_id: 'k1', budget_line_id: 'blu' }],
+    schedules: [], plans: [{ budget_line_id: 'rm', month: '2026-01', amount: 120 }, { budget_line_id: 'rm', month: '2026-05', amount: 80 }], contractLines: [{ contract_id: 'k1', budget_line_id: 'rm' }, { contract_id: 'k1', budget_line_id: 'blu' }],
     bills: [{ status: 'diverifikasi', total: 300, paid: 200 }, { status: 'draft', total: 10, paid: 0 }, { status: 'dibatalkan', total: 99, paid: 0 }]
   };
   it('estimasi menghabiskan sisa pagu RM dulu lalu BLU, kontrak tanpa baris anggaran dipisah', () => {
@@ -45,6 +45,7 @@ describe('laporan prognosis', () => {
     expect(blu.months.slice(3, 6).map((m) => m.estimate)).toEqual([50, 100, 100]);
     expect([rm.prognosis, rm.kebutuhan, blu.prognosis, blu.kebutuhan]).toEqual([350, 0, 250, -750]);
     expect(none.estimate).toBe(50);
+    expect([rm.plan, rm.plan_to_cutoff, rm.actual_to_cutoff, rm.months[4].plan]).toEqual([200, 120, 300, 80]);
     expect(r.total).toMatchObject({ pagu: 1350, billed: 300, estimate: 350, prognosis: 650, kebutuhan: -700 });
     expect(r.bills).toEqual({ draft: 1, draft_amount: 10, unpaid: 1, unpaid_amount: 100 });
     expect(r.ending.map((e) => e.contract_number)).toEqual(['KTR-2']);

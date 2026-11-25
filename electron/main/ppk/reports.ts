@@ -27,10 +27,15 @@ export async function ppkReport(s: PpkStore, actor: Actor, fiscal_year_id: strin
        WHERE c.fiscal_year_id = ? AND b.status <> 'dibatalkan'
      UNION SELECT fa.contract_id, fa.budget_line_id FROM ppk_contract_funding_allocations fa JOIN ppk_contracts c ON c.id = fa.contract_id WHERE c.fiscal_year_id = ?`,
     [fiscal_year_id, fiscal_year_id]);
+  const plans = await s.all<{ budget_line_id: string; month: string; amount: number }>(
+    'SELECT bp.budget_line_id, bp.month, bp.amount FROM ppk_budget_plans bp JOIN ppk_budget_lines bl ON bl.id = bp.budget_line_id WHERE bl.fiscal_year_id = ?', [fiscal_year_id]);
+  const yearValues = new Map((await s.all<{ contract_id: string; amount: number }>(
+    'SELECT yv.contract_id, yv.amount FROM ppk_contract_year_values yv JOIN ppk_contracts c ON c.id = yv.contract_id WHERE c.fiscal_year_id = ? AND yv.year = ? AND c.is_multi_year = 1',
+    [fiscal_year_id, fy.year])).map((r) => [r.contract_id, r.amount]));
   return buildReport({
-    year: fy.year, cutoff, extend, actuals, schedules, contractLines,
+    year: fy.year, cutoff, extend, actuals, schedules, contractLines, plans,
     lines: lines.map((l) => ({ id: l.id, label: budgetLabel(l), mak: l.mak, detail: l.output_detail, source_code: l.source_code, kind: l.kind, pagu_terakhir: l.pagu_terakhir, allocated: l.allocated, billed: l.billed, paid: l.paid })),
-    contracts, bills
+    contracts: contracts.map((c) => ({ ...c, year_value: yearValues.get(c.id) ?? null })), bills
   });
 }
 
@@ -42,6 +47,9 @@ export function reportSheets(r: PpkReport): WriteSheet[] {
     { name: 'Prognosis', header: ['Baris anggaran', 'Sumber dana', 'Jenis', 'Pagu terakhir', 'Realisasi', 'Dibayar', ...months, 'Estimasi', 'Prognosis', 'Kebutuhan (+) / sisa (−)'],
       rows: r.lines.map((l) => [l.label, l.source_code, l.kind, l.pagu, l.billed, l.paid, ...l.months.map((m) => m.actual + m.estimate), l.estimate, l.prognosis, l.kebutuhan]),
       widths: [48, 10, 10, 18, 18, 18, ...months.map(() => 16), 18, 18, 20] },
+    { name: 'RPD vs realisasi', header: ['Baris anggaran', 'Sumber dana', 'Pagu terakhir', ...months.map((m) => `RPD ${m.split(' ')[0]}`), 'Total RPD', `RPD s.d. ${r.cutoff}`, `Realisasi s.d. ${r.cutoff}`, 'Deviasi (realisasi − RPD)'],
+      rows: r.lines.filter((l) => l.id).map((l) => [l.label, l.source_code, l.pagu, ...l.months.map((m) => m.plan), l.plan, l.plan_to_cutoff, l.actual_to_cutoff, l.actual_to_cutoff - l.plan_to_cutoff]),
+      widths: [48, 10, 18, ...months.map(() => 14), 18, 18, 18, 20] },
     { name: 'Per sumber dana', header: ['Sumber dana', 'Pagu terakhir', 'Realisasi', 'Dibayar', 'Estimasi', 'Prognosis', 'Kebutuhan (+) / sisa (−)'],
       rows: [...r.sources.map((t) => [t.source_code || 'Belum terbebankan', ...total(t)]), ['Total', ...total(r.total)]], widths: [22, 18, 18, 18, 18, 18, 20] }
   ];

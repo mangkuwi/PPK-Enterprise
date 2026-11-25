@@ -704,6 +704,49 @@ WHEN OLD.voided_at IS NOT NULL OR NEW.voided_at IS NULL OR length(trim(COALESCE(
   OR NEW.bill_funding_id IS NOT OLD.bill_funding_id OR NEW.channel IS NOT OLD.channel OR NEW.reference_number IS NOT OLD.reference_number
   OR NEW.payment_date IS NOT OLD.payment_date OR NEW.amount IS NOT OLD.amount
 BEGIN SELECT RAISE(ABORT, 'Pembayaran hanya dapat dibatalkan sekali dengan alasan; isinya tidak dapat diubah.'); END;`
+  },
+  {
+    version: 11,
+    name: 'ppk_rpd_sp2d_multiyear',
+    sql: `
+-- Modul PPK, tahap 5: RPD, rekonsiliasi SP2D, nilai kontrak tahun jamak per tahun anggaran. Hanya menambah tabel.
+-- RPD (rencana penarikan dana) per baris anggaran per bulan. Rencana, bukan data keuangan final: diganti utuh, perubahan tercatat di audit.
+CREATE TABLE ppk_budget_plans (
+  budget_line_id TEXT NOT NULL REFERENCES ppk_budget_lines(id),
+  month TEXT NOT NULL CHECK (length(month) = 7),
+  amount INTEGER NOT NULL CHECK (amount >= 0),
+  updated_by TEXT NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (budget_line_id, month)
+);
+
+-- SP2D menurut SAKTI (dicatat dari laporan SAKTI) untuk dicocokkan dengan pembayaran di aplikasi lewat nomor SP2D.
+-- Data keuangan: tidak dihapus atau diubah; salah catat = batalkan dengan alasan lalu catat ulang.
+CREATE TABLE ppk_sp2d_records (
+  id TEXT PRIMARY KEY,
+  fiscal_year_id TEXT NOT NULL REFERENCES ppk_fiscal_years(id),
+  sp2d_number TEXT NOT NULL CHECK (length(trim(sp2d_number)) > 0),
+  sp2d_date TEXT NOT NULL,
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  notes TEXT NOT NULL DEFAULT '',
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL,
+  voided_at TEXT, voided_by TEXT, void_reason TEXT
+);
+CREATE UNIQUE INDEX uq_ppk_sp2d_active ON ppk_sp2d_records(fiscal_year_id, sp2d_number) WHERE voided_at IS NULL;
+CREATE TRIGGER trg_ppk_sp2d_nodel BEFORE DELETE ON ppk_sp2d_records BEGIN SELECT RAISE(ABORT, 'Data SP2D tidak boleh dihapus; batalkan dengan alasan.'); END;
+CREATE TRIGGER trg_ppk_sp2d_upd BEFORE UPDATE ON ppk_sp2d_records
+WHEN OLD.voided_at IS NOT NULL OR NEW.voided_at IS NULL OR length(trim(COALESCE(NEW.void_reason, ''))) = 0
+  OR NEW.fiscal_year_id IS NOT OLD.fiscal_year_id OR NEW.sp2d_number IS NOT OLD.sp2d_number OR NEW.sp2d_date IS NOT OLD.sp2d_date OR NEW.amount IS NOT OLD.amount
+BEGIN SELECT RAISE(ABORT, 'Data SP2D hanya dapat dibatalkan sekali dengan alasan; isinya tidak dapat diubah.'); END;
+CREATE INDEX idx_ppk_pay_ref ON ppk_payments(reference_number);
+
+-- Kontrak tahun jamak: nilai estimasi per tahun anggaran (mis. SATRIA-1 15 tahun). Dipakai prognosis tahun itu.
+CREATE TABLE ppk_contract_year_values (
+  contract_id TEXT NOT NULL REFERENCES ppk_contracts(id),
+  year INTEGER NOT NULL CHECK (year BETWEEN 2000 AND 2100),
+  amount INTEGER NOT NULL CHECK (amount >= 0),
+  updated_by TEXT NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (contract_id, year)
+);`
   }
 ];
 

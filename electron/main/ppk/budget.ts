@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Actor } from '@shared/numbering';
 import { formatRupiah } from '@shared/ppk/money';
-import { BUDGET_KIND_LABEL, type BudgetAmountInput, type BudgetLine, type BudgetLineInput, type BudgetVersion, type Warned } from '@shared/ppk/budget';
+import { BUDGET_KIND_LABEL, type BudgetAmountInput, type BudgetLine, type BudgetLineInput, type BudgetVersion, type PlanRow, type Warned } from '@shared/ppk/budget';
 import type { PpkStore } from './store';
 import { PpkError, ppkAudit, requirePpk } from './access';
 import { constraintError, date, rupiah, text } from './validate';
@@ -107,4 +107,32 @@ export async function addBudgetRevision(s: PpkStore, actor: Actor, lineId: strin
 export async function listBudgetVersions(s: PpkStore, actor: Actor, lineId: string): Promise<BudgetVersion[]> {
   await requirePpk(s, actor, 'read');
   return s.all<BudgetVersion>('SELECT id, version_no, kind, amount, effective_date, source_document, notes, created_by, created_at FROM ppk_budget_versions WHERE budget_line_id = ? ORDER BY version_no', [lineId]);
+}
+
+export async function getBudgetPlan(s: PpkStore, actor: Actor, lineId: string): Promise<PlanRow[]> {
+  await requirePpk(s, actor, 'read');
+  return s.all<PlanRow>('SELECT month, amount FROM ppk_budget_plans WHERE budget_line_id = ? ORDER BY month', [lineId]);
+}
+
+/** Simpan RPD satu baris anggaran (diganti utuh, tercatat di audit). Bulan harus di tahun anggaran baris itu; total di atas pagu hanya diperingatkan. */
+export async function setBudgetPlan(s: PpkStore, actor: Actor, lineId: string, rows: PlanRow[]): Promise<Warned<PlanRow[]>> {
+  const line = await getBudgetLine(s, actor, lineId);
+  const seen = new Set<string>();
+  const clean = rows.filter((r) => r.amount !== 0).map((r) => {
+    if (!new RegExp(`^${line.year}-(0[1-9]|1[0-2])$`).test(r.month)) throw new PpkError('INVALID', `Bulan "${r.month}" harus di tahun ${line.year} (format YYYY-MM).`);
+    if (seen.has(r.month)) throw new PpkError('INVALID', `Bulan ${r.month} tercantum dua kali.`);
+    seen.add(r.month);
+    return { month: r.month, amount: rupiah(r.amount, `RPD ${r.month}`) };
+  });
+  await s.tx(async (t) => {
+    await requirePpk(t, actor, 'write');
+    const before = await t.all<PlanRow>('SELECT month, amount FROM ppk_budget_plans WHERE budget_line_id = ? ORDER BY month', [lineId]);
+    await t.run('DELETE FROM ppk_budget_plans WHERE budget_line_id = ?', [lineId]);
+    const ts = now();
+    for (const r of clean) await t.run('INSERT INTO ppk_budget_plans (budget_line_id, month, amount, updated_by, updated_at) VALUES (?,?,?,?,?)', [lineId, r.month, r.amount, actor.name, ts]);
+    await ppkAudit(t, actor, 'budget.plan', 'ppk_budget_lines', lineId, { before, after: clean });
+  });
+  const total = clean.reduce((a, r) => a + r.amount, 0);
+  const warnings = total > line.pagu_terakhir ? [`Total RPD ${formatRupiah(total)} melebihi pagu terakhir ${formatRupiah(line.pagu_terakhir)}.`] : [];
+  return { data: await getBudgetPlan(s, actor, lineId), warnings };
 }
