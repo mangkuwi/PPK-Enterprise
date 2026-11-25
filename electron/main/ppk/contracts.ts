@@ -20,12 +20,18 @@ const SELECT = `SELECT c.*, fy.year, v.name AS vendor_name, p.code AS program_co
   COALESCE((SELECT a.new_end_date FROM ppk_contract_addendums a WHERE a.contract_id = c.id AND ${VALID_ADD} AND a.new_end_date IS NOT NULL
     ORDER BY a.addendum_date DESC, a.created_at DESC LIMIT 1), c.end_date) AS effective_end,
   COALESCE((SELECT SUM(fa.amount) FROM ppk_contract_funding_allocations fa WHERE fa.contract_id = c.id), 0) AS allocated,
-  COALESCE((SELECT SUM(cs.planned_amount) FROM ppk_contract_schedules cs WHERE cs.contract_id = c.id), 0) AS scheduled
+  COALESCE((SELECT SUM(cs.planned_amount) FROM ppk_contract_schedules cs WHERE cs.contract_id = c.id), 0) AS scheduled,
+  COALESCE((SELECT SUM(b.amount + b.pass_through) FROM ppk_bills b WHERE b.contract_id = c.id AND b.status <> 'dibatalkan'), 0) AS billed,
+  COALESCE((SELECT SUM(py.amount) FROM ppk_payments py JOIN ppk_bill_funding bf ON bf.id = py.bill_funding_id JOIN ppk_bills b ON b.id = bf.bill_id
+    WHERE b.contract_id = c.id AND py.voided_at IS NULL), 0) AS paid
   FROM ppk_contracts c
   JOIN ppk_fiscal_years fy ON fy.id = c.fiscal_year_id JOIN ppk_vendors v ON v.id = c.vendor_id
   JOIN ppk_programs p ON p.id = c.program_id JOIN ppk_activities act ON act.id = c.activity_id
   LEFT JOIN ppk_service_packages sp ON sp.id = c.service_package_id`;
-const withLatest = (c: Contract): Contract => ({ ...c, latest_value: c.initial_value + c.addendum_total });
+const withLatest = (c: Contract): Contract => {
+  const latest_value = c.initial_value + c.addendum_total;
+  return { ...c, latest_value, sisa_kontrak: latest_value - c.billed };
+};
 
 async function load(s: PpkStore, id: string): Promise<Contract> {
   const c = await s.get<Contract>(`${SELECT} WHERE c.id = ?`, [id]);
@@ -114,8 +120,9 @@ export async function updateContract(s: PpkStore, actor: Actor, id: string, vers
     if (!before) throw new PpkError('NOT_FOUND', 'Kontrak tidak ditemukan.');
     if (before.status === 'selesai' || before.status === 'dibatalkan') throw new PpkError('INVALID', `Kontrak berstatus ${CONTRACT_STATUS_LABEL[before.status]} tidak dapat diubah.`);
     if (before.status !== 'draft' && r.initial_value !== before.initial_value) throw new PpkError('INVALID', 'Nilai awal kontrak aktif tidak dapat diubah. Catat perubahan nilai sebagai addendum.');
-    if (r.fiscal_year_id !== before.fiscal_year_id && (await t.get('SELECT 1 FROM ppk_contract_funding_allocations WHERE contract_id = ?', [id])))
-      throw new PpkError('INVALID', 'Tahun anggaran tidak dapat diubah selama kontrak masih dibebankan ke baris anggaran.');
+    if (r.fiscal_year_id !== before.fiscal_year_id && (await t.get(`SELECT 1 FROM ppk_contract_funding_allocations WHERE contract_id = ?
+      UNION ALL SELECT 1 FROM ppk_bills WHERE contract_id = ?`, [id, id])))
+      throw new PpkError('INVALID', 'Tahun anggaran tidak dapat diubah selama kontrak masih dibebankan ke anggaran atau punya tagihan.');
     await checkRefs(t, r, before.vendor_id);
     try {
       const res = await t.run(`UPDATE ppk_contracts SET ${COLS.map((c) => `${c} = ?`).join(', ')}, version = version + 1, updated_by = ?, updated_at = ? WHERE id = ? AND version = ?`,
@@ -134,6 +141,8 @@ export async function setContractStatus(s: PpkStore, actor: Actor, id: string, s
     if (!c) throw new PpkError('NOT_FOUND', 'Kontrak tidak ditemukan.');
     if (!CONTRACT_NEXT[c.status].includes(status)) throw new PpkError('INVALID', `Status ${CONTRACT_STATUS_LABEL[c.status]} tidak dapat diubah menjadi ${CONTRACT_STATUS_LABEL[status] ?? status}.`);
     const why = text(reason, 'Alasan', { required: status === 'dibatalkan', max: 500 });
+    if (status === 'dibatalkan' && (await t.get("SELECT 1 FROM ppk_bills WHERE contract_id = ? AND status <> 'dibatalkan'", [id])))
+      throw new PpkError('INVALID', 'Kontrak masih punya tagihan. Batalkan tagihannya dulu.');
     await t.run('UPDATE ppk_contracts SET status = ?, version = version + 1, updated_by = ?, updated_at = ? WHERE id = ?', [status, actor.name, now(), id]);
     await ppkAudit(t, actor, 'contract.status', 'ppk_contracts', id, { before: c.status, after: status, reason: why });
   });
@@ -158,6 +167,7 @@ export async function addAddendum(s: PpkStore, actor: Actor, contractId: string,
     await writable(t, contractId);
     const c = await load(t, contractId);
     if (c.latest_value + r.value_change < 0) throw new PpkError('INVALID', 'Nilai kontrak setelah addendum tidak boleh negatif.');
+    if (c.latest_value + r.value_change < c.billed) throw new PpkError('INVALID', `Nilai kontrak setelah addendum lebih kecil dari total tagihan ${formatRupiah(c.billed)}.`);
     const id = randomUUID();
     try {
       await t.run(`INSERT INTO ppk_contract_addendums (id, contract_id, addendum_number, addendum_date, value_change, period_start, period_end, new_end_date, description, created_by, created_at)
@@ -180,6 +190,7 @@ export async function voidAddendum(s: PpkStore, actor: Actor, addendumId: string
     await writable(t, contractId);
     const c = await load(t, contractId);
     if (c.latest_value - a.value_change < 0) throw new PpkError('INVALID', 'Membatalkan addendum ini membuat nilai kontrak negatif.');
+    if (c.latest_value - a.value_change < c.billed) throw new PpkError('INVALID', `Membatalkan addendum ini membuat nilai kontrak lebih kecil dari total tagihan ${formatRupiah(c.billed)}.`);
     await t.run('UPDATE ppk_contract_addendums SET voided_at = ?, voided_by = ?, void_reason = ? WHERE id = ?', [now(), actor.name, why, addendumId]);
     await ppkAudit(t, actor, 'addendum.void', 'ppk_contract_addendums', addendumId, { contract_id: contractId, reason: why, value_change: a.value_change });
   });

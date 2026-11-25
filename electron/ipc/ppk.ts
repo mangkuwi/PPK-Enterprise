@@ -13,6 +13,8 @@ import { addBudgetRevision, createBudgetLine, listBudgetLines, listBudgetVersion
 import { addAddendum, createContract, getContract, listContracts, setAllocations, setContractStatus, setSchedule, updateContract, voidAddendum } from '../main/ppk/contracts';
 import { BUDGET_KIND_LABEL, type BudgetKind } from '@shared/ppk/budget';
 import { CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, type ContractStatus, type ContractType } from '@shared/ppk/contracts';
+import { addPayment, getBill, listBills, saveBill, setBillStatus, voidPayment } from '../main/ppk/bills';
+import { BILL_STATUS_LABEL, PAYMENT_CHANNELS, type BillStatus } from '@shared/ppk/bills';
 import { MASTER_KEYS, type MasterKey } from '@shared/ppk/master';
 import { PPK_ROLES } from '@shared/ppk/access';
 import { VENDOR_STATUS } from '@shared/ppk/vendors';
@@ -39,6 +41,13 @@ const contractInput = z.object({
 const addendumInput = z.object({
   addendum_number: text(200), addendum_date: day, value_change: money, period_start: day.nullable(), period_end: day.nullable(), new_end_date: day.nullable(), description: text(2000)
 });
+const billInput = z.object({
+  contract_id: S.id, bill_number: text(200), bill_date: day, received_date: day.nullable(), service_month: z.string().max(7), period_start: day.nullable(), period_end: day.nullable(),
+  amount: money, pass_through: money, faktur_code: z.enum(['02', '04']).nullable(), faktur_number: text(100), ppn: money.nullable(), pph23: money.nullable(),
+  deduction: money, deduction_reason: text(500), fx_rate: text(40), fx_amount: text(40), ba_number: text(200), ba_date: day.nullable(), official_id: S.id.nullable(),
+  notes: text(2000), funding: z.array(z.object({ budget_line_id: S.id, amount: money })).max(50)
+});
+const billStatus = keys<BillStatus>(BILL_STATUS_LABEL);
 const masterKey = z.enum(MASTER_KEYS as [MasterKey, ...MasterKey[]]);
 
 /** Semua channel ppk:* memeriksa izin di lapisan domain (requirePpk), bukan hanya menyembunyikan menu. */
@@ -87,4 +96,13 @@ export function registerPpkHandlers() {
     ({ id, rows }) => setSchedule(st(), actor(), id, rows));
   handle('ppk:contracts:setAllocations', z.object({ id: S.id, rows: z.array(z.object({ budget_line_id: S.id, amount: money })).max(200) }),
     ({ id, rows }) => setAllocations(st(), actor(), id, rows));
+
+  handle('ppk:bills:list', z.object({ fiscal_year_id: S.id.optional(), contract_id: S.id.optional(), status: z.union([billStatus, z.literal('semua')]).optional(), search: text(200).optional() }),
+    (f) => listBills(st(), actor(), f));
+  handle('ppk:bills:get', z.object({ id: S.id }), ({ id }) => getBill(st(), actor(), id));
+  handle('ppk:bills:save', z.object({ id: S.id.nullable(), version: z.number().int().min(1).nullable(), values: billInput }), ({ id, version, values }) => saveBill(st(), actor(), id, version, values));
+  handle('ppk:bills:setStatus', z.object({ id: S.id, status: z.enum(['diverifikasi', 'dibatalkan']), reason: text(500) }), ({ id, status, reason }) => setBillStatus(st(), actor(), id, status, reason));
+  handle('ppk:bills:addPayment', z.object({ bill_funding_id: S.id, payment: z.object({ channel: z.enum(PAYMENT_CHANNELS), reference_number: text(100), payment_date: day, amount: money, notes: text(1000) }) }),
+    ({ bill_funding_id, payment }) => addPayment(st(), actor(), bill_funding_id, payment));
+  handle('ppk:bills:voidPayment', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidPayment(st(), actor(), id, reason));
 }

@@ -21,6 +21,8 @@ export interface Contract extends Omit<ContractInput, 'is_multi_year'> {
   /** Tanggal selesai terakhir: tanggal baru dari addendum sah terakhir, atau tanggal selesai kontrak. */
   effective_end: string;
   allocated: number; scheduled: number;
+  /** Tagihan tidak dibatalkan; sisa kontrak = nilai terakhir − tagihan. */
+  billed: number; paid: number; sisa_kontrak: number;
   created_by: string; created_at: string; updated_by: string; updated_at: string;
 }
 export interface Addendum {

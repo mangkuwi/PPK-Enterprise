@@ -15,12 +15,16 @@ const SELECT = `SELECT bl.*, fy.year, u.name AS unit_name, p.code AS program_cod
   (SELECT v.amount FROM ppk_budget_versions v WHERE v.budget_line_id = bl.id ORDER BY v.version_no DESC LIMIT 1) AS pagu_terakhir,
   (SELECT COUNT(*) FROM ppk_budget_versions v WHERE v.budget_line_id = bl.id) - 1 AS revisions,
   COALESCE((SELECT SUM(fa.amount) FROM ppk_contract_funding_allocations fa JOIN ppk_contracts c ON c.id = fa.contract_id
-    WHERE fa.budget_line_id = bl.id AND c.status <> 'dibatalkan'), 0) AS allocated
+    WHERE fa.budget_line_id = bl.id AND c.status <> 'dibatalkan'), 0) AS allocated,
+  COALESCE((SELECT SUM(bf.amount) FROM ppk_bill_funding bf JOIN ppk_bills b ON b.id = bf.bill_id
+    WHERE bf.budget_line_id = bl.id AND b.status <> 'dibatalkan'), 0) AS billed,
+  COALESCE((SELECT SUM(py.amount) FROM ppk_payments py JOIN ppk_bill_funding bf ON bf.id = py.bill_funding_id
+    WHERE bf.budget_line_id = bl.id AND py.voided_at IS NULL), 0) AS paid
   FROM ppk_budget_lines bl
   JOIN ppk_fiscal_years fy ON fy.id = bl.fiscal_year_id JOIN ppk_units u ON u.id = bl.unit_id
   JOIN ppk_programs p ON p.id = bl.program_id JOIN ppk_activities a ON a.id = bl.activity_id
   JOIN ppk_budget_accounts ba ON ba.id = bl.budget_account_id JOIN ppk_funding_sources fs ON fs.id = bl.funding_source_id`;
-const withSisa = (r: BudgetLine): BudgetLine => ({ ...r, sisa: r.pagu_terakhir - r.allocated });
+const withSisa = (r: BudgetLine): BudgetLine => ({ ...r, sisa: r.pagu_terakhir - r.allocated, sisa_realisasi: r.pagu_terakhir - r.billed });
 
 export async function listBudgetLines(s: PpkStore, actor: Actor, f: { fiscal_year_id?: string; include_inactive?: boolean } = {}): Promise<BudgetLine[]> {
   await requirePpk(s, actor, 'read');

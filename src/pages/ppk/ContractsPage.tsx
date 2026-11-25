@@ -62,7 +62,7 @@ export default function ContractsPage() {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-xs text-slate-600"><tr>
                 <th className="px-3 py-2 text-left">Nomor kontrak</th><th className="px-3 py-2 text-left">Penyedia</th><th className="px-3 py-2 text-left">Uraian</th>
-                <th className="px-3 py-2 text-right">Nilai terakhir</th><th className="px-3 py-2 text-right">Dibebankan</th><th className="px-3 py-2 text-left">Selesai</th><th className="px-3 py-2 text-left">Status</th>
+                <th className="px-3 py-2 text-right">Nilai terakhir</th><th className="px-3 py-2 text-right">Tertagih / sisa</th><th className="px-3 py-2 text-left">Selesai</th><th className="px-3 py-2 text-left">Status</th>
               </tr></thead>
               <tbody>{list.data.map((c) => (
                 <tr key={c.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => setOpen(c.id)}>
@@ -71,7 +71,7 @@ export default function ContractsPage() {
                   <td className="px-3 py-2">{c.vendor_name}</td>
                   <td className="max-w-xs truncate px-3 py-2" title={c.description}>{c.description}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{rp(c.latest_value)}{c.addendum_count > 0 && <div className="text-xs text-slate-500">{c.addendum_count} addendum</div>}</td>
-                  <td className={cn('px-3 py-2 text-right tabular-nums', c.allocated !== c.latest_value && 'text-amber-700')}>{rp(c.allocated)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{rp(c.billed)}<div className="text-xs text-slate-500">sisa {rp(c.sisa_kontrak)}</div></td>
                   <td className="whitespace-nowrap px-3 py-2">{c.effective_end}<EndBadge c={c} /></td>
                   <td className="px-3 py-2"><Badge tone={TONE[c.status]}>{CONTRACT_STATUS_LABEL[c.status]}</Badge></td>
                 </tr>))}
@@ -232,6 +232,9 @@ function Summary({ c }: { c: Contract }) {
         {row(<strong>Nilai kontrak terakhir</strong>, <strong>{rp(c.latest_value)}</strong>)}
         {row('Dibebankan ke anggaran', rp(c.allocated))}
         {row('Total jadwal', rp(c.scheduled))}
+        {row('Tertagih', rp(c.billed))}
+        {row('Terbayar', rp(c.paid))}
+        {row(<strong>Sisa kontrak</strong>, <strong>{rp(c.sisa_kontrak)}</strong>)}
         {!!c.is_multi_year && row('Dibayar tahun lalu', rp(c.prior_year_paid))}
       </div>
       <div className="mt-3 md:col-span-2"><dt className="text-slate-500">Uraian</dt><dd className="whitespace-pre-wrap">{c.description}</dd></div>

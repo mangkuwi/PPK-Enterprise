@@ -25,7 +25,7 @@ export default function BudgetPage() {
   const [dlg, setDlg] = useState<{ kind: 'new' } | { kind: 'revise' | 'history' | 'edit'; line: BudgetLine } | null>(null);
   const done = () => { setDlg(null); list.reload(); };
   const rows = list.data ?? [];
-  const sum = (k: 'pagu_awal' | 'pagu_terakhir' | 'allocated' | 'sisa') => rows.filter((r) => r.is_active).reduce((a, r) => a + r[k], 0);
+  const sum = (k: 'pagu_terakhir' | 'allocated' | 'sisa' | 'billed' | 'sisa_realisasi') => rows.filter((r) => r.is_active).reduce((a, r) => a + r[k], 0);
 
   return (
     <Page>
@@ -44,23 +44,24 @@ export default function BudgetPage() {
           <Card className="overflow-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-xs text-slate-600"><tr>
-                <th className="px-3 py-2 text-left">Program / Kegiatan</th><th className="px-3 py-2 text-left">MAK</th><th className="px-3 py-2 text-left">Detail output</th>
-                <th className="px-3 py-2 text-left">Sumber</th><th className="px-3 py-2 text-left">Jenis</th>
-                <th className="px-3 py-2 text-right">Pagu awal</th><th className="px-3 py-2 text-right">Pagu terakhir</th>
-                <th className="px-3 py-2 text-right">Komitmen kontrak</th><th className="px-3 py-2 text-right">Sisa pagu</th><th className="px-3 py-2 text-right">Aksi</th>
+                <th className="px-3 py-2 text-left">Program / Kegiatan</th><th className="px-3 py-2 text-left">MAK / detail output</th>
+                <th className="px-3 py-2 text-left">Sumber / jenis</th><th className="px-3 py-2 text-right">Pagu terakhir</th>
+                <th className="px-3 py-2 text-right">Komitmen kontrak</th><th className="px-3 py-2 text-right">Sisa pagu</th>
+                <th className="px-3 py-2 text-right">Realisasi tagihan</th><th className="px-3 py-2 text-right">Sisa realisasi</th><th className="sticky right-0 bg-slate-50 px-3 py-2 text-right">Aksi</th>
               </tr></thead>
               <tbody>{rows.map((b) => (
                 <tr key={b.id} className={`border-t border-slate-100 ${b.is_active ? '' : 'text-slate-400'}`}>
                   <td className="px-3 py-2"><div className="font-medium">{b.program_code}</div><div className="text-xs text-slate-500">{b.activity_name}</div></td>
-                  <td className="px-3 py-2 font-mono text-xs" title={b.mak_name}>{b.mak}</td>
-                  <td className="px-3 py-2">{b.output_detail || '—'}{!b.is_active && <Badge className="ml-2">Nonaktif</Badge>}</td>
-                  <td className="px-3 py-2">{b.source_code}</td>
-                  <td className="px-3 py-2">{BUDGET_KIND_LABEL[b.kind]}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{rp(b.pagu_awal)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{rp(b.pagu_terakhir)}{b.revisions > 0 && <div className="text-xs text-slate-500">{b.revisions}× revisi</div>}</td>
+                  <td className="px-3 py-2"><span className="font-mono text-xs" title={b.mak_name}>{b.mak}</span>{!b.is_active && <Badge className="ml-2">Nonaktif</Badge>}
+                    {b.output_detail && <div className="text-xs text-slate-500">{b.output_detail}</div>}</td>
+                  <td className="px-3 py-2">{b.source_code}<div className="text-xs text-slate-500">{BUDGET_KIND_LABEL[b.kind]}</div></td>
+                  <td className="px-3 py-2 text-right tabular-nums">{rp(b.pagu_terakhir)}
+                    {b.revisions > 0 && <div className="text-xs text-slate-500">awal {rp(b.pagu_awal)} · {b.revisions}× revisi</div>}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{rp(b.allocated)}</td>
                   <td className={`px-3 py-2 text-right font-medium tabular-nums ${b.sisa < 0 ? 'text-red-700' : ''}`}>{rp(b.sisa)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                  <td className="px-3 py-2 text-right tabular-nums">{rp(b.billed)}<div className="text-xs text-slate-500">dibayar {rp(b.paid)}</div></td>
+                  <td className={`px-3 py-2 text-right font-medium tabular-nums ${b.sisa_realisasi < 0 ? 'text-red-700' : ''}`}>{rp(b.sisa_realisasi)}</td>
+                  <td className="sticky right-0 whitespace-nowrap bg-white px-3 py-2 text-right">
                     <Button size="icon" variant="ghost" title="Riwayat pagu" aria-label={`Riwayat pagu ${b.mak}`} onClick={() => setDlg({ kind: 'history', line: b })}><History size={15} /></Button>
                     {can('write') && <>
                       <Button size="icon" variant="ghost" title="Revisi pagu" aria-label={`Revisi pagu ${b.mak}`} onClick={() => setDlg({ kind: 'revise', line: b })}><TrendingUp size={15} /></Button>
@@ -70,14 +71,13 @@ export default function BudgetPage() {
                 </tr>))}
               </tbody>
               <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-semibold"><tr>
-                <td className="px-3 py-2" colSpan={5}>Total baris aktif</td>
-                <td className="px-3 py-2 text-right tabular-nums">{rp(sum('pagu_awal'))}</td><td className="px-3 py-2 text-right tabular-nums">{rp(sum('pagu_terakhir'))}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{rp(sum('allocated'))}</td><td className="px-3 py-2 text-right tabular-nums">{rp(sum('sisa'))}</td><td />
+                <td className="px-3 py-2" colSpan={3}>Total baris aktif</td>
+                {(['pagu_terakhir', 'allocated', 'sisa', 'billed', 'sisa_realisasi'] as const).map((k) => <td key={k} className="px-3 py-2 text-right tabular-nums">{rp(sum(k))}</td>)}<td className="sticky right-0 bg-slate-50" />
               </tr></tfoot>
             </table>
           </Card>
         )}
-        <p className="mt-3 text-xs text-slate-500">Komitmen = pembebanan kontrak yang tidak dibatalkan. Realisasi pembayaran tampil setelah modul tagihan dan pembayaran selesai.</p>
+        <p className="mt-3 text-xs text-slate-500">Komitmen = pembebanan kontrak yang tidak dibatalkan. Realisasi = tagihan yang tidak dibatalkan (catatan internal; angka resmi di SAKTI/SP2D dan FO).</p>
         {dlg?.kind === 'new' && <NewLineDialog fiscalYearId={fyId} onClose={() => setDlg(null)} onSaved={done} />}
         {dlg?.kind === 'revise' && <ReviseDialog line={dlg.line} onClose={() => setDlg(null)} onSaved={done} />}
         {dlg?.kind === 'edit' && <EditLineDialog line={dlg.line} onClose={() => setDlg(null)} onSaved={done} />}

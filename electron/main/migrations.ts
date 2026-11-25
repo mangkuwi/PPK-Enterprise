@@ -619,6 +619,91 @@ CREATE TABLE ppk_contract_funding_allocations (
   UNIQUE (contract_id, budget_line_id)
 );
 CREATE INDEX idx_ppk_cfa_line ON ppk_contract_funding_allocations(budget_line_id);`
+  },
+  {
+    version: 10,
+    name: 'ppk_bills_payments',
+    sql: `
+-- Modul PPK, tahap 3: tagihan dan pembayaran. Hanya menambah tabel.
+-- Tagihan per bulan layanan. Nilai = bagian kena pajak (termasuk PPN) + pass-through (tanpa pajak).
+-- Pajak disimpan sesuai faktur (jawaban no. 12); usulan sistem hanya pembanding. Setelah diverifikasi, isi terkunci; koreksi = batalkan + tagihan baru.
+CREATE TABLE ppk_bills (
+  id TEXT PRIMARY KEY,
+  contract_id TEXT NOT NULL REFERENCES ppk_contracts(id),
+  bill_number TEXT NOT NULL CHECK (length(trim(bill_number)) > 0),
+  bill_date TEXT NOT NULL,
+  received_date TEXT,
+  service_month TEXT NOT NULL CHECK (length(service_month) = 7),
+  period_start TEXT, period_end TEXT,
+  amount INTEGER NOT NULL CHECK (amount >= 0),
+  pass_through INTEGER NOT NULL DEFAULT 0 CHECK (pass_through >= 0),
+  faktur_code TEXT CHECK (faktur_code IN ('02','04')),
+  faktur_number TEXT NOT NULL DEFAULT '',
+  tax_rate_id TEXT REFERENCES ppk_tax_rates(id),
+  dpp INTEGER NOT NULL CHECK (dpp >= 0),
+  ppn INTEGER NOT NULL CHECK (ppn >= 0),
+  pph23 INTEGER NOT NULL CHECK (pph23 >= 0),
+  deduction INTEGER NOT NULL DEFAULT 0 CHECK (deduction >= 0),
+  deduction_reason TEXT NOT NULL DEFAULT '',
+  fx_rate TEXT NOT NULL DEFAULT '',
+  fx_amount TEXT NOT NULL DEFAULT '',
+  ba_number TEXT NOT NULL DEFAULT '',
+  ba_date TEXT,
+  official_id TEXT REFERENCES ppk_officials(id),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','diverifikasi','dibatalkan')),
+  cancel_reason TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL,
+  UNIQUE (contract_id, bill_number),
+  CHECK (ppn + pph23 + deduction <= amount + pass_through),
+  CHECK (period_end IS NULL OR period_start IS NULL OR period_end >= period_start)
+);
+CREATE INDEX idx_ppk_bills_contract ON ppk_bills(contract_id, service_month);
+CREATE TRIGGER trg_ppk_bills_nodel BEFORE DELETE ON ppk_bills BEGIN SELECT RAISE(ABORT, 'Tagihan tidak boleh dihapus; batalkan dengan alasan.'); END;
+CREATE TRIGGER trg_ppk_bills_lock BEFORE UPDATE ON ppk_bills
+WHEN OLD.status = 'dibatalkan'
+  OR (OLD.status = 'diverifikasi' AND (NEW.status <> 'dibatalkan' OR length(trim(NEW.cancel_reason)) = 0
+    OR NEW.contract_id IS NOT OLD.contract_id OR NEW.bill_number IS NOT OLD.bill_number OR NEW.bill_date IS NOT OLD.bill_date
+    OR NEW.service_month IS NOT OLD.service_month OR NEW.amount IS NOT OLD.amount OR NEW.pass_through IS NOT OLD.pass_through
+    OR NEW.faktur_code IS NOT OLD.faktur_code OR NEW.dpp IS NOT OLD.dpp OR NEW.ppn IS NOT OLD.ppn OR NEW.pph23 IS NOT OLD.pph23
+    OR NEW.deduction IS NOT OLD.deduction))
+BEGIN SELECT RAISE(ABORT, 'Tagihan terverifikasi atau dibatalkan tidak dapat diubah; batalkan lalu buat tagihan baru.'); END;
+
+-- Pembagian nilai tagihan ke baris anggaran (satu tagihan bisa RM + BLU). Hanya dapat diubah selama tagihan draf.
+CREATE TABLE ppk_bill_funding (
+  id TEXT PRIMARY KEY,
+  bill_id TEXT NOT NULL REFERENCES ppk_bills(id),
+  budget_line_id TEXT NOT NULL REFERENCES ppk_budget_lines(id),
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  UNIQUE (bill_id, budget_line_id)
+);
+CREATE INDEX idx_ppk_bf_line ON ppk_bill_funding(budget_line_id);
+CREATE TRIGGER trg_ppk_bf_ins BEFORE INSERT ON ppk_bill_funding WHEN (SELECT status FROM ppk_bills WHERE id = NEW.bill_id) <> 'draft'
+BEGIN SELECT RAISE(ABORT, 'Sumber dana tagihan terkunci setelah diverifikasi.'); END;
+CREATE TRIGGER trg_ppk_bf_upd BEFORE UPDATE ON ppk_bill_funding BEGIN SELECT RAISE(ABORT, 'Sumber dana tagihan tidak diubah; ganti selama draf.'); END;
+CREATE TRIGGER trg_ppk_bf_del BEFORE DELETE ON ppk_bill_funding WHEN (SELECT status FROM ppk_bills WHERE id = OLD.bill_id) <> 'draft'
+BEGIN SELECT RAISE(ABORT, 'Sumber dana tagihan terkunci setelah diverifikasi.'); END;
+
+-- Pembayaran per porsi sumber dana: RM/PNBP lewat SAKTI (nomor dan tanggal SP2D), BLU lewat FO. Salah catat = dibatalkan, bukan dihapus.
+CREATE TABLE ppk_payments (
+  id TEXT PRIMARY KEY,
+  bill_funding_id TEXT NOT NULL REFERENCES ppk_bill_funding(id),
+  channel TEXT NOT NULL CHECK (channel IN ('SAKTI','FO','LAINNYA')),
+  reference_number TEXT NOT NULL CHECK (length(trim(reference_number)) > 0),
+  payment_date TEXT NOT NULL,
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  notes TEXT NOT NULL DEFAULT '',
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL,
+  voided_at TEXT, voided_by TEXT, void_reason TEXT
+);
+CREATE UNIQUE INDEX uq_ppk_pay_active ON ppk_payments(bill_funding_id) WHERE voided_at IS NULL;
+CREATE TRIGGER trg_ppk_pay_nodel BEFORE DELETE ON ppk_payments BEGIN SELECT RAISE(ABORT, 'Pembayaran tidak boleh dihapus; batalkan dengan alasan.'); END;
+CREATE TRIGGER trg_ppk_pay_upd BEFORE UPDATE ON ppk_payments
+WHEN OLD.voided_at IS NOT NULL OR NEW.voided_at IS NULL OR length(trim(COALESCE(NEW.void_reason, ''))) = 0
+  OR NEW.bill_funding_id IS NOT OLD.bill_funding_id OR NEW.channel IS NOT OLD.channel OR NEW.reference_number IS NOT OLD.reference_number
+  OR NEW.payment_date IS NOT OLD.payment_date OR NEW.amount IS NOT OLD.amount
+BEGIN SELECT RAISE(ABORT, 'Pembayaran hanya dapat dibatalkan sekali dengan alasan; isinya tidak dapat diubah.'); END;`
   }
 ];
 

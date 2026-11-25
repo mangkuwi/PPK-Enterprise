@@ -8,6 +8,7 @@ import type { CompareView, DocxTemplateInfo, ImportReview, ImportSaveInput, Impo
 import type { AiAction } from '@shared/ai-guard';
 import type { PpkAccess, PpkRole, PpkUserRow } from '@shared/ppk/access';
 import type { MasterKey, MasterRow } from '@shared/ppk/master';
+import type { Bill, BillDetail, BillFilter, BillInput, PaymentInput } from '@shared/ppk/bills';
 import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, Warned } from '@shared/ppk/budget';
 import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow } from '@shared/ppk/contracts';
 import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
@@ -176,6 +177,14 @@ export const api = {
       voidAddendum: (id: string, reason: string) => call<Warned<Contract>>('ppk:contracts:voidAddendum', { id, reason }),
       setSchedule: (id: string, rows: ScheduleRow[]) => call<Warned<Contract>>('ppk:contracts:setSchedule', { id, rows }),
       setAllocations: (id: string, rows: AllocationRow[]) => call<Warned<Contract>>('ppk:contracts:setAllocations', { id, rows })
+    },
+    bills: {
+      list: (f: BillFilter = {}) => call<Bill[]>('ppk:bills:list', f),
+      get: (id: string) => call<BillDetail>('ppk:bills:get', { id }),
+      save: (id: string | null, version: number | null, values: BillInput) => call<Warned<Bill>>('ppk:bills:save', { id, version, values }),
+      setStatus: (id: string, status: 'diverifikasi' | 'dibatalkan', reason = '') => call<Bill>('ppk:bills:setStatus', { id, status, reason }),
+      addPayment: (bill_funding_id: string, payment: PaymentInput) => call<Warned<Bill>>('ppk:bills:addPayment', { bill_funding_id, payment }),
+      voidPayment: (id: string, reason: string) => call<Bill>('ppk:bills:voidPayment', { id, reason })
     }
   },
   ai: {

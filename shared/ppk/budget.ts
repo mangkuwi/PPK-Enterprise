@@ -15,6 +15,8 @@ export interface BudgetLine extends BudgetLineInput {
   pagu_awal: number; pagu_terakhir: number; revisions: number;
   /** Komitmen kontraktual: jumlah pembebanan kontrak yang tidak dibatalkan. */
   allocated: number; sisa: number;
+  /** Realisasi = tagihan tidak dibatalkan yang dibebankan ke baris ini (catatan internal; resmi di SAKTI/SP2D). */
+  billed: number; paid: number; sisa_realisasi: number;
 }
 export interface BudgetVersion { id: string; version_no: number; kind: 'awal' | 'revisi'; amount: number; effective_date: string; source_document: string; notes: string; created_by: string; created_at: string }
 
