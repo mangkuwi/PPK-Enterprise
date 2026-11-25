@@ -122,6 +122,7 @@ describe('penyedia', () => {
     await setVendorStatus(s, staf, v.id, 'arsip', 'kontrak selesai');
     expect(await listVendors(s, staf)).toHaveLength(0);
     expect(await listVendors(s, staf, { status: 'semua', search: 'satelit' })).toHaveLength(1);
+    await expect(createVendor(s, staf, vin())).rejects.toThrow(/berstatus arsip/);
     const log = db.prepare("SELECT detail_json FROM audit_log WHERE action='ppk.vendor.update'").get() as { detail_json: string };
     expect(JSON.parse(log.detail_json)).toMatchObject({ before: { phone: '' }, after: { phone: '021' } });
   });

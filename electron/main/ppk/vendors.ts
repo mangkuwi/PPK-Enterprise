@@ -28,10 +28,11 @@ function prepare(i: VendorInput): Row {
 }
 
 async function duplicateOf(s: PpkStore, r: Row, exceptId: string | null): Promise<string | null> {
-  const hit = await s.get<{ name: string; npwp: string }>(
-    `SELECT name, npwp FROM ppk_vendors WHERE (name_key = ? OR (npwp <> '' AND npwp = ?)) AND id <> ?`, [r.name_key, r.npwp, exceptId ?? '']);
+  const hit = await s.get<{ name: string; npwp: string; status: string }>(
+    `SELECT name, npwp, status FROM ppk_vendors WHERE (name_key = ? OR (npwp <> '' AND npwp = ?)) AND id <> ?`, [r.name_key, r.npwp, exceptId ?? '']);
   if (!hit) return null;
-  return hit.npwp && hit.npwp === r.npwp ? `NPWP ini sudah dipakai penyedia "${hit.name}".` : `Penyedia "${hit.name}" sudah terdaftar (nama dianggap sama).`;
+  const tip = hit.status === 'aktif' ? '' : ` Penyedia itu berstatus ${hit.status}; aktifkan kembali dari daftar "Semua status".`;
+  return (hit.npwp && hit.npwp === r.npwp ? `NPWP ini sudah dipakai penyedia "${hit.name}".` : `Penyedia "${hit.name}" sudah terdaftar (nama dianggap sama).`) + tip;
 }
 
 export async function listVendors(s: PpkStore, actor: Actor, f: VendorFilter = {}): Promise<Vendor[]> {
