@@ -504,6 +504,121 @@ INSERT INTO ppk_tax_rates (id, valid_from, ppn_bp, pph23_bp, note, created_at) V
  (lower(hex(randomblob(16))), '2022-04-01', 1100, 200, 'PPN 11% (UU HPP), PPh 23 2%', strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 INSERT INTO ppk_fiscal_years (id, year, created_at, updated_at) VALUES
  (lower(hex(randomblob(16))), 2026, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));`
+  },
+  {
+    version: 9,
+    name: 'ppk_budget_contracts',
+    sql: `
+-- Modul PPK, tahap 2: anggaran dan kontrak. Hanya menambah tabel. Rupiah = INTEGER. Nilai turunan dihitung query.
+-- Baris anggaran: pembeda = TA + MAK + detail rincian output + sumber dana + jenis (jawaban C: MAK bisa sama untuk pagu DIPA dan saldo kas).
+CREATE TABLE ppk_budget_lines (
+  id TEXT PRIMARY KEY,
+  fiscal_year_id TEXT NOT NULL REFERENCES ppk_fiscal_years(id),
+  unit_id TEXT NOT NULL REFERENCES ppk_units(id),
+  program_id TEXT NOT NULL REFERENCES ppk_programs(id),
+  activity_id TEXT NOT NULL REFERENCES ppk_activities(id),
+  budget_account_id TEXT NOT NULL REFERENCES ppk_budget_accounts(id),
+  output_detail TEXT NOT NULL DEFAULT '',
+  funding_source_id TEXT NOT NULL REFERENCES ppk_funding_sources(id),
+  kind TEXT NOT NULL CHECK (kind IN ('dipa','saldo_kas')),
+  description TEXT NOT NULL DEFAULT '',
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+  version INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL,
+  UNIQUE (fiscal_year_id, budget_account_id, output_detail, funding_source_id, kind)
+);
+CREATE INDEX idx_ppk_bl_year ON ppk_budget_lines(fiscal_year_id, program_id);
+CREATE TRIGGER trg_ppk_bl_nodel BEFORE DELETE ON ppk_budget_lines BEGIN SELECT RAISE(ABORT, 'Baris anggaran tidak boleh dihapus; nonaktifkan saja.'); END;
+
+-- Riwayat pagu (awal, revisi): append-only. Pagu terakhir = versi tertinggi. Koreksi = revisi baru, bukan menimpa.
+CREATE TABLE ppk_budget_versions (
+  id TEXT PRIMARY KEY,
+  budget_line_id TEXT NOT NULL REFERENCES ppk_budget_lines(id),
+  version_no INTEGER NOT NULL CHECK (version_no >= 1),
+  kind TEXT NOT NULL CHECK (kind IN ('awal','revisi')),
+  amount INTEGER NOT NULL CHECK (amount >= 0),
+  effective_date TEXT NOT NULL,
+  source_document TEXT NOT NULL CHECK (length(trim(source_document)) > 0),
+  notes TEXT NOT NULL DEFAULT '',
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL,
+  UNIQUE (budget_line_id, version_no),
+  CHECK ((version_no = 1) = (kind = 'awal'))
+);
+CREATE TRIGGER trg_ppk_bv_noupd BEFORE UPDATE ON ppk_budget_versions BEGIN SELECT RAISE(ABORT, 'Riwayat pagu tidak boleh diubah; catat revisi baru.'); END;
+CREATE TRIGGER trg_ppk_bv_nodel BEFORE DELETE ON ppk_budget_versions BEGIN SELECT RAISE(ABORT, 'Riwayat pagu tidak boleh dihapus; catat revisi baru.'); END;
+
+-- Kontrak induk per penyedia + paket (jawaban no. 6). Nilai kontrak terakhir = nilai awal + perubahan nilai addendum yang sah.
+CREATE TABLE ppk_contracts (
+  id TEXT PRIMARY KEY,
+  fiscal_year_id TEXT NOT NULL REFERENCES ppk_fiscal_years(id),
+  unit_id TEXT NOT NULL REFERENCES ppk_units(id),
+  vendor_id TEXT NOT NULL REFERENCES ppk_vendors(id),
+  program_id TEXT NOT NULL REFERENCES ppk_programs(id),
+  activity_id TEXT NOT NULL REFERENCES ppk_activities(id),
+  service_package_id TEXT REFERENCES ppk_service_packages(id),
+  contract_type TEXT NOT NULL DEFAULT 'biasa' CHECK (contract_type IN ('biasa','kpbu')),
+  contract_number TEXT NOT NULL UNIQUE CHECK (length(trim(contract_number)) > 0),
+  vendor_contract_number TEXT NOT NULL DEFAULT '',
+  contract_date TEXT NOT NULL,
+  description TEXT NOT NULL CHECK (length(trim(description)) > 0),
+  initial_value INTEGER NOT NULL CHECK (initial_value >= 0),
+  start_date TEXT NOT NULL, end_date TEXT NOT NULL,
+  is_multi_year INTEGER NOT NULL DEFAULT 0 CHECK (is_multi_year IN (0,1)),
+  term_start TEXT, term_end TEXT,
+  prior_year_paid INTEGER NOT NULL DEFAULT 0 CHECK (prior_year_paid >= 0),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','aktif','selesai','dibatalkan')),
+  notes TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL,
+  CHECK (end_date >= start_date),
+  CHECK (term_end IS NULL OR term_start IS NULL OR term_end >= term_start)
+);
+CREATE INDEX idx_ppk_contracts_vendor ON ppk_contracts(vendor_id);
+CREATE INDEX idx_ppk_contracts_year ON ppk_contracts(fiscal_year_id, status);
+CREATE TRIGGER trg_ppk_contracts_nodel BEFORE DELETE ON ppk_contracts BEGIN SELECT RAISE(ABORT, 'Kontrak tidak boleh dihapus; ubah status menjadi dibatalkan.'); END;
+
+-- Addendum terpisah dari kontrak, tidak pernah menimpa nilai awal. Salah catat = dibatalkan (void) dengan alasan, bukan dihapus.
+CREATE TABLE ppk_contract_addendums (
+  id TEXT PRIMARY KEY,
+  contract_id TEXT NOT NULL REFERENCES ppk_contracts(id),
+  addendum_number TEXT NOT NULL CHECK (length(trim(addendum_number)) > 0),
+  addendum_date TEXT NOT NULL,
+  value_change INTEGER NOT NULL DEFAULT 0,
+  period_start TEXT, period_end TEXT, new_end_date TEXT,
+  description TEXT NOT NULL DEFAULT '',
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL,
+  voided_at TEXT, voided_by TEXT, void_reason TEXT,
+  UNIQUE (contract_id, addendum_number),
+  CHECK (period_end IS NULL OR period_start IS NULL OR period_end >= period_start)
+);
+CREATE INDEX idx_ppk_add_contract ON ppk_contract_addendums(contract_id);
+CREATE TRIGGER trg_ppk_add_nodel BEFORE DELETE ON ppk_contract_addendums BEGIN SELECT RAISE(ABORT, 'Addendum tidak boleh dihapus; batalkan dengan alasan.'); END;
+CREATE TRIGGER trg_ppk_add_upd BEFORE UPDATE ON ppk_contract_addendums
+WHEN OLD.voided_at IS NOT NULL OR NEW.voided_at IS NULL
+  OR NEW.contract_id IS NOT OLD.contract_id OR NEW.addendum_number IS NOT OLD.addendum_number OR NEW.addendum_date IS NOT OLD.addendum_date
+  OR NEW.value_change IS NOT OLD.value_change OR NEW.period_start IS NOT OLD.period_start OR NEW.period_end IS NOT OLD.period_end
+  OR NEW.new_end_date IS NOT OLD.new_end_date OR NEW.description IS NOT OLD.description
+BEGIN SELECT RAISE(ABORT, 'Addendum hanya dapat dibatalkan sekali; isinya tidak dapat diubah.'); END;
+
+-- Jadwal nilai per bulan (rencana).
+CREATE TABLE ppk_contract_schedules (
+  contract_id TEXT NOT NULL REFERENCES ppk_contracts(id),
+  month TEXT NOT NULL CHECK (length(month) = 7),
+  planned_amount INTEGER NOT NULL CHECK (planned_amount >= 0),
+  updated_by TEXT NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (contract_id, month)
+);
+
+-- Pembebanan kontrak ke baris anggaran (sumber dana + MAK). Satu kontrak bisa ke beberapa baris anggaran.
+CREATE TABLE ppk_contract_funding_allocations (
+  id TEXT PRIMARY KEY,
+  contract_id TEXT NOT NULL REFERENCES ppk_contracts(id),
+  budget_line_id TEXT NOT NULL REFERENCES ppk_budget_lines(id),
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  updated_by TEXT NOT NULL, updated_at TEXT NOT NULL,
+  UNIQUE (contract_id, budget_line_id)
+);
+CREATE INDEX idx_ppk_cfa_line ON ppk_contract_funding_allocations(budget_line_id);`
   }
 ];
 
