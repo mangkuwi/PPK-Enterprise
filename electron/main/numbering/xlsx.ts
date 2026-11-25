@@ -6,6 +6,7 @@ const MAX_ROWS = 50_000; const MAX_COLS = 60;
 
 const unesc = (s: string) => s.replace(/&(lt|gt|amp|quot|apos|#\d+|#x[0-9a-fA-F]+);/g, (_, k: string) =>
   k === 'lt' ? '<' : k === 'gt' ? '>' : k === 'amp' ? '&' : k === 'quot' ? '"' : k === 'apos' ? "'" : k[1] === 'x' ? String.fromCodePoint(parseInt(k.slice(2), 16)) : String.fromCodePoint(Number(k.slice(1))));
+// eslint-disable-next-line no-control-regex -- karakter kontrol tidak sah di XML, sengaja dibuang
 const esc = (s: string) => s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const attr = (a: string, k: string) => new RegExp(`\\b${k}="([^"]*)"`).exec(a)?.[1];
 const textOf = (x: string) => [...x.replace(/<rPh\b[\s\S]*?<\/rPh>/g, '').matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)].map((m) => unesc(m[1])).join('');

@@ -8,7 +8,7 @@ import type { CompareView, DocxTemplateInfo, ImportReview, ImportSaveInput, Impo
 import type { AiAction } from '@shared/ai-guard';
 import type {
   Actor, AppUser, AuditRow, CategoryMapRow, ConfigHistoryRow, DocNumbering, ImportCommitInput, ImportPreview, ImportRecordRow, ImportReport, ImportResult, NextInfo,
-  AvailableQuery, BatchPreview, MigrationReview, NumberBatch, NumberEvent, NumberRecord, NumberRef, NumberingContext, RecordPage, RecordQuery, Register, RegisterSummary, ReserveResult, Role, TemplateMapRow
+  AvailableQuery, BatchPreview, MigrationReview, NumberBatch, NumberEvent, NumberRecord, NumberRef, NumberingContext, RecordPage, RecordQuery, Register, RegisterSummary, Role, TemplateMapRow
 } from '@shared/numbering';
 
 declare global {

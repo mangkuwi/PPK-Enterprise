@@ -53,7 +53,7 @@ const labelOf = (raw: string) => {
   return { l, cfg: LABELS.find((c) => c.re.test(l)) };
 };
 
-const NOMOR_RE = /\b[A-Z]{0,6}-?\d{1,5}(?:\/[A-Za-z0-9.\-]+){2,7}\b/g;
+const NOMOR_RE = /\b[A-Z]{0,6}-?\d{1,5}(?:\/[A-Za-z0-9.-]+){2,7}\b/g;
 const TIME_RE = /\d{1,2}[.:]\d{2}(?:\s*(?:s\.?d\.?|sampai(?:\s+dengan)?|-|–)\s*(?:\d{1,2}[.:]\d{2}|selesai))?\s*(?:WIB|WITA|WIT)\b/gi;
 const WEEKDAY = '(?:Senin|Selasa|Rabu|Kamis|Jumat|Jum\'at|Sabtu|Minggu)';
 const CLOSING_RE = /^\s*(demikian|atas perhatian|atas kerja ?sama|terima kasih|atas bantuan)/i;
@@ -206,11 +206,11 @@ export function analyzeDocx(zip: Zip, filename: string): AnalysisResult {
     if (labelPart) {
       const { l, cfg } = labelOf(labelPart);
       const words = l.split(' ').filter(Boolean).length;
-      let [s, e] = trimRange(text, ci + 1, text.length);
-      e = cutAtVirtual(p, s, e);
+      const [s, e0] = trimRange(text, ci + 1, text.length);
+      const e = cutAtVirtual(p, s, e0);
       if (e <= s) continue;
       if (cfg) { addLabeled(p, s, e, cfg, `Label "${norm(labelPart).replace(/[.:]$/, '')}"`); continue; }
-      const generic = /^[A-ZÀ-Ý][A-Za-zÀ-ÿ \/.]{2,28}$/.test(norm(labelPart)) && words <= 3 && e - s >= 2 && e - s <= 160 && text.length < 220 && !/\d/.test(labelPart);
+      const generic = /^[A-ZÀ-Ý][A-Za-zÀ-ÿ /.]{2,28}$/.test(norm(labelPart)) && words <= 3 && e - s >= 2 && e - s <= 160 && text.length < 220 && !/\d/.test(labelPart);
       if (generic) {
         const base = snakeName(labelPart);
         if (base) push({ para: p, start: s, end: e, base, label: keyToLabel(base), type: inferType(base), required: true, options: [], conf: 0.55, reason: `Pasangan "${norm(labelPart)}: nilai" tidak dikenal; konfirmasi bila nilainya berubah-ubah.` });

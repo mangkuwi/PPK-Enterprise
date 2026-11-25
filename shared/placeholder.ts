@@ -175,7 +175,7 @@ function replaceTextNode(n: TipTapNode, ctx: Ctx): TipTapNode[] {
   return out;
 }
 
-const SOLO = /^\s*\[(\??)([A-Z][A-Z0-9_]*)(?:\|[^\[\]|]*)*\]\s*$/;
+const SOLO = /^\s*\[(\??)([A-Z][A-Z0-9_]*)(?:\|[^[\]|]*)*\]\s*$/;
 
 function processContent(nodes: TipTapNode[], ctx: Ctx): TipTapNode[] {
   const out: TipTapNode[] = [];

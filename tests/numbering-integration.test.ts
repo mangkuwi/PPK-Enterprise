@@ -209,7 +209,7 @@ describe('siklus dokumen', () => {
     const refs = [{ key: 'NOMOR_KONTRAK', record_id: k.id }];
     const mk = (over: object) => repo.saveDocument(db, { id: docId, template_id: null, template_name: 'x', category_id: null, title: 'BA', letter_number: 'diketik-manual', recipient: '', subject: '', doc_date: '2030-01-01', status: 'draft',
       content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: r.number_text }] }] }, header_text: '', footer_text: '', layout: repo.getSettings(db) as never, form_values: {}, use_kop: true, ...over } as never);
-    let docId: string | undefined;
+    let docId: string | undefined = undefined;
     docId = mk({}).id;
     bindDocument(db, op, { record_id: r.id, document_id: docId, values: {}, refs, template_id: t });
     mk({ status: 'final' });

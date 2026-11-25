@@ -121,6 +121,8 @@ export function importTemplates(db: DB, payload: TemplateExport, opts: { keepIds
     for (const t of payload.templates) {
       const cat = cats.find((c) => c.code === t.category_code) ?? cats.find((c) => c.name === t.category_name);
       if (opts.keepIds && t.id && db.prepare('SELECT 1 FROM templates WHERE id = ?').get(t.id)) continue;
+      // Template contoh dibuat dengan UUID acak per instalasi; saat restore, nama + kategori yang sama dianggap sudah ada.
+      if (opts.keepIds && db.prepare('SELECT 1 FROM templates WHERE name = ? AND category_id IS ?').get(t.name, cat?.id ?? fallback)) continue;
       saveTemplate(db, {
         id: opts.keepIds ? t.id : undefined, category_id: cat?.id ?? fallback, name: t.name, description: t.description,
         content: t.content, header_text: t.header_text, footer_text: t.footer_text, layout: t.layout,

@@ -76,7 +76,7 @@ export function scanPart(part: string, xml: string): Scan {
         if (closing) { tblStack.pop(); } else { tblStack.push({ id: tables++, tr: -1, tc: -1, rowIdx: -1 }); }
         break;
       case 'tr':
-        if (closing) { const r = rowStack.pop(); if (r) r.xmlEnd = m.index + m[0].length; tblStack[tblStack.length - 1] && (tblStack[tblStack.length - 1].tc = -1); }
+        if (closing) { const r = rowStack.pop(); if (r) r.xmlEnd = m.index + m[0].length; if (tblStack.length) tblStack[tblStack.length - 1].tc = -1; }
         else if (!selfClose) {
           const t = tblStack[tblStack.length - 1];
           if (t) {
