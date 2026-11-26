@@ -21,7 +21,7 @@ describe('dokumen NASKAHDINAS terkait', () => {
     const reg = (db.prepare("SELECT id FROM number_registers WHERE code='KONTRAK'").get() as { id: string }).id;
     db.prepare(`INSERT INTO number_records (id, register_id, year, number_text, status, number_date, document_id, created_at, updated_at)
       VALUES ('n1', ?, 2026, '1402/PKS/PPK.2', 'issued', '2026-01-14', 'd2', ?, ?)`).run(reg, ts, ts);
-    const r = await relatedDocuments(s, admin, ['0505/ba.ppk.3/bakti tanggal 05 Maret 2026', '1402/PKS/PPK.2', '']);
+    const r = await relatedDocuments(s, s, admin, ['0505/ba.ppk.3/bakti tanggal 05 Maret 2026', '1402/PKS/PPK.2', '']);
     expect(r.map((d) => [d.document_id, d.register_name])).toEqual([['d1', ''], ['d2', 'Kontrak']]);
   });
 });

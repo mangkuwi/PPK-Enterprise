@@ -15,6 +15,10 @@ Setiap uji: database dibuat di folder data OS, 18 halaman dibuka tanpa galat kon
 
 **Font PDF:** di Linux (tanpa Calibri) PDF dokumen berfont Calibri tersemat Carlito; font sematan juga dimuat dengan CSP pratinjau (`font-src data:`). Di Mac tanpa Office, Calibri dan Cambria memakai pengganti yang sama.
 
+## Server PPK (PostgreSQL)
+- `tests/ppk-postgres.test.ts` di PostgreSQL 16 lokal dan workflow **PostgreSQL** (13 dan 16): kolom server = SQLite; data hasil impor + pembayaran + SP2D + RPD disalin lalu semua tampilan (anggaran, kontrak, tagihan, penyedia, master, laporan prognosis 6 varian, rekonsiliasi SP2D) identik dengan SQLite; trigger riwayat; dua tagihan bersamaan yang melewati sisa kontrak (hanya satu lolos); masuk dengan PIN + audit; backup server dipulihkan ke server kosong dengan isi identik; impor spreadsheet langsung di server.
+- Aplikasi Electron asli (Linux, Xvfb), dua folder data = dua komputer, satu PostgreSQL: komputer A memindahkan data lewat halaman Server PPK, membuat pengguna; komputer B bergabung, masuk dengan PIN lewat formulir, melihat data A, menambah penyedia yang langsung terlihat di A; backup server; keluar = akses ditolak; A kembali ke data lokal. Tanpa galat konsol.
+
 ## Belum diuji
 | Konfigurasi | Alasan | Cara menguji |
 | --- | --- | --- |
@@ -24,5 +28,5 @@ Setiap uji: database dibuat di folder data OS, 18 halaman dibuka tanpa galat kon
 | Peringatan Gatekeeper/SmartScreen saat unduh pertama | Butuh unduhan lewat browser oleh manusia | Manual |
 | Keyboard ⌘, trackpad, Retina, Keychain, layar penuh | Butuh manusia | Manual |
 | Tanda tangan Developer ID + notarisasi | Belum ada akun Apple Developer | Otomatis setelah secret diisi (`docs/RELEASE.md`) |
-| PostgreSQL dan multiuser LAN | Belum dibangun (Tahap 6) | Setelah Tahap 6 |
+| Server PPK di LAN sungguhan (Windows server + beberapa PC, firewall, pg_hba) | Uji hanya di satu mesin | Manual: `docs/LAN-SERVER.md` |
 | Pembaruan aplikasi (pasang versi baru di atas versi lama) | Baru satu versi | Rilis berikutnya |

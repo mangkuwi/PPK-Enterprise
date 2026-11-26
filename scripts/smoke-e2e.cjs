@@ -10,7 +10,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ROUTES = ['/', '/generator', '/templates', '/archive', '/importer', '/importer/history', '/bank-nomor', '/penomoran', '/register/surat-keluar',
-  '/ppk/laporan', '/ppk/anggaran', '/ppk/kontrak', '/ppk/tagihan', '/ppk/rekonsiliasi', '/ppk/penyedia', '/ppk/impor', '/ppk/pengaturan', '/settings'];
+  '/ppk/laporan', '/ppk/anggaran', '/ppk/kontrak', '/ppk/tagihan', '/ppk/rekonsiliasi', '/ppk/penyedia', '/ppk/impor', '/ppk/pengaturan', '/ppk/server', '/settings'];
 const UNICODE = 'Surat Undangan – Rapat Ñ ä ẞ';
 
 (async () => {

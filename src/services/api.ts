@@ -16,6 +16,13 @@ import type { Bill, BillDetail, BillFilter, BillInput, PaymentInput } from '@sha
 import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, PlanRow, Warned } from '@shared/ppk/budget';
 import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow, YearValueRow } from '@shared/ppk/contracts';
 import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
+
+export interface PpkServerConf { host: string; port: number; database: string; user: string; password: string }
+export interface PpkServerState { schema: number | null; users: number; data_rows: number }
+export interface PpkServerStatus {
+  mode: 'lokal' | 'server'; conf: Omit<PpkServerConf, 'password'> | null; server: PpkServerState | null; error: string | null; app_schema: number;
+  session: { id: string; name: string; role: string } | null;
+}
 import type {
   Actor, AppUser, AuditRow, CategoryMapRow, ConfigHistoryRow, DocNumbering, ImportCommitInput, ImportPreview, ImportRecordRow, ImportReport, ImportResult, NextInfo,
   AvailableQuery, BatchPreview, MigrationReview, NumberBatch, NumberEvent, NumberRecord, NumberRef, NumberingContext, RecordPage, RecordQuery, Register, RegisterSummary, Role, TemplateMapRow
@@ -208,7 +215,22 @@ export const api = {
       add: (fiscal_year_id: string, record: Sp2dInput) => call<Sp2dRecord>('ppk:sp2d:add', { fiscal_year_id, record }),
       void: (id: string, reason: string) => call<void>('ppk:sp2d:void', { id, reason })
     },
-    relatedDocuments: (numbers: string[]) => call<RelatedDocument[]>('ppk:documents:related', { numbers })
+    relatedDocuments: (numbers: string[]) => call<RelatedDocument[]>('ppk:documents:related', { numbers }),
+    server: {
+      status: () => call<PpkServerStatus>('ppk:server:status'),
+      test: (c: PpkServerConf) => call<PpkServerState>('ppk:server:test', c),
+      configure: (c: PpkServerConf) => call<PpkServerState>('ppk:server:configure', c),
+      setup: (action: 'copy' | 'fresh' | 'join', pin?: string) => call<{ copied: Array<{ table: string; rows: number; rupiah: number }> }>('ppk:server:setup', { action, pin }),
+      useLocal: () => call<boolean>('ppk:server:useLocal'),
+      users: () => call<Array<{ id: string; name: string }>>('ppk:server:users'),
+      login: (user_id: string, pin: string) => call<{ id: string; name: string; role: string }>('ppk:server:login', { user_id, pin }),
+      logout: () => call<boolean>('ppk:server:logout'),
+      createUser: (name: string, pin: string) => call<{ id: string; name: string }>('ppk:server:createUser', { name, pin }),
+      setPin: (user_id: string, pin: string) => call<boolean>('ppk:server:setPin', { user_id, pin }),
+      setActive: (user_id: string, active: boolean) => call<boolean>('ppk:server:setActive', { user_id, active }),
+      backup: () => call<{ path: string; size: number; rows: number }>('ppk:server:backup'),
+      restore: () => call<{ canceled: true } | { canceled: false; tables: Array<{ table: string; rows: number; rupiah: number }> }>('ppk:server:restore')
+    }
   },
   ai: {
     run: (action: AiAction, text: string) => call<{ text: string; warnings: string[] }>('ai:run', { action, text, consent: true })

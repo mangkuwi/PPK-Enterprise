@@ -156,7 +156,7 @@ function RolesTab() {
           </table>
         </Card>
       )}
-      <p className="mt-3 text-xs text-slate-500">Admin PPK: semua termasuk peran. Pejabat PPK: data dan master. Staf Input: data. Pembaca: lihat saja. Pengguna baru dan PIN diatur di Administrasi → Register Lainnya & Impor → Pengaturan → Pengguna.</p>
+      <p className="mt-3 text-xs text-slate-500">Admin PPK: semua termasuk peran. Pejabat PPK: data dan master. Staf Input: data. Pembaca: lihat saja. Pengguna baru dan PIN diatur di Administrasi → Register Lainnya & Impor → Pengaturan → Pengguna, atau di halaman Server PPK bila memakai server.</p>
     </div>
   );
 }

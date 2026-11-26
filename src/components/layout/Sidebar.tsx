@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Archive, BarChart3, Scale, BookOpen, Building2, FileSpreadsheet, FileSignature, Receipt, Wallet, SlidersHorizontal, ChevronsLeft, ChevronsRight, FileClock, FilePlus2, FileSearch, FileText, FileUp, Files, Hash, History, LayoutDashboard, Library, Mail, Settings, UserCircle2, Wand2, type LucideIcon } from 'lucide-react';
+import { Archive, BarChart3, Scale, BookOpen, Building2, FileSpreadsheet, FileSignature, Receipt, Server, Wallet, SlidersHorizontal, ChevronsLeft, ChevronsRight, FileClock, FilePlus2, FileSearch, FileText, FileUp, Files, Hash, History, LayoutDashboard, Library, Mail, Settings, UserCircle2, Wand2, type LucideIcon } from 'lucide-react';
 import { useActor } from '@/features/numbering/NumberingContext';
 import { cn } from '@/lib/utils';
 
@@ -34,7 +34,8 @@ const groups: Array<{ title: string; items: Item[] }> = [
     { to: '/ppk/rekonsiliasi', label: 'Rekonsiliasi SP2D', icon: Scale },
     { to: '/ppk/penyedia', label: 'Database Penyedia', icon: Building2 },
     { to: '/ppk/impor', label: 'Impor Excel', icon: FileSpreadsheet },
-    { to: '/ppk/pengaturan', label: 'Pengaturan PPK', icon: SlidersHorizontal }
+    { to: '/ppk/pengaturan', label: 'Pengaturan PPK', icon: SlidersHorizontal },
+    { to: '/ppk/server', label: 'Server PPK', icon: Server }
   ] },
   { title: 'Settings', items: [
     { to: '/settings', label: 'Pengaturan', icon: Settings }

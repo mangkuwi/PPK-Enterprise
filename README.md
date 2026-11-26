@@ -108,6 +108,10 @@ Empat register mandiri — **Surat Keluar, Nota Dinas, Berita Acara, Kontrak** �
 - Sebelum migrasi skema database, berkas DB disalin otomatis ke folder `backups` (`pre-migration-v*.db`).
 - Lokasi data: `%APPDATA%\NASKAHDINAS AI\data\naskahdinas.db`; log: `%APPDATA%\NASKAHDINAS AI\logs\app.log`.
 
+## 4b. Server PPK bersama (opsional, LAN)
+Modul PPK dapat memakai satu database PostgreSQL di jaringan kantor agar beberapa komputer melihat dan mencatat data yang sama.
+Dokumen dan penomoran tetap lokal. Langkah pasang, keamanan, dan backup: [docs/LAN-SERVER.md](docs/LAN-SERVER.md). Menu: *PPK Management → Server PPK*.
+
 ## 5. Keamanan
 `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`; preload hanya mengekspos `invoke` dengan **daftar putih channel**;
 setiap handler IPC memverifikasi asal frame dan memvalidasi payload dengan **zod**; renderer tidak pernah memberi path tulis
@@ -157,6 +161,7 @@ tests/             vitest · scripts/ dev & build · docs/ SRS, checklist uji
 Catatan teknis: Prisma diganti `better-sqlite3` + migrasi SQL manual karena engine native Prisma bermasalah saat dikemas untuk Electron offline.
 
 ## 8. Batasan yang diketahui
+- Server PPK: koneksi ke PostgreSQL tanpa TLS (hanya untuk LAN tepercaya); backup otomatis server hanya berjalan saat aplikasi terbuka di salah satu komputer.
 - Kesetaraan DOCX dengan Microsoft Word **belum diuji**; konverter mendukung paragraf, heading, format teks, rata teks, indentasi, daftar bertingkat, tabel (colspan/rowspan/lebar kolom/tanpa garis), gambar PNG/JPEG/GIF/BMP, page break, kop, header/footer, nomor halaman.
 - Pagination di editor bersifat perkiraan (garis batas halaman); pemisahan halaman final ditentukan Word/Chromium saat export.
 - Gambar WebP/SVG tidak didukung pada export DOCX.

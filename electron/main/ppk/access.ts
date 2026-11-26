@@ -4,7 +4,7 @@ import { PPK_ROLES, permsOf, type PpkAccess, type PpkPerm, type PpkRole, type Pp
 import type { PpkStore } from './store';
 
 export class PpkError extends Error {
-  constructor(public code: 'FORBIDDEN' | 'PIN_REQUIRED' | 'INVALID' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE', message: string) { super(message); }
+  constructor(public code: 'FORBIDDEN' | 'PIN_REQUIRED' | 'LOGIN_REQUIRED' | 'INVALID' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE', message: string) { super(message); }
 }
 
 const now = () => new Date().toISOString();

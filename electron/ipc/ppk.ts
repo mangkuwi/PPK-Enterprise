@@ -7,7 +7,6 @@ import { handle } from './handle';
 import * as S from './schemas';
 import { saveFile } from './numbering';
 import { getDb } from '../main/database';
-import { currentActor, peekActor } from '../main/numbering/session';
 import { readXlsx, writeXlsx, type Sheet } from '../main/numbering/xlsx';
 import { getMainWindow } from '../main/window';
 import { runPpkImport } from '../main/ppk/import';
@@ -15,6 +14,8 @@ import { ppkReport, reportSheets } from '../main/ppk/reports';
 import { addSp2d, sp2dReport, voidSp2d } from '../main/ppk/sp2d';
 import { relatedDocuments } from '../main/ppk/documents';
 import { sqliteStore } from '../main/ppk/store';
+import { peekPpkActor, ppkActor, ppkStore } from '../main/ppk/server';
+import { registerPpkServerHandlers } from './ppkServer';
 import { listPpkUsers, ppkAccess, setPpkRole } from '../main/ppk/access';
 import { listMaster, listTaxRates, saveMaster } from '../main/ppk/master';
 import { VENDOR_EXPORT_HEADER, createVendor, getVendor, listVendors, setVendorStatus, similarVendors, updateVendor, vendorExportRow } from '../main/ppk/vendors';
@@ -61,10 +62,11 @@ const masterKey = z.enum(MASTER_KEYS as [MasterKey, ...MasterKey[]]);
 
 /** Semua channel ppk:* memeriksa izin di lapisan domain (requirePpk), bukan hanya menyembunyikan menu. */
 export function registerPpkHandlers() {
-  const st = () => sqliteStore(getDb());
-  const actor = () => currentActor(getDb());
+  const st = () => ppkStore(getDb());
+  const actor = () => ppkActor(getDb());
+  registerPpkServerHandlers();
 
-  handle('ppk:access', S.empty, async () => { const a = peekActor(getDb()); return a ? ppkAccess(st(), a) : null; });
+  handle('ppk:access', S.empty, async () => { const a = peekPpkActor(getDb()); return a ? ppkAccess(st(), a) : null; });
   handle('ppk:users', S.empty, () => listPpkUsers(st(), actor()));
   handle('ppk:setRole', z.object({ user_id: S.id, role: z.enum(PPK_ROLES).nullable() }), async ({ user_id, role }) => { await setPpkRole(st(), actor(), user_id, role); return true; });
 
@@ -149,7 +151,7 @@ export function registerPpkHandlers() {
   handle('ppk:sp2d:report', z.object({ fiscal_year_id: S.id }), ({ fiscal_year_id }) => sp2dReport(st(), actor(), fiscal_year_id));
   handle('ppk:sp2d:add', z.object({ fiscal_year_id: S.id, record: z.object({ sp2d_number: text(100), sp2d_date: day, amount: money, notes: text(1000) }) }),
     ({ fiscal_year_id, record }) => addSp2d(st(), actor(), fiscal_year_id, record));
-  handle('ppk:documents:related', z.object({ numbers: z.array(text(300)).max(20) }), ({ numbers }) => relatedDocuments(st(), actor(), numbers));
+  handle('ppk:documents:related', z.object({ numbers: z.array(text(300)).max(20) }), ({ numbers }) => relatedDocuments(st(), sqliteStore(getDb()), actor(), numbers));
   handle('ppk:sp2d:void', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidSp2d(st(), actor(), id, reason));
 }
 

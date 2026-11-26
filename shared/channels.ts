@@ -27,6 +27,8 @@ export const CHANNELS = [
   'ppk:bills:list', 'ppk:bills:get', 'ppk:bills:save', 'ppk:bills:setStatus', 'ppk:bills:addPayment', 'ppk:bills:voidPayment',
   'ppk:import:pick', 'ppk:import:run', 'ppk:reports:get', 'ppk:reports:export',
   'ppk:budget:plan', 'ppk:budget:setPlan', 'ppk:contracts:setYearValues', 'ppk:sp2d:report', 'ppk:sp2d:add', 'ppk:sp2d:void', 'ppk:documents:related',
+  'ppk:server:status', 'ppk:server:test', 'ppk:server:configure', 'ppk:server:setup', 'ppk:server:useLocal', 'ppk:server:users', 'ppk:server:login',
+  'ppk:server:logout', 'ppk:server:createUser', 'ppk:server:setPin', 'ppk:server:setActive', 'ppk:server:backup', 'ppk:server:restore',
   'ai:run'
 ] as const;
 export type Channel = (typeof CHANNELS)[number];
