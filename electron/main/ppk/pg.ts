@@ -100,20 +100,27 @@ export function pgStore(pool: pg.Pool): PpkStore {
 export const PG_TABLES = ['app_users', 'audit_log', 'ppk_user_roles', 'ppk_fiscal_years', 'ppk_units', 'ppk_officials', 'ppk_programs', 'ppk_activities',
   'ppk_funding_sources', 'ppk_budget_accounts', 'ppk_service_categories', 'ppk_service_packages', 'ppk_tax_rates', 'ppk_vendors',
   'ppk_budget_lines', 'ppk_budget_versions', 'ppk_contracts', 'ppk_contract_addendums', 'ppk_contract_schedules', 'ppk_contract_funding_allocations',
-  'ppk_bills', 'ppk_bill_funding', 'ppk_payments', 'ppk_budget_plans', 'ppk_sp2d_records', 'ppk_contract_year_values'] as const;
+  'ppk_bills', 'ppk_bill_funding', 'ppk_payments', 'ppk_budget_plans', 'ppk_sp2d_records', 'ppk_contract_year_values', 'ppk_agendas', 'ppk_agenda_assignees'] as const;
 
-export const PG_SCHEMA_VERSION = 11;
+/** Migrasi SQLite yang berisi tabel PPK (v12 = tabel undangan modul dokumen, tetap lokal). */
+const PG_MIGRATIONS = [8, 9, 10, 11, 13];
+export const PG_SCHEMA_VERSION = PG_MIGRATIONS[PG_MIGRATIONS.length - 1];
+
+/** Satu migrasi SQLite → PostgreSQL: INTEGER → BIGINT, trigger dan data awal SQLite dibuang (trigger ditulis ulang di PG_TRIGGERS). */
+const convert = (v: number) => MIGRATIONS.find((m) => m.version === v)!.sql
+  .replace(/CREATE TRIGGER[\s\S]*?\bEND;/g, '')
+  .replace(/INSERT INTO[\s\S]*?\);\s*(?=\n|$)/g, '')
+  .replace(/\bINTEGER\b/g, 'BIGINT');
 
 /**
- * Tabel PPK diambil dari migrasi SQLite v8–v11 (satu sumber kolom dan constraint): INTEGER → BIGINT, trigger dan data awal SQLite dibuang,
- * lalu trigger PostgreSQL ditulis ulang di bawah dengan aturan yang sama. tests/ppk-postgres.test.ts mencocokkan kolom kedua skema.
+ * Skema server = migrasi SQLite PPK (satu sumber kolom dan constraint) + trigger PostgreSQL dengan aturan yang sama.
+ * tests/ppk-postgres.test.ts mencocokkan kolom kedua skema dan menguji pembaruan server lama.
  */
-export function pgSchemaSql(): string {
-  const ppk = MIGRATIONS.filter((m) => m.version >= 8 && m.version <= PG_SCHEMA_VERSION).map((m) => m.sql).join('\n')
-    .replace(/CREATE TRIGGER[\s\S]*?\bEND;/g, '')
-    .replace(/INSERT INTO[\s\S]*?\);\s*(?=\n|$)/g, '')
-    .replace(/\bINTEGER\b/g, 'BIGINT');
-  return `
+export function pgSchemaSql(upTo = PG_SCHEMA_VERSION): string {
+  return PG_MIGRATIONS.filter((v) => v <= upTo).map((v) => (v === 8 ? BASE : '') + convert(v) + (PG_TRIGGERS[v] ?? '')).join('\n');
+}
+
+const BASE = `
 CREATE TABLE app_users (
   id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, role TEXT NOT NULL CHECK (role IN ('admin','operator')),
   pin_hash TEXT, pin_salt TEXT, is_active BIGINT NOT NULL DEFAULT 1, created_at TEXT NOT NULL
@@ -123,11 +130,13 @@ CREATE TABLE audit_log (
   entity TEXT NOT NULL DEFAULT '', entity_id TEXT, detail_json TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX idx_audit_at ON audit_log(at);
-${ppk}
 -- Pemeriksaan dilewati hanya saat menyalin data lama ke server kosong (SET LOCAL ppk.copy = 'on' di satu transaksi).
 CREATE FUNCTION ppk_copying() RETURNS boolean LANGUAGE sql AS $$ SELECT coalesce(current_setting('ppk.copy', true), '') = 'on' $$;
 CREATE FUNCTION ppk_forbid() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION '%', TG_ARGV[0]; END $$;
 CREATE TRIGGER trg_audit_noupd BEFORE UPDATE OR DELETE ON audit_log FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Log audit bersifat append-only.');
+`;
+
+const TRIGGERS_V8_11 = `
 CREATE TRIGGER trg_ppk_vendors_nodel BEFORE DELETE ON ppk_vendors FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Penyedia tidak boleh dihapus; arsipkan saja.');
 CREATE TRIGGER trg_ppk_bl_nodel BEFORE DELETE ON ppk_budget_lines FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Baris anggaran tidak boleh dihapus; nonaktifkan saja.');
 CREATE TRIGGER trg_ppk_bv_noupd BEFORE UPDATE ON ppk_budget_versions FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Riwayat pagu tidak boleh diubah; catat revisi baru.');
@@ -176,7 +185,12 @@ CREATE FUNCTION ppk_sp2d_upd() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
   RETURN NEW; END $$;
 CREATE TRIGGER trg_ppk_sp2d_upd BEFORE UPDATE ON ppk_sp2d_records FOR EACH ROW EXECUTE FUNCTION ppk_sp2d_upd();
 `;
-}
+
+/** Trigger PostgreSQL per migrasi, aturan sama dengan trigger SQLite. */
+const PG_TRIGGERS: Record<number, string> = {
+  11: TRIGGERS_V8_11,
+  13: `CREATE TRIGGER trg_ppk_agendas_nodel BEFORE DELETE ON ppk_agendas FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Agenda tidak boleh dihapus; batalkan dengan alasan.');`
+};
 
 /** Data awal untuk server baru yang tidak diisi dari data lama (sama dengan migrasi v8 SQLite). */
 const SEED = `
@@ -201,17 +215,26 @@ async function status(pool: pg.Pool): Promise<PgStatus> {
   return { schema: v, users, data_rows: data };
 }
 
-/** Pasang skema di database kosong. Kunci advisory mencegah dua komputer memasang bersamaan. */
+/** Pasang skema di database kosong, atau perbarui server lama. Kunci advisory mencegah dua komputer memasang bersamaan. */
 export async function installPgSchema(pool: pg.Pool) {
   const c = await pool.connect();
   try {
     await c.query('BEGIN');
     await c.query('SELECT pg_advisory_xact_lock(7262011)');
     const exists = (await c.query("SELECT to_regclass('public.ppk_schema_version') IS NOT NULL AS ok")).rows[0].ok;
+    const at = new Date().toISOString();
     if (!exists) {
       await c.query(pgSchemaSql());
       await c.query('CREATE TABLE ppk_schema_version (version BIGINT PRIMARY KEY, applied_at TEXT NOT NULL)');
-      await c.query('INSERT INTO ppk_schema_version VALUES ($1, $2)', [PG_SCHEMA_VERSION, new Date().toISOString()]);
+      await c.query('INSERT INTO ppk_schema_version VALUES ($1, $2)', [PG_SCHEMA_VERSION, at]);
+    } else {
+      // Server dari versi aplikasi lama: terapkan migrasi PPK yang belum ada (hanya menambah tabel), satu transaksi.
+      const cur = Number((await c.query('SELECT max(version) v FROM ppk_schema_version')).rows[0].v);
+      if (cur > PG_SCHEMA_VERSION) throw new PpkError('INVALID', `Server dibuat aplikasi versi lebih baru (data ${cur}). Perbarui aplikasi di komputer ini.`);
+      for (const v of PG_MIGRATIONS.filter((x) => x > cur)) {
+        await c.query(convert(v) + (PG_TRIGGERS[v] ?? ''));
+        await c.query('INSERT INTO ppk_schema_version VALUES ($1, $2)', [v, at]);
+      }
     }
     await c.query('COMMIT');
   } catch (e) { await c.query('ROLLBACK').catch(() => undefined); throw e; } finally { c.release(); }

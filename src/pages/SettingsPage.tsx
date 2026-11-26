@@ -146,7 +146,35 @@ export default function SettingsPage() {
               <Button variant="outline" disabled={!aiKey} onClick={() => saveKey(aiKey)}>Simpan kunci</Button>
               {settings.ai_key_set === 'true' && <Button variant="ghost" onClick={() => saveKey('')}>Hapus</Button>}</div></Field>
         </Card>
+
+        <WhatsAppApiCard />
       </div>
     </Page>
+  );
+}
+
+/** WhatsApp Business Cloud API: nonaktif sampai administrator mengisi kredensial. Token tidak pernah ditampilkan kembali. */
+function WhatsAppApiCard() {
+  const { toast } = useFeedback();
+  const st = useAsync(() => api.whatsapp.cloudStatus(), []);
+  const [f, setF] = useState({ enabled: false, phone_number_id: '', api_version: 'v21.0', token: '' });
+  useEffect(() => { if (st.data) setF((x) => ({ ...x, enabled: st.data!.enabled, phone_number_id: st.data!.phone_number_id, api_version: st.data!.api_version })); }, [st.data]);
+  const run = async (fn: () => Promise<unknown>, ok: string) => { try { await fn(); toast(ok, 'success'); setF((x) => ({ ...x, token: '' })); st.reload(); } catch (e) { toast(errMsg(e), 'error'); } };
+  return (
+    <Card className="space-y-3 p-4 xl:col-span-2">
+      <h2 className="font-semibold text-navy-900">WhatsApp Business API (opsional)</h2>
+      <p className="text-xs text-slate-500">Tanpa ini, surat undangan tetap bisa dikirim lewat WhatsApp Desktop/Web (lampiran PDF ditambahkan sendiri). Dengan API, PDF dikirim langsung dari aplikasi. Butuh akun WhatsApp Business Platform (Meta), nomor bisnis terverifikasi, dan access token. Hanya administrator. Di luar 24 jam sejak pesan terakhir penerima, Meta mewajibkan template pesan yang disetujui.</p>
+      <Switch checked={f.enabled} onChange={(v) => setF({ ...f, enabled: v })} label="Aktifkan pengiriman lewat API" />
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <Field label="Phone Number ID"><Input value={f.phone_number_id} onChange={(e) => setF({ ...f, phone_number_id: e.target.value.trim() })} /></Field>
+        <Field label="Versi Graph API"><Input value={f.api_version} onChange={(e) => setF({ ...f, api_version: e.target.value.trim() })} /></Field>
+        <Field label="Access token" hint={st.data?.token_set ? 'Token tersimpan terenkripsi. Isi untuk mengganti.' : 'Disimpan terenkripsi oleh sistem operasi.'}>
+          <Input type="password" autoComplete="off" value={f.token} onChange={(e) => setF({ ...f, token: e.target.value })} placeholder={st.data?.token_set ? '••••••••' : ''} /></Field>
+      </div>
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={() => run(() => api.whatsapp.cloudConfigure(f), 'Pengaturan WhatsApp API disimpan.')}>Simpan</Button>
+        {st.data?.token_set && <Button variant="ghost" onClick={() => run(() => api.whatsapp.cloudForget(), 'Token dihapus dan API dinonaktifkan.')}>Hapus token</Button>}
+      </div>
+    </Card>
   );
 }

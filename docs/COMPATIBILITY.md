@@ -29,4 +29,6 @@ Setiap uji: database dibuat di folder data OS, 18 halaman dibuka tanpa galat kon
 | Keyboard ⌘, trackpad, Retina, Keychain, layar penuh | Butuh manusia | Manual |
 | Tanda tangan Developer ID + notarisasi | Belum ada akun Apple Developer | Otomatis setelah secret diisi (`docs/RELEASE.md`) |
 | Server PPK di LAN sungguhan (Windows server + beberapa PC, firewall, pg_hba) | Uji hanya di satu mesin | Manual: `docs/LAN-SERVER.md` |
+| Membuka WhatsApp Desktop/Web sungguhan | Runner tidak punya WhatsApp | Manual: tombol Kirim via WhatsApp |
+| WhatsApp Business API dengan akun nyata | Belum ada akun, nomor bisnis, dan token | Manual setelah konfigurasi (`docs/WHATSAPP.md`) |
 | Pembaruan aplikasi (pasang versi baru di atas versi lama) | Baru satu versi | Rilis berikutnya |

@@ -21,6 +21,14 @@ const conf = z.object({ host: z.string().trim().min(1).max(200), port: z.number(
 const pin = z.string().regex(/^\d{4,12}$/, 'PIN harus 4–12 digit angka.');
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+/** Server berisi skema: perbarui bila dibuat versi aplikasi lama (migrasi hanya menambah), lalu cek versinya sama. */
+async function ready(pool: Parameters<typeof pgStatus>[0]) {
+  if ((await pgStatus(pool)).schema !== null) await installPgSchema(pool);
+  const st = await pgStatus(pool);
+  assertSchema(st);
+  return st;
+}
+
 /** Server PPK (PostgreSQL di LAN): atur koneksi, siapkan, masuk, kelola pengguna, backup. */
 export function registerPpkServerHandlers() {
   const db = () => getDb();
@@ -53,8 +61,7 @@ export function registerPpkServerHandlers() {
       }
       await initFreshServer(pool, { id: admin.id, name: admin.name }, pin.parse(p ?? ''));
     } else {
-      const st = await pgStatus(pool);
-      assertSchema(st);
+      const st = await ready(pool);
       if (!st.users) throw new Error('Server belum berisi pengguna. Pilih "Pindahkan data" atau "Server baru".');
     }
     setDbMode(db(), 'server');
@@ -69,7 +76,7 @@ export function registerPpkServerHandlers() {
   handle('ppk:server:users', S.empty, () => listServerUsers(pgStore(serverPool(db()))));
   handle('ppk:server:login', z.object({ user_id: S.id, pin: z.string().max(12) }), async ({ user_id, pin: p }) => {
     const pool = serverPool(db());
-    assertSchema(await pgStatus(pool));
+    await ready(pool);
     const a = await serverLogin(pgStore(pool), user_id, p);
     setServerSession(a);
     return a;

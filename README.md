@@ -112,6 +112,12 @@ Empat register mandiri — **Surat Keluar, Nota Dinas, Berita Acara, Kontrak** �
 Modul PPK dapat memakai satu database PostgreSQL di jaringan kantor agar beberapa komputer melihat dan mencatat data yang sama.
 Dokumen dan penomoran tetap lokal. Langkah pasang, keamanan, dan backup: [docs/LAN-SERVER.md](docs/LAN-SERVER.md). Menu: *PPK Management → Server PPK*.
 
+## 4c. Undangan via WhatsApp dan Agenda PPK
+Di editor surat (dokumen tersimpan): **Kirim via WhatsApp** membuat PDF di folder aplikasi, mengisi daftar penerima dan pesan,
+lalu membuka WhatsApp Desktop/Web dengan pesan terisi. PDF dilampirkan sendiri oleh pengguna; status "WhatsApp dibuka" hanya berarti chat terbuka.
+Mode WhatsApp Business API (PDF terlampir otomatis) nonaktif sampai administrator mengisinya di *Pengaturan*: [docs/WHATSAPP.md](docs/WHATSAPP.md).
+**Buat Agenda** mengisi agenda dari surat undangan (tanggal, hari, jam, lokasi/tautan rapat, penanggung jawab, staf pendukung); tampil di *PPK Management → Agenda PPK* dan dashboard.
+
 ## 5. Keamanan
 `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`; preload hanya mengekspos `invoke` dengan **daftar putih channel**;
 setiap handler IPC memverifikasi asal frame dan memvalidasi payload dengan **zod**; renderer tidak pernah memberi path tulis

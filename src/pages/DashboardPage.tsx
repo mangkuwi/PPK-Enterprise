@@ -7,6 +7,8 @@ import { useAsync } from '@/hooks/useAsync';
 import { api } from '@/services/api';
 import { formatDateTime } from '@/lib/utils';
 import { REGISTER_PATH } from '@shared/numbering';
+import { dayName } from '@shared/ppk/agenda';
+import { formatDateID } from '@shared/date';
 
 function Stat({ icon: Icon, label, value, hint, to }: { icon: typeof Files; label: string; value: string | number; hint?: string; to?: string }) {
   const body = (
@@ -23,6 +25,8 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const stats = useAsync(() => api.stats(), []);
   const reg = useAsync(() => api.numbering.summary(new Date().getFullYear()), []);
+  // Agenda PPK hanya tampil bila pengguna punya akses PPK (galat izin = kartu disembunyikan).
+  const agendas = useAsync(() => api.ppk.agendas.list({ from: new Date().toLocaleDateString('sv-SE') }), []);
   const s = stats.data;
   const totals = (reg.data ?? []).reduce((a, x) => ({ available: a.available + x.available - x.review, assigned: a.assigned + x.assigned, issued: a.issued + x.issued }), { available: 0, assigned: 0, issued: 0 });
   return (
@@ -44,6 +48,17 @@ export default function DashboardPage() {
         <Button variant="outline" onClick={() => navigate('/generator?register=SURAT_KELUAR')}><Send size={16} /> Buat Surat Keluar</Button>
         <Button variant="outline" onClick={() => navigate('/generator')}><FilePlus2 size={16} /> Buat Dokumen Baru</Button>
       </div>
+
+      {!!agendas.data?.length && (
+        <Card className="mt-6 p-4">
+          <div className="mb-3 flex items-center justify-between font-semibold text-navy-900">Agenda mendatang<Link to="/ppk/agenda" className="text-sm font-normal text-navy-600 hover:underline">Agenda PPK</Link></div>
+          <ul className="divide-y divide-slate-100 text-sm">{agendas.data.slice(0, 5).map((a) => (
+            <li key={a.id} className="flex flex-wrap justify-between gap-2 py-2">
+              <span className="font-medium">{a.title}</span>
+              <span className="text-slate-600">{dayName(a.agenda_date)}, {formatDateID(a.agenda_date)}{a.start_time && ` · ${a.start_time}`}{a.pic && ` · ${a.pic.name}`}</span>
+            </li>))}</ul>
+        </Card>
+      )}
 
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card className="p-4">

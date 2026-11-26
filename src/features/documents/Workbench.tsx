@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Copy, Eye, FileDown, FileText, History, Printer, RefreshCw, Save, SaveAll, SlidersHorizontal, Undo2 } from 'lucide-react';
+import { CalendarPlus, Copy, Eye, FileDown, FileText, History, MessageCircle, Printer, RefreshCw, Save, SaveAll, SlidersHorizontal, Undo2 } from 'lucide-react';
 import { RichEditor } from '@/features/editor/RichEditor';
 import { Button } from '@/components/ui/button';
 import { Badge, STATUS_LABEL } from '@/components/ui/card';
@@ -9,6 +9,9 @@ import { errMsg, useFeedback } from '@/components/ui/feedback';
 import { api } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
 import { useSettings } from '@/hooks/useSettings';
+import { WhatsAppDialog } from './WhatsAppDialog';
+import { AgendaForm } from '@/features/ppk/AgendaForm';
+import { agendaFromInvitation } from '@shared/ppk/agenda';
 import { formatDateTime } from '@/lib/utils';
 import { buildDocumentHtml } from '@shared/render';
 import { unresolvedKeys } from '@shared/placeholder';
@@ -44,6 +47,8 @@ export function Workbench({ initial, content, contentKey, onSaved, onRegenerate,
   const [busy, setBusy] = useState('');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [waOpen, setWaOpen] = useState(false);
+  const [agendaOpen, setAgendaOpen] = useState(false);
   const [unresolved, setUnresolved] = useState(() => unresolvedKeys(content).length);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const tick = useRef(0);
@@ -125,6 +130,8 @@ export function Workbench({ initial, content, contentKey, onSaved, onRegenerate,
         <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('docx')}><FileText size={14} /> {busy === 'docx' ? 'Membuat…' : 'Export DOCX'}</Button>
         <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('pdf')}><FileDown size={14} /> {busy === 'pdf' ? 'Membuat…' : 'Export PDF'}</Button>
         <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('print')}><Printer size={14} /> Cetak</Button>
+        <Button size="sm" variant="outline" disabled={!!busy} onClick={() => setWaOpen(true)}><MessageCircle size={14} /> Kirim via WhatsApp</Button>
+        <Button size="sm" variant="outline" onClick={() => setAgendaOpen(true)}><CalendarPlus size={14} /> Buat Agenda</Button>
         {draft.id && <Button size="sm" variant="ghost" onClick={duplicate}><Copy size={14} /> Duplikat</Button>}
         {draft.id && <Button size="sm" variant="ghost" onClick={() => setVersionsOpen(true)}><History size={14} /> Riwayat Versi</Button>}
         {onRegenerate && <Button size="sm" variant="ghost" onClick={onRegenerate}><RefreshCw size={14} /> Regenerate</Button>}
@@ -172,6 +179,12 @@ export function Workbench({ initial, content, contentKey, onSaved, onRegenerate,
             <iframe title="Pratinjau" sandbox="" srcDoc={previewHtml} className="h-[70vh] w-full rounded border border-slate-200 bg-slate-300" />
           </DialogContent>
         )}
+      </Dialog>
+      <Dialog open={agendaOpen} onOpenChange={setAgendaOpen}>
+        {agendaOpen && <AgendaForm initial={agendaFromInvitation(draft, settings.sender_identity || settings.institution_name)} onSaved={() => setAgendaOpen(false)} />}
+      </Dialog>
+      <Dialog open={waOpen} onOpenChange={setWaOpen}>
+        {waOpen && <WhatsAppDialog source={draft} exportDoc={exportDoc} />}
       </Dialog>
       {draft.id && <VersionsDialog open={versionsOpen} onOpenChange={setVersionsOpen} documentId={draft.id} draft={draft} onRestored={restored} />}
     </div>

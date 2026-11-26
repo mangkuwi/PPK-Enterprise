@@ -12,6 +12,7 @@ import { getMainWindow } from '../main/window';
 import { runPpkImport } from '../main/ppk/import';
 import { ppkReport, reportSheets } from '../main/ppk/reports';
 import { addSp2d, sp2dReport, voidSp2d } from '../main/ppk/sp2d';
+import { agendaPeople, createAgenda, getAgenda, listAgendas, setAgendaStatus, updateAgenda } from '../main/ppk/agenda';
 import { relatedDocuments } from '../main/ppk/documents';
 import { sqliteStore } from '../main/ppk/store';
 import { peekPpkActor, ppkActor, ppkStore } from '../main/ppk/server';
@@ -152,6 +153,16 @@ export function registerPpkHandlers() {
   handle('ppk:sp2d:add', z.object({ fiscal_year_id: S.id, record: z.object({ sp2d_number: text(100), sp2d_date: day, amount: money, notes: text(1000) }) }),
     ({ fiscal_year_id, record }) => addSp2d(st(), actor(), fiscal_year_id, record));
   handle('ppk:documents:related', z.object({ numbers: z.array(text(300)).max(20) }), ({ numbers }) => relatedDocuments(st(), sqliteStore(getDb()), actor(), numbers));
+  const agendaInput = z.object({
+    title: text(300), letter_number: text(200), source_document_id: S.id.nullable(), agenda_date: day, start_time: z.string().max(5), end_time: z.string().max(5),
+    location: text(500), meeting_url: text(500), organizer: text(300), agenda_text: text(4000), notes: text(2000), pic_user_id: S.id.nullable(), support_user_ids: z.array(S.id).max(30)
+  });
+  handle('ppk:agendas:list', z.object({ from: day.optional(), to: day.optional(), include_cancelled: z.boolean().optional() }), (f) => listAgendas(st(), actor(), f));
+  handle('ppk:agendas:get', z.object({ id: S.id }), ({ id }) => getAgenda(st(), actor(), id));
+  handle('ppk:agendas:create', agendaInput, (i) => createAgenda(st(), actor(), i));
+  handle('ppk:agendas:update', z.object({ id: S.id, version: z.number().int().min(1), values: agendaInput }), ({ id, version, values }) => updateAgenda(st(), actor(), id, version, values));
+  handle('ppk:agendas:setStatus', z.object({ id: S.id, status: z.enum(['selesai', 'dibatalkan']), reason: text(500) }), ({ id, status, reason }) => setAgendaStatus(st(), actor(), id, status, reason));
+  handle('ppk:agendas:people', S.empty, () => agendaPeople(st(), actor()));
   handle('ppk:sp2d:void', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidSp2d(st(), actor(), id, reason));
 }
 

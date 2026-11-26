@@ -16,6 +16,8 @@ import type { Bill, BillDetail, BillFilter, BillInput, PaymentInput } from '@sha
 import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, PlanRow, Warned } from '@shared/ppk/budget';
 import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow, YearValueRow } from '@shared/ppk/contracts';
 import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
+import type { Agenda, AgendaInput } from '@shared/ppk/agenda';
+import type { DeliveryLog, Recipient } from '@shared/whatsapp';
 
 export interface PpkServerConf { host: string; port: number; database: string; user: string; password: string }
 export interface PpkServerState { schema: number | null; users: number; data_rows: number }
@@ -216,6 +218,14 @@ export const api = {
       void: (id: string, reason: string) => call<void>('ppk:sp2d:void', { id, reason })
     },
     relatedDocuments: (numbers: string[]) => call<RelatedDocument[]>('ppk:documents:related', { numbers }),
+    agendas: {
+      list: (f: { from?: string; to?: string; include_cancelled?: boolean } = {}) => call<Agenda[]>('ppk:agendas:list', f),
+      get: (id: string) => call<Agenda>('ppk:agendas:get', { id }),
+      create: (v: AgendaInput) => call<Agenda>('ppk:agendas:create', v),
+      update: (id: string, version: number, values: AgendaInput) => call<Agenda>('ppk:agendas:update', { id, version, values }),
+      setStatus: (id: string, status: 'selesai' | 'dibatalkan', reason = '') => call<Agenda>('ppk:agendas:setStatus', { id, status, reason }),
+      people: () => call<Array<{ id: string; name: string }>>('ppk:agendas:people')
+    },
     server: {
       status: () => call<PpkServerStatus>('ppk:server:status'),
       test: (c: PpkServerConf) => call<PpkServerState>('ppk:server:test', c),
@@ -231,6 +241,18 @@ export const api = {
       backup: () => call<{ path: string; size: number; rows: number }>('ppk:server:backup'),
       restore: () => call<{ canceled: true } | { canceled: false; tables: Array<{ table: string; rows: number; rupiah: number }> }>('ppk:server:restore')
     }
+  },
+  whatsapp: {
+    preparePdf: (doc: ExportDoc) => call<{ path: string; name: string; size: number; sha256: string }>('wa:preparePdf', { doc }),
+    openPdf: (path: string) => call<boolean>('wa:openPdf', { path }),
+    open: (i: { phone: string; text: string; target: 'desktop' | 'web'; recipient: string; document_id: string; pdf_sha256: string | null }) => call<DeliveryLog>('wa:open', i),
+    recipients: (document_id: string) => call<{ recipients: Recipient[]; history: DeliveryLog[] }>('wa:recipients', { document_id }),
+    saveRecipients: (document_id: string, rows: Array<{ name: string; organization: string; phone: string }>) => call<Recipient[]>('wa:saveRecipients', { document_id, rows }),
+    delivered: (document_id: string, phone: string) => call<boolean>('wa:delivered', { document_id, phone }),
+    cloudStatus: () => call<{ enabled: boolean; phone_number_id: string; api_version: string; token_set: boolean }>('wa:cloudStatus'),
+    cloudConfigure: (c: { enabled: boolean; phone_number_id: string; api_version: string; token: string }) => call<boolean>('wa:cloudConfigure', c),
+    cloudForget: () => call<boolean>('wa:cloudForget'),
+    cloudSend: (i: { document_id: string; phone: string; recipient: string; caption: string; pdf_path: string }) => call<DeliveryLog>('wa:cloudSend', i)
   },
   ai: {
     run: (action: AiAction, text: string) => call<{ text: string; warnings: string[] }>('ai:run', { action, text, consent: true })

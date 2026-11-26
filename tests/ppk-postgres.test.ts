@@ -17,9 +17,10 @@ import { getContract, listContracts } from '../electron/main/ppk/contracts';
 import { addPayment, getBill, listBills, saveBill, setBillStatus, voidPayment } from '../electron/main/ppk/bills';
 import { addSp2d, sp2dReport } from '../electron/main/ppk/sp2d';
 import { listPpkUsers } from '../electron/main/ppk/access';
+import { createAgenda, listAgendas } from '../electron/main/ppk/agenda';
 import {
   copyIntoServer, createPool, createServerUser, dumpServer, initFreshServer, installPgSchema, listServerUsers, pgStatus, pgStore, PG_TABLES,
-  serverLogin, sqliteSource, toPg, type PgConfig
+  serverLogin, sqliteSource, toPg, pgSchemaSql, PG_SCHEMA_VERSION, type PgConfig
 } from '../electron/main/ppk/pg';
 import { MASTER_KEYS } from '@shared/ppk/master';
 import type { BillInput } from '@shared/ppk/bills';
@@ -27,6 +28,8 @@ import type { Actor } from '@shared/numbering';
 import { detail, summary } from './fixtures/ppkSheets';
 
 const URL_ = process.env.PPK_TEST_PG;
+const agenda = { title: 'Rapat Koordinasi', letter_number: 'UND-1', source_document_id: null, agenda_date: '2026-12-07', start_time: '09:00', end_time: '12:00',
+  location: 'Ruang Rapat', meeting_url: '', organizer: 'PPK 6', agenda_text: '', notes: '', pic_user_id: null, support_user_ids: [] };
 
 it('toPg mengganti ? menjadi $n kecuali di dalam kutipan', () => {
   expect(toPg("SELECT * FROM t WHERE a = ? AND b LIKE '%?%' AND c IN (?, ?)")).toBe("SELECT * FROM t WHERE a = $1 AND b LIKE '%?%' AND c IN ($2, $3)");
@@ -68,6 +71,7 @@ describe.skipIf(!URL_)('PostgreSQL', () => {
     await addSp2d(lite, admin, fy, { sp2d_number: 'SP2D-1', sp2d_date: '2026-03-02', amount: f.amount, notes: '' });
     const line = (await listBudgetLines(lite, admin, { fiscal_year_id: fy }))[0];
     await setBudgetPlan(lite, admin, line.id, [{ month: '2026-01', amount: 100_000_000 }, { month: '2026-02', amount: 200_000_000 }]);
+    await createAgenda(lite, admin, agenda);
 
     pool = await freshPool(); srv = pgStore(pool);
   }, 60_000);
@@ -89,7 +93,7 @@ describe.skipIf(!URL_)('PostgreSQL', () => {
   it('salin SQLite → server: jumlah baris dan total rupiah cocok, semua tampilan sama', async () => {
     const r = await copyIntoServer(pool, sqliteSource(db));
     expect(r.tables.find((x) => x.table === 'ppk_bills')).toMatchObject({ rows: 5 });
-    expect((await pgStatus(pool)).schema).toBe(11);
+    expect((await pgStatus(pool)).schema).toBe(PG_SCHEMA_VERSION);
     const same = async <T>(f: (s: PpkStore) => Promise<T>) => expect(await f(srv)).toEqual(await f(lite));
     await same((s) => listBudgetLines(s, admin, { fiscal_year_id: fy, include_inactive: true }));
     await same((s) => listContracts(s, admin, {}));
@@ -106,6 +110,7 @@ describe.skipIf(!URL_)('PostgreSQL', () => {
     }
     for (const cutoff of ['2026-01', '2026-03', '2026-12']) for (const ext of [false, true]) await same((s) => ppkReport(s, admin, fy, cutoff, ext));
     await same((s) => sp2dReport(s, admin, fy));
+    await same((s) => listAgendas(s, admin, { include_cancelled: true }));
     // Server yang sudah berisi tidak bisa ditimpa.
     await expect(copyIntoServer(pool, sqliteSource(db))).rejects.toThrow(/sudah berisi data/);
   });
@@ -176,5 +181,20 @@ describe.skipIf(!URL_)('PostgreSQL', () => {
     expect(real.counts).toMatchObject({ contracts: 2, bills_verified: 4, bills_draft: 1, billed: 1_650_000_000 });
     const r = await ppkReport(s, a, year, '2026-03', false);
     expect(r.total).toMatchObject({ pagu: 2_800_000_000, billed: 1_650_000_000, estimate: 250_000_000 });
+  });
+
+  it('server lama (versi data 11) diperbarui otomatis dan aman diulang; agenda bisa dipakai', async () => {
+    const name = `ppk_test_${randomBytes(4).toString('hex')}`;
+    await root.query(`CREATE DATABASE ${name}`); made.push(name);
+    const p = createPool(cfg(name)); pools.push(p);
+    await p.query(pgSchemaSql(11));
+    await p.query("CREATE TABLE ppk_schema_version (version BIGINT PRIMARY KEY, applied_at TEXT NOT NULL); INSERT INTO ppk_schema_version VALUES (11, 'lama')");
+    await initFreshServer(p, { id: 'adm', name: 'Admin' }, '123456');
+    await Promise.all([installPgSchema(p), installPgSchema(p)]); // dua komputer bersamaan
+    expect((await pgStatus(p)).schema).toBe(PG_SCHEMA_VERSION);
+    const s = pgStore(p); const a = await serverLogin(s, 'adm', '123456');
+    const made_ = await createAgenda(s, a, { ...agenda, pic_user_id: 'adm' });
+    expect(made_.pic?.name).toBe('Admin');
+    await expect(p.query('DELETE FROM ppk_agendas')).rejects.toThrow(/tidak boleh dihapus/);
   });
 });

@@ -4,6 +4,7 @@ import { registerImporterHandlers } from './importer';
 import { registerNumberingHandlers } from './numbering';
 import { registerPpkHandlers } from './ppk';
 import { registerSettingsHandlers } from './settings';
+import { registerWhatsAppHandlers } from './whatsapp';
 
 export function registerIpc() {
   registerDataHandlers();
@@ -12,4 +13,5 @@ export function registerIpc() {
   registerImporterHandlers();
   registerNumberingHandlers();
   registerPpkHandlers();
+  registerWhatsAppHandlers();
 }

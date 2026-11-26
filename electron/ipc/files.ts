@@ -15,7 +15,7 @@ import { getMainWindow } from '../main/window';
 import { currentActor } from '../main/numbering/session';
 import { requireAdmin } from '../main/numbering/users';
 
-function toExportInput(doc: ExportDoc): ExportInput {
+export function toExportInput(doc: ExportDoc): ExportInput {
   const s = getSettings(getDb());
   const kopOn = doc.use_kop && s.kop_enabled === 'true' && (s.institution_name || s.institution_logo);
   const kop: KopInfo | null = kopOn ? { name: s.institution_name, address: s.institution_address, logo: s.institution_logo } : null;

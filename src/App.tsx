@@ -25,6 +25,7 @@ import ImportPage from './pages/ppk/ImportPage';
 import ReportsPage from './pages/ppk/ReportsPage';
 import Sp2dPage from './pages/ppk/Sp2dPage';
 import ServerPage from './pages/ppk/ServerPage';
+import AgendaPage from './pages/ppk/AgendaPage';
 
 export default function App() {
   return (
@@ -60,6 +61,7 @@ export default function App() {
           <Route path="/ppk/penyedia" element={<VendorsPage />} />
           <Route path="/ppk/pengaturan" element={<PpkSettingsPage />} />
           <Route path="/ppk/server" element={<ServerPage />} />
+          <Route path="/ppk/agenda" element={<AgendaPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<DashboardPage />} />
         </Routes>

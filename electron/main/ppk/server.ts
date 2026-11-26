@@ -114,7 +114,8 @@ export function readServerBackup(file: string): ServerBackup {
   let b: ServerBackup;
   try { b = JSON.parse(zlib.gunzipSync(fs.readFileSync(file)).toString('utf8')); } catch { throw new PpkError('INVALID', 'Berkas bukan backup server PPK yang valid.'); }
   if (b?.format !== 'ppk-server-backup' || typeof b.tables !== 'object') throw new PpkError('INVALID', 'Berkas bukan backup server PPK yang valid.');
-  if (b.schema !== PG_SCHEMA_VERSION) throw new PpkError('INVALID', `Backup dari versi data ${b.schema}; aplikasi ini versi ${PG_SCHEMA_VERSION}.`);
+  // Backup versi lama boleh: tabel yang belum ada saat itu dipulihkan kosong.
+  if (!(b.schema <= PG_SCHEMA_VERSION)) throw new PpkError('INVALID', `Backup dari aplikasi versi lebih baru (data ${b.schema}); aplikasi ini versi ${PG_SCHEMA_VERSION}.`);
   return b;
 }
 

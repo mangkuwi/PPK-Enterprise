@@ -747,6 +747,71 @@ CREATE TABLE ppk_contract_year_values (
   updated_by TEXT NOT NULL, updated_at TEXT NOT NULL,
   PRIMARY KEY (contract_id, year)
 );`
+  },
+  {
+    version: 12,
+    name: 'invitation_whatsapp',
+    sql: `
+-- Distribusi surat undangan lewat WhatsApp (modul dokumen, selalu lokal). Hanya menambah tabel; disetujui pemilik 2026-11-26.
+-- Penerima per surat undangan. Nomor disimpan sebagai digit E.164 tanpa '+'.
+CREATE TABLE invitation_recipients (
+  id TEXT PRIMARY KEY,
+  document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  name TEXT NOT NULL DEFAULT '', organization TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL CHECK (length(phone) BETWEEN 8 AND 15 AND phone NOT GLOB '*[^0-9]*'),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL,
+  UNIQUE (document_id, phone)
+);
+-- Riwayat pengiriman, append-only: setiap perubahan status = baris baru. Tanpa FK ke dokumen agar riwayat tetap ada bila dokumen dihapus.
+-- whatsapp_opened = chat dibuka (click-to-chat); sent/delivered/read hanya dari konfirmasi WhatsApp Business API.
+CREATE TABLE invitation_delivery_logs (
+  id TEXT PRIMARY KEY,
+  document_id TEXT NOT NULL,
+  recipient_name TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL,
+  method TEXT NOT NULL CHECK (method IN ('wa_desktop','wa_web','cloud_api')),
+  status TEXT NOT NULL CHECK (status IN ('whatsapp_opened','submitted','sent','delivered','read','failed')),
+  pdf_sha256 TEXT, provider_message_id TEXT, error TEXT,
+  actor_id TEXT, actor_name TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX idx_inv_log_doc ON invitation_delivery_logs(document_id, created_at);
+CREATE INDEX idx_inv_log_msg ON invitation_delivery_logs(provider_message_id) WHERE provider_message_id IS NOT NULL;
+CREATE TRIGGER trg_inv_log_noupd BEFORE UPDATE ON invitation_delivery_logs BEGIN SELECT RAISE(ABORT, 'Riwayat pengiriman bersifat append-only.'); END;
+CREATE TRIGGER trg_inv_log_nodel BEFORE DELETE ON invitation_delivery_logs BEGIN SELECT RAISE(ABORT, 'Riwayat pengiriman bersifat append-only.'); END;`
+  },
+  {
+    version: 13,
+    name: 'ppk_agendas',
+    sql: `
+-- Agenda PPK dari surat undangan (ikut ke server PPK bila mode server). Hanya menambah tabel; disetujui pemilik 2026-11-26.
+-- source_document_id tanpa FK: dokumen tetap lokal di komputer pembuat. Hari dihitung dari tanggal, tidak disimpan.
+CREATE TABLE ppk_agendas (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+  letter_number TEXT NOT NULL DEFAULT '',
+  source_document_id TEXT,
+  agenda_date TEXT NOT NULL CHECK (length(agenda_date) = 10),
+  start_time TEXT NOT NULL DEFAULT '', end_time TEXT NOT NULL DEFAULT '',
+  location TEXT NOT NULL DEFAULT '', meeting_url TEXT NOT NULL DEFAULT '',
+  organizer TEXT NOT NULL DEFAULT '', agenda_text TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'terjadwal' CHECK (status IN ('terjadwal','selesai','dibatalkan')),
+  cancel_reason TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL,
+  CHECK (start_time = '' OR end_time = '' OR end_time >= start_time)
+);
+CREATE INDEX idx_ppk_agendas_date ON ppk_agendas(agenda_date);
+CREATE TRIGGER trg_ppk_agendas_nodel BEFORE DELETE ON ppk_agendas BEGIN SELECT RAISE(ABORT, 'Agenda tidak boleh dihapus; batalkan dengan alasan.'); END;
+-- Penanggung jawab utama (tepat satu) dan staf pendukung. Diganti utuh saat agenda diubah; perubahan tercatat di audit.
+CREATE TABLE ppk_agenda_assignees (
+  agenda_id TEXT NOT NULL REFERENCES ppk_agendas(id),
+  user_id TEXT NOT NULL REFERENCES app_users(id),
+  role TEXT NOT NULL CHECK (role IN ('utama','pendukung')),
+  PRIMARY KEY (agenda_id, user_id)
+);
+CREATE UNIQUE INDEX uq_ppk_agenda_utama ON ppk_agenda_assignees(agenda_id) WHERE role = 'utama';`
   }
 ];
 
