@@ -2,7 +2,7 @@
   "name": "naskahdinas-ai",
   "productName": "NASKAHDINAS AI",
   "version": "1.0.0",
-  "description": "NASKAHDINAS AI – Smart Document Generator untuk naskah dinas pemerintahan (Windows, offline).",
+  "description": "NASKAHDINAS AI – Smart Document Generator untuk naskah dinas pemerintahan (Windows dan macOS, offline).",
   "author": "NASKAHDINAS AI",
   "license": "UNLICENSED",
   "private": true,
@@ -20,6 +20,7 @@
     "rebuild:electron": "node scripts/rebuild-electron-abi.mjs",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder --win nsis portable --x64",
+    "dist:mac": "npm run build && electron-builder --mac dmg zip",
     "postinstall": "node scripts/rebuild-electron-abi.mjs"
   },
   "dependencies": {

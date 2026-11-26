@@ -1,16 +1,16 @@
 # NASKAHDINAS AI – Smart Document Generator
 
-Aplikasi desktop Windows (Electron + React + TypeScript) untuk membuat naskah dinas dari template: **buat sekali, pakai berulang kali**.
+Aplikasi desktop Windows dan macOS (Electron + React + TypeScript) untuk membuat naskah dinas dari template: **buat sekali, pakai berulang kali**.
 Berjalan sepenuhnya **offline**, tanpa akun, tanpa iklan; data tersimpan lokal (SQLite).
 
 > **Status jujur:** seluruh kode, skema, test, dan konfigurasi installer sudah ditulis. Build `.exe` dan uji pada Windows 10/11
 > **belum dijalankan** (dikerjakan di lingkungan Linux tanpa internet). Ikuti `docs/TEST-CHECKLIST.md` sebelum dipakai produksi.
 
 ## 1. Persyaratan pengembang (hanya untuk membangun, bukan untuk pengguna akhir)
-- Windows 10/11 64-bit
+- Windows 10/11 64-bit, atau macOS 11+ (Apple Silicon maupun Intel)
 - Node.js 20 LTS atau 22 LTS, npm 10+
 - Visual Studio Build Tools **tidak** diperlukan bila prebuilt `better-sqlite3` untuk Electron tersedia (diunduh otomatis saat `npm install`).
-  Jika unduhan prebuilt gagal, pasang "Desktop development with C++" dari Visual Studio Build Tools.
+  Jika unduhan prebuilt gagal, pasang "Desktop development with C++" dari Visual Studio Build Tools (Windows) atau `xcode-select --install` (macOS).
 
 ## 2. Perintah
 ```bash
@@ -22,12 +22,17 @@ npm test               # unit test: placeholder engine, render, DOCX, mesin OOXM
 npm run test:db        # test database, backup/restore, Smart Template Importer (DB) (otomatis rebuild untuk Node lalu kembalikan ke Electron)
 npm run build          # typecheck + build renderer + build Electron
 npm run pack           # build + folder aplikasi tanpa installer (release/win-unpacked)
-npm run dist           # build + installer NSIS + portable  →  folder release/
+npm run dist           # build + installer NSIS + portable  →  folder release/ (jalankan di Windows)
+npm run dist:mac       # build + .dmg dan .zip untuk Apple Silicon dan Intel  →  folder release/ (jalankan di Mac)
 ```
+Hasil `npm run dist:mac`: `release/NaskahDinasAI-<versi>-arm64.dmg` (Apple Silicon) dan `release/NaskahDinasAI-<versi>-x64.dmg` (Intel).
+Aplikasi Mac belum dinotarisasi Apple: saat pertama dibuka, klik kanan aplikasi > **Open** (macOS 15: System Settings > Privacy & Security > **Open Anyway**).
+Data di Mac tersimpan di `~/Library/Application Support/NASKAHDINAS AI`. Build Mac harus dibuat di Mac; build Windows di Windows. Tanpa Mac untuk membangun: jalankan workflow **Build macOS** di tab Actions GitHub, lalu unduh `.dmg` dari hasil run.
+Bila macOS menyebut aplikasi "rusak", jalankan sekali `xattr -cr "/Applications/NASKAHDINAS AI.app"` di Terminal.
 Hasil `npm run dist`: `release/NaskahDinasAI-Setup-<versi>.exe` (installer) dan `release/NaskahDinasAI-Portable-<versi>.exe` (portable; data disimpan di folder `NaskahDinasAI-Data` di samping .exe).
 Pengguna akhir **tidak perlu** memasang Node.js.
 
-Ikon kustom: letakkan `build/icon.ico` (256×256) sebelum `npm run dist`.
+Ikon kustom: letakkan `build/icon.ico` (256×256, Windows) atau `build/icon.icns` (macOS) sebelum build.
 
 ## 3. Cara pakai
 1. **Pengaturan** → isi nama instansi, alamat, logo (kop surat), identitas pengirim/pejabat default, font & margin default.

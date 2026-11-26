@@ -18,6 +18,18 @@ win:
     - { target: nsis, arch: [x64] }
     - { target: portable, arch: [x64] }
   # Letakkan build/icon.ico (256x256) untuk ikon kustom; tanpa file ini ikon bawaan Electron dipakai.
+mac:
+  # Satu build per arsitektur (Apple Silicon dan Intel) karena better-sqlite3 modul native.
+  target:
+    - { target: dmg, arch: [arm64, x64] }
+    - { target: zip, arch: [arm64, x64] }
+  category: public.app-category.productivity
+  # Tanpa sertifikat Developer ID, electron-builder memakai tanda tangan ad-hoc (wajib untuk arm64).
+  # Aplikasi belum dinotarisasi: buka pertama kali lewat klik kanan > Open, atau System Settings > Privacy & Security > Open Anyway.
+  artifactName: "NaskahDinasAI-${version}-${arch}.${ext}"
+  # Letakkan build/icon.icns (atau build/icon.png 1024x1024) untuk ikon kustom.
+dmg:
+  artifactName: "NaskahDinasAI-${version}-${arch}.${ext}"
 nsis:
   oneClick: false
   perMachine: false

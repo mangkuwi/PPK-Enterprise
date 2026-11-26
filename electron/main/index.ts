@@ -35,7 +35,9 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
     registerIpc();
-    if (app.isPackaged) Menu.setApplicationMenu(null);
+    // macOS butuh menu aplikasi agar Cmd+C/V/X/Z/A/Q/W berfungsi; di Windows menu disembunyikan.
+    if (process.platform === 'darwin') Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]));
+    else if (app.isPackaged) Menu.setApplicationMenu(null);
     createMainWindow();
     // Cek backup otomatis 1 menit setelah mulai lalu tiap jam; backup dibuat bila yang terakhir sudah lewat 24 jam.
     const tick = () => autoBackup().catch((e) => log('error', 'Backup otomatis', e));
