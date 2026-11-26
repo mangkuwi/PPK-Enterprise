@@ -20,7 +20,7 @@
     "rebuild:electron": "node scripts/rebuild-electron-abi.mjs",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder --win",
-    "dist:mac": "npm run build && electron-builder --mac dmg zip -c.mac.identity=- -c.mac.hardenedRuntime=false",
+    "dist:mac": "npm run build && electron-builder --mac dmg zip -c.mac.hardenedRuntime=false",
     "smoke": "node scripts/smoke-e2e.cjs",
     "postinstall": "node scripts/rebuild-electron-abi.mjs"
   },

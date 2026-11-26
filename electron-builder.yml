@@ -14,6 +14,7 @@ asarUnpack:
   - "**/node_modules/better-sqlite3/**"
   - "**/node_modules/pdfjs-dist/**"
 npmRebuild: true
+afterPack: scripts/after-pack.cjs
 # Ikon dari build/icon.png (1024x1024); electron-builder membuat .ico dan .icns darinya.
 icon: build/icon.png
 win:
@@ -40,7 +41,7 @@ mac:
   category: public.app-category.productivity
   minimumSystemVersion: "13.0"
   # Rilis produksi: Developer ID + Hardened Runtime + notarisasi (lihat docs/RELEASE.md).
-  # Build tanpa kredensial memakai -c.mac.identity=- -c.mac.hardenedRuntime=false (tanda tangan ad-hoc).
+  # Build tanpa kredensial: CSC_IDENTITY_AUTO_DISCOVERY=false + -c.mac.hardenedRuntime=false; scripts/after-pack.cjs memberi tanda tangan ad-hoc.
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
