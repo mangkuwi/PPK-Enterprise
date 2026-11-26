@@ -132,7 +132,8 @@ jobs:
             npx electron-builder --mac dmg zip --${{ matrix.arch }} -c.mac.notarize=true --publish never
             echo "SIGNED=1" >> "$GITHUB_ENV"
           else
-            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg zip --${{ matrix.arch }} -c.mac.identity=- -c.mac.hardenedRuntime=false --publish never
+            # Ad-hoc tanpa sertifikat; electron-builder melewati tanda tangan di PR kecuali CSC_FOR_PULL_REQUEST.
+            CSC_FOR_PULL_REQUEST=true CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg zip --${{ matrix.arch }} -c.mac.identity=- -c.mac.hardenedRuntime=false --publish never
           fi
           for f in release/PPK-Management-macOS-${{ matrix.arch }}-*; do mv "$f" "${f/macOS-${{ matrix.arch }}/macOS-${{ matrix.label }}}"; done
           ls -la release
