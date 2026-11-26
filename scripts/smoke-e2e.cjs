@@ -15,7 +15,7 @@ const UNICODE = 'Surat Undangan – Rapat Ñ ä ẞ';
 
 (async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nd smoke Ñ-'));
-  const ud = path.join(root, 'Data Uji – é');
+  const ud = path.join(root, 'Data Uji – é'); // macOS: tmpdir /var adalah symlink ke /private/var, jadi dibandingkan lewat realpath
   const out = path.join(root, 'Ekspor ü');
   fs.mkdirSync(out);
   const results = []; const errors = [];
@@ -39,7 +39,7 @@ const UNICODE = 'Surat Undangan – Rapat Ñ ä ẞ';
   const stubOpen = (file) => app.evaluate(({ dialog }, f) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] }); }, file);
 
   const info = await call('app:info');
-  check('Database dibuat di folder data OS', fs.existsSync(info.dbPath) && info.dbPath.startsWith(ud), `${info.platform} ${process.arch}, ${info.dbPath}`);
+  check('Database dibuat di folder data OS', fs.existsSync(info.dbPath) && fs.realpathSync(info.dbPath).startsWith(fs.realpathSync(ud)), `${info.platform} ${process.arch}, ${info.dbPath}`);
 
   for (const r of ROUTES) {
     here = r; const before = errors.length;
