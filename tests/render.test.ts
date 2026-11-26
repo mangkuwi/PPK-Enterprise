@@ -53,3 +53,15 @@ describe('penjaga keluaran AI', () => {
     expect(checkAiOutput('rapat tgl 5 Mei [LOKASI]', 'Rapat dilaksanakan pada 5 Mei di [LOKASI]')).toEqual([]);
   });
 });
+
+describe('font dokumen lintas platform', () => {
+  it('menyematkan pengganti Calibri/Cambria dan mengizinkan font data: di CSP', () => {
+    const layout = { ...layoutFromSettings(DEFAULT_SETTINGS), fontFamily: 'Bookman Old Style' };
+    for (const mode of ['print', 'preview'] as const) {
+      const html = buildDocumentHtml({ title: 'T', content: { type: 'doc', content: [] }, layout, mode });
+      expect(html).toContain("font-src data:");
+      expect(html).toMatch(/@font-face\{font-family:'Calibri';src:local\('Calibri'\),url\(/);
+      expect(html).toContain("font-family:'Bookman Old Style','Bookman','URW Bookman',Georgia,serif");
+    }
+  });
+});

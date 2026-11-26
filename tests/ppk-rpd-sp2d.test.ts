@@ -16,7 +16,7 @@ import type { ContractInput } from '@shared/ppk/contracts';
 import type { Actor } from '@shared/numbering';
 
 let db: DB; let s: PpkStore; let admin: Actor;
-let rm: string; let blu: string; let contractId: string;
+let rm: string; let contractId: string;
 
 const bill = (o: Partial<BillInput> = {}): BillInput => ({
   contract_id: contractId, bill_number: 'INV-06', bill_date: '2026-07-05', received_date: null, service_month: '2026-06', period_start: null, period_end: null,
@@ -40,7 +40,7 @@ beforeEach(async () => {
     output_detail: 'Sewa', kind: 'dipa' as const, description: '' };
   const p = (amount: number) => ({ amount, effective_date: '2026-01-02', source_document: 'DIPA', notes: '' });
   rm = (await createBudgetLine(s, admin, { ...base, funding_source_id: id("SELECT id FROM ppk_funding_sources WHERE code='RM'") }, p(1_500_000_000))).id;
-  blu = (await createBudgetLine(s, admin, { ...base, funding_source_id: id("SELECT id FROM ppk_funding_sources WHERE code='BLU'") }, p(5_000_000_000))).id;
+  await createBudgetLine(s, admin, { ...base, funding_source_id: id("SELECT id FROM ppk_funding_sources WHERE code='BLU'") }, p(5_000_000_000));
   const c = await createContract(s, admin, { fiscal_year_id: fy, unit_id: unit.id as string, vendor_id: vendor.id, program_id: prog.id as string, activity_id: act.id as string,
     service_package_id: null, contract_type: 'biasa', contract_number: 'KTR-1', vendor_contract_number: '', contract_date: '2026-01-05', description: 'Sewa',
     initial_value: 3_000_000_000, start_date: '2026-01-01', end_date: '2026-12-31', is_multi_year: false, term_start: null, term_end: null, prior_year_paid: 0, notes: '' });

@@ -35,5 +35,6 @@ export default defineConfig({
     }
   },
   server: { port: 5173, strictPort: true },
-  build: { outDir: 'dist', emptyOutDir: true, sourcemap: false }
+  // Font dokumen di-inline agar bisa dipakai di iframe pratinjau ber-CSP (lihat shared/docFonts.ts).
+  build: { outDir: 'dist', emptyOutDir: true, sourcemap: false, assetsInlineLimit: (file) => (file.endsWith('.woff2') ? true : undefined) }
 });

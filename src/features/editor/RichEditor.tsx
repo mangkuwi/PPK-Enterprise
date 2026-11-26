@@ -20,6 +20,9 @@ import { errMsg, useFeedback } from '@/components/ui/feedback';
 import { api } from '@/services/api';
 import { cn, imageNaturalWidth, readFileAsDataUrl } from '@/lib/utils';
 import { FONT_FAMILIES, FONT_SIZES } from '@shared/settings';
+import { FONT_FALLBACK } from '@shared/docFonts';
+
+const MOD = /Mac/.test(navigator.userAgent) ? '⌘' : 'Ctrl+';
 import type { Layout, TipTapNode } from '@shared/types';
 import type { AiAction } from '@shared/ai-guard';
 
@@ -119,8 +122,8 @@ export function RichEditor({ content, onChange, layout, aiEnabled, onEditor, com
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-200 bg-white px-2 py-1">
-        <TB title="Urungkan (Ctrl+Z)" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()}><Undo2 size={16} /></TB>
-        <TB title="Ulangi (Ctrl+Y)" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()}><Redo2 size={16} /></TB>
+        <TB title={`Urungkan (${MOD}Z)`} onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()}><Undo2 size={16} /></TB>
+        <TB title={`Ulangi (${MOD === '⌘' ? '⌘⇧Z' : 'Ctrl+Y'})`} onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()}><Redo2 size={16} /></TB>
         <Sep />
         <Select aria-label="Font" className="h-8 w-40 py-0 text-xs" value={curFont.replace(/["']/g, '')}
           onChange={(e) => (e.target.value ? editor.chain().focus().setFontFamily(e.target.value).run() : editor.chain().focus().unsetFontFamily().run())}>
@@ -132,9 +135,9 @@ export function RichEditor({ content, onChange, layout, aiEnabled, onEditor, com
           {[...new Set([...FONT_SIZES.map((s) => `${s}pt`), curSize])].map((s) => <option key={s} value={s}>{parseFloat(s)}</option>)}
         </Select>
         <Sep />
-        <TB title="Tebal (Ctrl+B)" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}><Bold size={16} /></TB>
-        <TB title="Miring (Ctrl+I)" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}><Italic size={16} /></TB>
-        <TB title="Garis bawah (Ctrl+U)" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}><UnderlineIcon size={16} /></TB>
+        <TB title={`Tebal (${MOD}B)`} active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}><Bold size={16} /></TB>
+        <TB title={`Miring (${MOD}I)`} active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}><Italic size={16} /></TB>
+        <TB title={`Garis bawah (${MOD}U)`} active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}><UnderlineIcon size={16} /></TB>
         <TB title="Coret" active={editor.isActive('strike')} onClick={() => editor.chain().focus().toggleStrike().run()}><Strikethrough size={16} /></TB>
         <Sep />
         <TB title="Rata kiri" active={editor.isActive({ textAlign: 'left' })} onClick={() => editor.chain().focus().setTextAlign('left').run()}><AlignLeft size={16} /></TB>
@@ -205,7 +208,7 @@ export function RichEditor({ content, onChange, layout, aiEnabled, onEditor, com
       <div className={cn('paper-wrap', compact && 'py-3')}>
         <div className="paper" style={{
           padding: `${layout.marginTop}mm ${layout.marginRight}mm ${layout.marginBottom}mm ${layout.marginLeft}mm`,
-          fontFamily: `'${layout.fontFamily}', Arial, sans-serif`, fontSize: `${layout.fontSize}pt`, lineHeight: layout.lineHeight
+          fontFamily: FONT_FALLBACK[layout.fontFamily] ?? `'${layout.fontFamily}', Arial, sans-serif`, fontSize: `${layout.fontSize}pt`, lineHeight: layout.lineHeight
         }}>
           <EditorContent editor={editor} />
         </div>

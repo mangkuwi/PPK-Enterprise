@@ -22,17 +22,29 @@ npm test               # unit test: placeholder engine, render, DOCX, mesin OOXM
 npm run test:db        # test database, backup/restore, Smart Template Importer (DB) (otomatis rebuild untuk Node lalu kembalikan ke Electron)
 npm run build          # typecheck + build renderer + build Electron
 npm run pack           # build + folder aplikasi tanpa installer (release/win-unpacked)
-npm run dist           # build + installer NSIS + portable  →  folder release/ (jalankan di Windows)
-npm run dist:mac       # build + .dmg dan .zip untuk Apple Silicon dan Intel  →  folder release/ (jalankan di Mac)
+npm run dist           # build + installer NSIS (x64 dan ARM64) + portable x64  →  folder release/ (jalankan di Windows)
+npm run dist:mac       # build + .dmg dan .zip untuk Apple Silicon dan Intel, tanda tangan ad-hoc  →  folder release/ (jalankan di Mac)
+npm run smoke          # uji jalan aplikasi hasil build pada OS ini (perlu `npx vite build && node scripts/build-electron.mjs`)
 ```
-Hasil `npm run dist:mac`: `release/NaskahDinasAI-<versi>-arm64.dmg` (Apple Silicon) dan `release/NaskahDinasAI-<versi>-x64.dmg` (Intel).
-Aplikasi Mac belum dinotarisasi Apple: saat pertama dibuka, klik kanan aplikasi > **Open** (macOS 15: System Settings > Privacy & Security > **Open Anyway**).
-Data di Mac tersimpan di `~/Library/Application Support/NASKAHDINAS AI`. Build Mac harus dibuat di Mac; build Windows di Windows. Tanpa Mac untuk membangun: jalankan workflow **Build macOS** di tab Actions GitHub, lalu unduh `.dmg` dari hasil run.
-Bila macOS menyebut aplikasi "rusak", jalankan sekali `xattr -cr "/Applications/NASKAHDINAS AI.app"` di Terminal.
-Hasil `npm run dist`: `release/NaskahDinasAI-Setup-<versi>.exe` (installer) dan `release/NaskahDinasAI-Portable-<versi>.exe` (portable; data disimpan di folder `NaskahDinasAI-Data` di samping .exe).
-Pengguna akhir **tidak perlu** memasang Node.js.
 
-Ikon kustom: letakkan `build/icon.ico` (256×256, Windows) atau `build/icon.icns` (macOS) sebelum build.
+### Berkas rilis
+| Berkas | Untuk |
+| --- | --- |
+| `PPK-Management-Setup-<versi>-x64.exe` | Windows 10/11 64-bit (installer per pengguna, tanpa hak administrator) |
+| `PPK-Management-Setup-<versi>-arm64.exe` | Windows 11 ARM |
+| `PPK-Management-Portable-<versi>-x64.exe` | Windows tanpa instalasi; data di folder `NaskahDinasAI-Data` di samping .exe |
+| `PPK-Management-macOS-AppleSilicon-<versi>.dmg` | Mac M1–M4 dan sesudahnya, macOS 13+ |
+| `PPK-Management-macOS-Intel-<versi>.dmg` | Mac Intel, macOS 13+ |
+| `SHA256SUMS.txt`, `RELEASE-NOTES.md` | Checksum dan catatan rilis (hasil uji per platform) |
+
+Rilis dibuat otomatis oleh workflow **Lintas platform** (`.github/workflows/cross-platform.yml`) saat tag `v<versi>` di-push: uji jalan di Windows dan Mac, paket, pasang-dan-jalankan installer, lalu draft GitHub Release. Detail dan penandatanganan: `docs/RELEASE.md`. Hasil uji per platform: `docs/COMPATIBILITY.md`.
+
+### Instalasi
+- **Windows:** jalankan `PPK-Management-Setup-…exe`. Bila SmartScreen muncul ("Windows protected your PC"), klik **More info** → **Run anyway** (installer belum ditandatangani sertifikat code signing). Pembaruan: pasang installer versi baru di atas versi lama; data tetap.
+- **macOS:** buka `.dmg`, seret **NASKAHDINAS AI** ke **Applications**. Selama aplikasi belum dinotarisasi Apple, pembukaan pertama ditahan Gatekeeper: klik kanan aplikasi → **Open** (macOS 13–14), atau System Settings → Privacy & Security → **Open Anyway** (macOS 15). Gatekeeper tidak perlu dimatikan dan tidak ada perintah Terminal. Pembaruan: ganti aplikasi di Applications; data tetap.
+- **Lokasi data:** Windows `%APPDATA%\NASKAHDINAS AI`, macOS `~/Library/Application Support/NASKAHDINAS AI`. Database tidak pernah disimpan di folder instalasi. Backup `.zip` bisa dipulihkan di OS mana pun.
+
+Pengguna akhir **tidak perlu** memasang Node.js. Ikon: `build/icon.png` (1024×1024; .ico dan .icns dibuat otomatis saat build).
 
 ## 3. Cara pakai
 1. **Pengaturan** → isi nama instansi, alamat, logo (kop surat), identitas pengirim/pejabat default, font & margin default.
@@ -101,7 +113,7 @@ Empat register mandiri — **Surat Keluar, Nota Dinas, Berita Acara, Kontrak** �
 setiap handler IPC memverifikasi asal frame dan memvalidasi payload dengan **zod**; renderer tidak pernah memberi path tulis
 (penyimpanan hanya lewat dialog sistem); CSP ketat pada build produksi; navigasi & jendela baru diblokir; izin web ditolak;
 gambar dokumen hanya `data:` URL; jendela PDF/cetak ber-sandbox dengan CSP `default-src 'none'`.
-Kunci API AI dienkripsi dengan `safeStorage` (DPAPI Windows) dan tidak pernah dikirim ke renderer.
+Kunci API AI dienkripsi dengan `safeStorage` (DPAPI di Windows, Keychain di macOS) dan tidak pernah dikirim ke renderer.
 
 ## 6. Asisten AI (opsional, nonaktif secara bawaan)
 Endpoint kompatibel OpenAI yang dikonfigurasi pengguna (HTTPS; HTTP hanya untuk localhost). Setiap pengiriman teks meminta persetujuan eksplisit.

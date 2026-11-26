@@ -13,6 +13,7 @@ export async function buildElectron() {
     sourcemap: true,
     external: ['electron', 'better-sqlite3', 'pdfjs-dist'],
     alias: { '@shared': path.join(root, 'shared') },
+    loader: { '.woff2': 'dataurl' },
     logLevel: 'info'
   };
   await build({ ...common, entryPoints: [path.join(root, 'electron/main/index.ts')], outfile: path.join(root, 'dist-electron/main.js') });

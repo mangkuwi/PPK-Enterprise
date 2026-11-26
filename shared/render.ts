@@ -1,4 +1,5 @@
 import type { KopInfo, Layout, TipTapMark, TipTapNode } from './types';
+import { DOC_FONT_CSS, FONT_FALLBACK } from './docFonts';
 
 export const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -104,12 +105,12 @@ export function buildDocumentHtml(o: HtmlOptions): string {
   const l = o.layout;
   const margins = `${l.marginTop}mm ${l.marginRight}mm ${l.marginBottom}mm ${l.marginLeft}mm`;
   const body = `<div class="nd-doc">${o.kop ? kopToHtml(o.kop) : ''}${nodeToHtml(o.content)}</div>`;
-  const base = `font-family:'${safeCss(l.fontFamily)}',Arial,sans-serif;font-size:${Number(l.fontSize)}pt;line-height:${Number(l.lineHeight)};color:#000`;
-  const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">`;
+  const base = `font-family:${FONT_FALLBACK[l.fontFamily] ?? `'${safeCss(l.fontFamily)}',Arial,sans-serif`};font-size:${Number(l.fontSize)}pt;line-height:${Number(l.lineHeight)};color:#000`;
+  const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'">`;
   if (o.mode === 'print') {
-    return `<!doctype html><html lang="id"><head><meta charset="utf-8">${csp}<title>${esc(o.title)}</title><style>
+    return `<!doctype html><html lang="id"><head><meta charset="utf-8">${csp}<title>${esc(o.title)}</title><style>${DOC_FONT_CSS}
 @page{size:A4;margin:${margins}}html,body{margin:0;padding:0}body{${base}}${DOC_CSS}</style></head><body>${body}</body></html>`;
   }
-  return `<!doctype html><html lang="id"><head><meta charset="utf-8">${csp}<title>${esc(o.title)}</title><style>
+  return `<!doctype html><html lang="id"><head><meta charset="utf-8">${csp}<title>${esc(o.title)}</title><style>${DOC_FONT_CSS}
 body{margin:0;background:#cbd5e1;padding:24px 0}.paper{width:210mm;min-height:297mm;box-sizing:border-box;margin:0 auto;background:#fff;padding:${margins};box-shadow:0 2px 12px rgba(0,0,0,.25);${base}}${DOC_CSS}</style></head><body><div class="paper">${body}</div></body></html>`;
 }
