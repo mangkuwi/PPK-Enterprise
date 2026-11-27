@@ -12,7 +12,7 @@ Aplikasi desktop PPK ──tarik tiap 60 detik (kunci API)──┘
 - Setiap webhook dicatat mentah di `wa_webhook_log`. Pesan yang dikirim ulang oleh Meta diabaikan karena `wa_message_id` bersifat unik.
 - Lampiran (PDF, DOCX, foto) diunduh oleh satu worker antrean di tabel `gw_jobs`. Unduhan dicoba sampai 3 kali dengan jeda.
 - File disimpan utuh (BYTEA) dan hanya bisa diambil lewat API dengan kunci. Tidak ada URL file publik.
-- Pembaca undangan dengan AI belum ada di Gateway ini (Fase 4).
+- Tidak ada AI atau OCR. Pesan berformat "AGENDA PPK" dibaca di aplikasi desktop dan hanya mengisi formulir agenda yang diperiksa staf.
 
 ## Kebutuhan
 
