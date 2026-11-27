@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { FileClock, FilePlus2, FileText, Files, Hash, Mail, Pencil, Send, Star } from 'lucide-react';
+import { CalendarDays, FileClock, FilePlus2, FileText, Files, Hash, Mail, Pencil, Send, Star } from 'lucide-react';
 import { Page } from '@/components/layout/Page';
 import { Button } from '@/components/ui/button';
 import { Badge, Card, Empty, PageHeader, STATUS_LABEL, STATUS_TONE } from '@/components/ui/card';
@@ -25,14 +25,32 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const stats = useAsync(() => api.stats(), []);
   const reg = useAsync(() => api.numbering.summary(new Date().getFullYear()), []);
-  // Agenda PPK hanya tampil bila pengguna punya akses PPK (galat izin = kartu disembunyikan).
-  const agendas = useAsync(() => api.ppk.agendas.list({ from: new Date().toLocaleDateString('sv-SE') }), []);
+  const today = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD waktu lokal
+  // Agenda PPK selalu di atas; tanpa akses PPK kartu menampilkan alasannya.
+  const agendas = useAsync(() => api.ppk.agendas.list({ from: today }), []);
   const s = stats.data;
   const totals = (reg.data ?? []).reduce((a, x) => ({ available: a.available + x.available - x.review, assigned: a.assigned + x.assigned, issued: a.issued + x.issued }), { available: 0, assigned: 0, issued: 0 });
   return (
     <Page>
       <PageHeader title="Dashboard" subtitle="Ringkasan aktivitas pembuatan naskah dinas. Semua angka dibaca dari data lokal aplikasi." />
       {(stats.error || reg.error) && <div className="mb-3 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800">{stats.error ?? reg.error}</div>}
+
+      <Card className="mb-6 border-navy-200 p-4">
+        <div className="mb-3 flex items-center justify-between font-semibold text-navy-900">
+          <span className="flex items-center gap-2"><CalendarDays size={18} /> Agenda mendatang</span>
+          <Link to="/ppk/agenda" className="text-sm font-normal text-navy-600 hover:underline">Lihat semua agenda</Link>
+        </div>
+        {agendas.error ? <p className="text-sm text-slate-600">{agendas.error} Buka <Link to="/ppk/agenda" className="text-navy-600 hover:underline">Agenda PPK</Link>.</p>
+          : agendas.data && !agendas.data.length ? <Empty>Belum ada agenda. Buka surat undangan lalu klik <b>Buat Agenda</b> di editor.</Empty>
+          : <ul className="divide-y divide-slate-100 text-sm">{agendas.data?.slice(0, 5).map((a) => (
+            <li key={a.id} className="flex flex-wrap items-start justify-between gap-2 py-2">
+              <div className="min-w-0">
+                <div className="font-medium text-navy-900">{a.agenda_date === today && <Badge tone="amber">Hari ini</Badge>} {a.title}</div>
+                <div className="text-slate-600">{[a.location, a.pic && `PJ: ${a.pic.name}`, a.support.length > 0 && `Pendukung: ${a.support.map((x) => x.name).join(', ')}`].filter(Boolean).join(' · ')}</div>
+              </div>
+              <span className="whitespace-nowrap text-slate-700">{dayName(a.agenda_date)}, {formatDateID(a.agenda_date)}{a.start_time && ` · ${a.start_time}${a.end_time ? `–${a.end_time}` : ''}`}</span>
+            </li>))}</ul>}
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Stat icon={Files} label="Total dokumen" value={s?.totalDocuments ?? '–'} hint={s ? `${s.documentsThisMonth} dibuat bulan ini` : undefined} to="/archive" />
@@ -49,16 +67,6 @@ export default function DashboardPage() {
         <Button variant="outline" onClick={() => navigate('/generator')}><FilePlus2 size={16} /> Buat Dokumen Baru</Button>
       </div>
 
-      {!!agendas.data?.length && (
-        <Card className="mt-6 p-4">
-          <div className="mb-3 flex items-center justify-between font-semibold text-navy-900">Agenda mendatang<Link to="/ppk/agenda" className="text-sm font-normal text-navy-600 hover:underline">Agenda PPK</Link></div>
-          <ul className="divide-y divide-slate-100 text-sm">{agendas.data.slice(0, 5).map((a) => (
-            <li key={a.id} className="flex flex-wrap justify-between gap-2 py-2">
-              <span className="font-medium">{a.title}</span>
-              <span className="text-slate-600">{dayName(a.agenda_date)}, {formatDateID(a.agenda_date)}{a.start_time && ` · ${a.start_time}`}{a.pic && ` · ${a.pic.name}`}</span>
-            </li>))}</ul>
-        </Card>
-      )}
 
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card className="p-4">
