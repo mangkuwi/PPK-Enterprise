@@ -18,11 +18,10 @@ export default function NumberingDashboardPage() {
   const years = Array.from({ length: 8 }, (_, i) => new Date().getFullYear() + 1 - i);
   return (
     <Page>
-      <PageHeader title="Penomoran & Register" subtitle="Empat register mandiri; nomor DDSS dibuat lebih dulu di Bank Nomor Dokumen. Nomor resmi hanya dibuat oleh sistem."
+      <PageHeader title="Ringkasan Register" subtitle="Empat register mandiri; nomor DDSS ditambahkan lebih dulu di Bank Nomor. Nomor resmi hanya dibuat oleh sistem."
         actions={<>
           <Select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Tahun">{years.map((y) => <option key={y} value={y}>Tahun {y}</option>)}</Select>
-          <Link to="/bank-nomor"><Button size="sm">Bank Nomor Dokumen</Button></Link>
-          <Link to="/penomoran/impor"><Button variant="outline" size="sm">Impor Excel</Button></Link>
+          <Link to="/bank-nomor"><Button size="sm">Tambahkan Nomor</Button></Link>
           <Link to="/penomoran/pengaturan"><Button variant="outline" size="sm"><Settings size={14} /> Pengaturan</Button></Link>
         </>} />
       {s.error && <div className="mb-3 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800">{s.error}</div>}
@@ -43,7 +42,7 @@ export default function NumberingDashboardPage() {
               <div className="flex justify-between gap-3"><dt className="shrink-0 text-slate-500">Terakhir</dt><dd className="truncate font-mono text-xs" title={x.year_last_number ?? ''}>{x.year_last_number ?? '—'}</dd></div>
               <div className="flex justify-between gap-3"><dt className="shrink-0 text-slate-500">Dapat dibuat berikutnya ({x.next_date})</dt><dd className="truncate font-mono text-xs" title={x.next_number ?? ''}>{x.next_full ? 'PENUH (01–99)' : x.next_number ?? '—'}</dd></div>
             </dl>
-            {x.review > 0 && <div className="mt-2 flex items-center gap-1 text-xs text-amber-800"><AlertTriangle size={14} /> {x.review} nomor hasil migrasi menunggu tinjauan{isAdmin ? ' (Bank Nomor Dokumen → Tinjauan migrasi)' : ' administrator'}.</div>}
+            {x.review > 0 && <div className="mt-2 flex items-center gap-1 text-xs text-amber-800"><AlertTriangle size={14} /> {x.review} nomor hasil migrasi menunggu tinjauan{isAdmin ? ' (Bank Nomor → Tinjauan migrasi)' : ' administrator'}.</div>}
             {x.needs_confirmation && <div className="mt-2 flex items-center gap-1 text-xs text-amber-800"><AlertTriangle size={14} /> Ada celah/konflik nomor hasil impor; periksa di Pengaturan Penomoran.</div>}
           </Card>
         ))}

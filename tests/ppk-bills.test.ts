@@ -8,7 +8,10 @@ import { saveMaster } from '../electron/main/ppk/master';
 import { createVendor } from '../electron/main/ppk/vendors';
 import { createBudgetLine, getBudgetLine } from '../electron/main/ppk/budget';
 import { addAddendum, createContract, getContract, setContractStatus } from '../electron/main/ppk/contracts';
-import { addPayment, getBill, listBills, saveBill, setBillStatus, voidPayment } from '../electron/main/ppk/bills';
+import { addPayment, getBill, listBills, listPayments, saveBill, setBillStatus, voidPayment } from '../electron/main/ppk/bills';
+import { billSheets } from '../electron/main/ppk/exports';
+import { readXlsx, writeXlsx } from '../electron/main/numbering/xlsx';
+import { Zip } from '../electron/main/ooxml/zip';
 import { billStage, fundingOrder, splitByRemaining, type BillInput } from '@shared/ppk/bills';
 import type { Actor } from '@shared/numbering';
 
@@ -147,5 +150,28 @@ describe('fungsi murni tagihan', () => {
   it('fundingOrder: DIPA dulu, lalu RM, PNBP, BLU', () => {
     const rows = [{ kind: 'saldo_kas', source_code: 'RM' }, { kind: 'dipa', source_code: 'BLU' }, { kind: 'dipa', source_code: 'RM' }];
     expect(rows.sort(fundingOrder).map((r) => `${r.kind}:${r.source_code}`)).toEqual(['dipa:RM', 'dipa:BLU', 'saldo_kas:RM']);
+  });
+});
+
+describe('ekspor Excel tagihan & pembayaran', () => {
+  it('pembayaran ikut tagihan yang difilter, rupiah tetap angka berformat ribuan', async () => {
+    await setContractStatus(s, admin, contractId, 'aktif', '');
+    const { data } = await saveBill(s, admin, null, null, bill());
+    await setBillStatus(s, admin, data.id, 'diverifikasi', '');
+    const fid = (await getBill(s, admin, data.id)).funding[0].id;
+    await addPayment(s, admin, fid, { channel: 'SAKTI', reference_number: 'SP2D-9', payment_date: '2026-07-20', amount: 1_110_000_000, notes: '' });
+    const fy = (db.prepare('SELECT fiscal_year_id FROM ppk_contracts WHERE id = ?').get(contractId) as { fiscal_year_id: string }).fiscal_year_id;
+    const pays = await listPayments(s, admin, fy);
+    expect(pays.map((p) => [p.reference_number, p.bill_number, p.source_code, p.amount])).toEqual([['SP2D-9', 'INV-06', 'RM', 1_110_000_000]]);
+
+    const [tagihan, bayar] = billSheets(await listBills(s, admin, { fiscal_year_id: fy }), pays);
+    expect(tagihan.rows[0][tagihan.header.indexOf('Nilai tagihan')]).toBe(1_110_000_000);
+    expect(tagihan.rows[0][tagihan.header.indexOf('Belum dibayar')]).toBe(0);
+    expect(bayar.rows).toHaveLength(1);
+    expect(billSheets([], pays)[1].rows).toHaveLength(0);
+
+    const back = readXlsx(writeXlsx([tagihan, bayar]));
+    expect(back[0].rows[1][tagihan.header.indexOf('Nilai tagihan')]).toBe(1_110_000_000);
+    expect(Zip.read(writeXlsx([tagihan])).data('xl/worksheets/sheet1.xml')!.toString()).toMatch(/<c r="H2" s="2"><v>1110000000<\/v>/);
   });
 });

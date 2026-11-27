@@ -59,8 +59,8 @@ export function NumberBanner({ n }: { n: NumberingState }) {
       </div>
       <p className="mt-1 text-xs text-slate-600">
         {r
-          ? `Nomor dari Bank Nomor Dokumen, diisikan ke ${n.ctx.own_keys.length ? n.ctx.own_keys.map((k) => `[${k}]`).join(', ') : 'dokumen'}. Terbit saat dokumen difinalkan; membatalkan draf mengembalikan nomor menjadi Tersedia.`
-          : 'Pilih nomor Tersedia dari Bank Nomor Dokumen. Sistem tidak membuat nomor otomatis dan AI tidak membuat nomor resmi.'}
+          ? `Nomor dari Bank Nomor, diisikan ke ${n.ctx.own_keys.length ? n.ctx.own_keys.map((k) => `[${k}]`).join(', ') : 'dokumen'}. Terbit saat dokumen difinalkan; membatalkan draf mengembalikan nomor menjadi Tersedia.`
+          : 'Pilih nomor Tersedia dari Bank Nomor. Sistem tidak membuat nomor otomatis dan AI tidak membuat nomor resmi.'}
         {!n.ctx.own_keys.length && ` Template ini tidak memiliki isian ${reg.placeholder_keys.map((k) => `[${k}]`).join('/')}; nomor tetap tertaut ke dokumen tetapi tidak tercetak otomatis.`}
       </p>
       <AvailablePicker open={picker} onClose={() => setPicker(false)} registerId={reg.id} registerName={reg.name} currentId={r?.id ?? null}
@@ -82,7 +82,7 @@ export function NumberedField({ field, value, onChange, n }: { field: TemplateFi
       return (
         <div>
           <div className="flex gap-2">
-            <Input readOnly value={rec?.number_text ?? ''} placeholder="Belum dipilih — pilih dari Bank Nomor Dokumen" className="bg-slate-100 font-mono" aria-label={field.label} />
+            <Input readOnly value={rec?.number_text ?? ''} placeholder="Belum dipilih — pilih dari Bank Nomor" className="bg-slate-100 font-mono" aria-label={field.label} />
             <Button type="button" variant="outline" onClick={() => setNumPicker(true)}><Hash size={14} /> {rec ? 'Ganti' : 'Pilih'}</Button>
             {rec && <Button type="button" variant="ghost" size="icon" aria-label="Lepas nomor" title="Lepas nomor (kembali Tersedia)" onClick={async () => { try { await n.clear(); } catch (er) { toast(errMsg(er), 'error'); } }}><X size={14} /></Button>}
           </div>

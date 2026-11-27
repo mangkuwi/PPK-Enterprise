@@ -812,6 +812,108 @@ CREATE TABLE ppk_agenda_assignees (
   PRIMARY KEY (agenda_id, user_id)
 );
 CREATE UNIQUE INDEX uq_ppk_agenda_utama ON ppk_agenda_assignees(agenda_id) WHERE role = 'utama';`
+  },
+  {
+    version: 14,
+    name: 'ppk_agenda_center',
+    sql: `
+-- Agenda Center: undangan masuk (WhatsApp/unggah), file, hasil ekstraksi, nomor WA staf, notifikasi. Hanya menambah; disetujui pemilik 2026-11-27.
+-- Undangan belum terverifikasi tidak pernah menjadi agenda; agenda hanya lahir dari verifikasi staf.
+CREATE TABLE ppk_invitations (
+  id TEXT PRIMARY KEY,
+  source TEXT NOT NULL CHECK (source IN ('whatsapp','unggah')),
+  wa_message_id TEXT UNIQUE,
+  sender_phone TEXT NOT NULL DEFAULT '', sender_name TEXT NOT NULL DEFAULT '',
+  received_at TEXT NOT NULL, message_text TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'baru' CHECK (status IN ('baru','diproses','menunggu_verifikasi','dikonversi','gagal','ditolak','diarsipkan')),
+  error_message TEXT NOT NULL DEFAULT '', duplicate_of TEXT,
+  verified_by TEXT, verified_at TEXT, reject_reason TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX idx_ppk_inv_status ON ppk_invitations(status, received_at);
+CREATE TRIGGER trg_ppk_inv_nodel BEFORE DELETE ON ppk_invitations BEGIN SELECT RAISE(ABORT, 'Undangan tidak boleh dihapus; arsipkan saja.'); END;
+-- File asli (undangan, kelak laporan rapat). Tidak bisa diubah atau dihapus; batas 20 MB.
+CREATE TABLE ppk_files (
+  id TEXT PRIMARY KEY,
+  owner_type TEXT NOT NULL CHECK (owner_type IN ('undangan','laporan')), owner_id TEXT NOT NULL,
+  filename TEXT NOT NULL, mime_type TEXT NOT NULL, size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 20971520),
+  sha256 TEXT NOT NULL CHECK (length(sha256) = 64), content BLOB NOT NULL,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX idx_ppk_files_owner ON ppk_files(owner_type, owner_id);
+CREATE INDEX idx_ppk_files_sha ON ppk_files(sha256);
+CREATE TRIGGER trg_ppk_files_noupd BEFORE UPDATE ON ppk_files BEGIN SELECT RAISE(ABORT, 'File asli tidak boleh diubah.'); END;
+CREATE TRIGGER trg_ppk_files_nodel BEFORE DELETE ON ppk_files BEGIN SELECT RAISE(ABORT, 'File asli tidak boleh dihapus.'); END;
+-- Satu baris per percobaan ekstraksi (append-only). confidence = 0..100.
+CREATE TABLE ppk_invitation_extractions (
+  id TEXT PRIMARY KEY,
+  invitation_id TEXT NOT NULL REFERENCES ppk_invitations(id),
+  attempt INTEGER NOT NULL CHECK (attempt >= 1),
+  provider TEXT NOT NULL DEFAULT '', model TEXT NOT NULL DEFAULT '', prompt_version TEXT NOT NULL DEFAULT '',
+  result_json TEXT NOT NULL DEFAULT '{}', confidence INTEGER CHECK (confidence BETWEEN 0 AND 100),
+  missing_fields_json TEXT NOT NULL DEFAULT '[]', error_message TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  UNIQUE (invitation_id, attempt)
+);
+CREATE TRIGGER trg_ppk_ext_noupd BEFORE UPDATE ON ppk_invitation_extractions BEGIN SELECT RAISE(ABORT, 'Hasil ekstraksi bersifat append-only.'); END;
+CREATE TRIGGER trg_ppk_ext_nodel BEFORE DELETE ON ppk_invitation_extractions BEGIN SELECT RAISE(ABORT, 'Hasil ekstraksi bersifat append-only.'); END;
+-- Nomor WhatsApp staf: hanya pengirim terdaftar yang diproses AI.
+CREATE TABLE ppk_user_phones (
+  user_id TEXT PRIMARY KEY REFERENCES app_users(id),
+  phone TEXT NOT NULL UNIQUE, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+-- Pusat notifikasi internal (tanpa pesan WhatsApp keluar).
+CREATE TABLE ppk_notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES app_users(id),
+  kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '',
+  entity TEXT NOT NULL DEFAULT '', entity_id TEXT,
+  created_at TEXT NOT NULL, read_at TEXT
+);
+CREATE INDEX idx_ppk_notif_user ON ppk_notifications(user_id, read_at);
+ALTER TABLE ppk_agendas ADD COLUMN invitation_id TEXT REFERENCES ppk_invitations(id);
+ALTER TABLE ppk_agendas ADD COLUMN letter_date TEXT;
+ALTER TABLE ppk_agendas ADD COLUMN program_id TEXT REFERENCES ppk_programs(id);
+ALTER TABLE ppk_agendas ADD COLUMN participants TEXT NOT NULL DEFAULT '';
+ALTER TABLE ppk_agendas ADD COLUMN verified_by TEXT;
+ALTER TABLE ppk_agendas ADD COLUMN verified_at TEXT;
+ALTER TABLE ppk_agendas ADD COLUMN archived_at TEXT;
+CREATE INDEX idx_ppk_agendas_inv ON ppk_agendas(invitation_id);
+CREATE INDEX idx_ppk_agendas_prog ON ppk_agendas(program_id);
+ALTER TABLE ppk_agenda_assignees ADD COLUMN duty TEXT NOT NULL DEFAULT '';
+ALTER TABLE ppk_agenda_assignees ADD COLUMN status TEXT NOT NULL DEFAULT 'ditugaskan' CHECK (status IN ('ditugaskan','diterima','selesai'));`
+  },
+  {
+    version: 15,
+    name: 'ppk_agenda_delete',
+    sql: `
+-- Hapus agenda yang bisa dikembalikan (disetujui pemilik 2026-11-27). Baris tidak pernah dihapus; trigger anti-hapus tetap berlaku.
+ALTER TABLE ppk_agendas ADD COLUMN deleted_at TEXT;
+ALTER TABLE ppk_agendas ADD COLUMN deleted_by TEXT;
+ALTER TABLE ppk_agendas ADD COLUMN delete_reason TEXT NOT NULL DEFAULT '';`
+  },
+  {
+    version: 16,
+    name: 'ppk_tasks',
+    sql: `
+-- To Do List staf PPK (disetujui pemilik 2026-11-27). Hanya menambah tabel; tugas tidak dihapus, hanya diarsipkan.
+CREATE TABLE ppk_tasks (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+  notes TEXT NOT NULL DEFAULT '',
+  due_date TEXT CHECK (due_date IS NULL OR length(due_date) = 10),
+  priority TEXT NOT NULL DEFAULT 'sedang' CHECK (priority IN ('tinggi','sedang','rendah')),
+  category TEXT NOT NULL DEFAULT '',
+  assignee_user_id TEXT REFERENCES app_users(id),
+  status TEXT NOT NULL DEFAULT 'berjalan' CHECK (status IN ('berjalan','selesai')),
+  done_at TEXT, done_by TEXT,
+  archived_at TEXT, archived_by TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX idx_ppk_tasks_due ON ppk_tasks(status, due_date);
+CREATE TRIGGER trg_ppk_tasks_nodel BEFORE DELETE ON ppk_tasks BEGIN SELECT RAISE(ABORT, 'Tugas tidak boleh dihapus; arsipkan.'); END;`
   }
 ];
 

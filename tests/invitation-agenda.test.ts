@@ -30,7 +30,7 @@ describe('migrasi v12–v13', () => {
     old.pragma('user_version = 11');
     const before = (old.prepare('SELECT COUNT(*) n FROM ppk_funding_sources').get() as { n: number }).n;
     expect(runMigrations(old)).toBe(LATEST_SCHEMA);
-    expect(LATEST_SCHEMA).toBe(13);
+    expect(LATEST_SCHEMA).toBe(16);
     for (const t of ['invitation_recipients', 'invitation_delivery_logs', 'ppk_agendas', 'ppk_agenda_assignees'])
       expect(old.prepare(`SELECT COUNT(*) n FROM ${t}`).get(), t).toEqual({ n: 0 });
     expect(old.prepare('SELECT COUNT(*) n FROM ppk_funding_sources').get()).toEqual({ n: before });
@@ -115,7 +115,8 @@ describe('agenda PPK', () => {
     const andi = createUser(db, admin, { name: 'Andi Pratama', role: 'operator', pin: '1111' });
     const budi = createUser(db, admin, { name: 'Budi Santoso', role: 'operator', pin: '2222' });
     await setPpkRole(s, admin, andi.id, 'ppk'); await setPpkRole(s, admin, budi.id, 'staf');
-    expect((await agendaPeople(s, admin)).map((p) => p.name)).toEqual(['Administrator', 'Andi Pratama', 'Budi Santoso']);
+    createUser(db, admin, { name: 'Citra Tanpa Peran', role: 'operator', pin: '3333' });
+    expect((await agendaPeople(s, admin)).map((p) => p.name)).toEqual(['Administrator', 'Andi Pratama', 'Budi Santoso', 'Citra Tanpa Peran']);
     const a = await createAgenda(s, admin, input({ pic_user_id: andi.id, support_user_ids: [budi.id, andi.id] }));
     expect(a.pic?.name).toBe('Andi Pratama');
     expect(a.support.map((x) => x.name)).toEqual(['Budi Santoso']); // PIC tidak dobel sebagai pendukung

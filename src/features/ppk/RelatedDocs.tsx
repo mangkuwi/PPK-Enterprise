@@ -10,7 +10,7 @@ export function RelatedDocs({ numbers }: { numbers: string[] }) {
   const docs = useAsync(() => api.ppk.relatedDocuments(list), [list.join('|')]);
   return (
     <div className="mt-4">
-      <div className="mb-1 text-sm font-semibold text-slate-700">Dokumen NASKAHDINAS terkait</div>
+      <div className="mb-1 text-sm font-semibold text-slate-700">Dokumen terkait (naskah dinas)</div>
       {docs.error && <p className="text-xs text-red-700">{docs.error}</p>}
       {docs.data && !docs.data.length && <p className="text-xs text-slate-500">Belum ada dokumen dengan nomor {list.join(' / ') || '—'}. Dokumen tertaut otomatis bila memakai nomor yang sama dari Bank Nomor atau nomor surat.</p>}
       {!!docs.data?.length && <ul className="divide-y divide-slate-100 rounded border border-slate-200 text-sm">

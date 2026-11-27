@@ -3,11 +3,11 @@ export const PPK_ROLES = ['admin', 'ppk', 'staf', 'pembaca'] as const;
 export type PpkRole = (typeof PPK_ROLES)[number];
 export const PPK_ROLE_LABEL: Record<PpkRole, string> = { admin: 'Admin PPK', ppk: 'Pejabat PPK', staf: 'Staf Input', pembaca: 'Pembaca' };
 
-/** read = lihat; write = ubah data transaksi; master = ubah data master; roles = atur peran pengguna. */
-export type PpkPerm = 'read' | 'write' | 'master' | 'roles';
+/** read = lihat; write = ubah data transaksi; master = ubah data master; accounts = kelola akun staf; roles = atur administrator & Admin PPK. */
+export type PpkPerm = 'read' | 'write' | 'master' | 'accounts' | 'roles';
 const PERMS: Record<PpkRole, PpkPerm[]> = {
-  admin: ['read', 'write', 'master', 'roles'],
-  ppk: ['read', 'write', 'master'],
+  admin: ['read', 'write', 'master', 'accounts', 'roles'],
+  ppk: ['read', 'write', 'master', 'accounts'],
   staf: ['read', 'write'],
   pembaca: ['read']
 };

@@ -17,7 +17,9 @@ import { getContract, listContracts } from '../electron/main/ppk/contracts';
 import { addPayment, getBill, listBills, saveBill, setBillStatus, voidPayment } from '../electron/main/ppk/bills';
 import { addSp2d, sp2dReport } from '../electron/main/ppk/sp2d';
 import { listPpkUsers } from '../electron/main/ppk/access';
-import { createAgenda, listAgendas } from '../electron/main/ppk/agenda';
+import { agendaConflicts, agendaHistory, createAgenda, listAgendas, setAgendaArchived, setAssignment } from '../electron/main/ppk/agenda';
+import { agendaReports, fileContent, getInvitation, invitationFiles, markInvitation, uploadInvitation, uploadReport } from '../electron/main/ppk/inbox';
+import { agendaHome, listInvitations } from '../electron/main/ppk/agendaHome';
 import {
   copyIntoServer, createPool, createServerUser, dumpServer, initFreshServer, installPgSchema, listServerUsers, pgStatus, pgStore, PG_TABLES,
   serverLogin, sqliteSource, toPg, pgSchemaSql, PG_SCHEMA_VERSION, type PgConfig
@@ -72,6 +74,8 @@ describe.skipIf(!URL_)('PostgreSQL', () => {
     const line = (await listBudgetLines(lite, admin, { fiscal_year_id: fy }))[0];
     await setBudgetPlan(lite, admin, line.id, [{ month: '2026-01', amount: 100_000_000 }, { month: '2026-02', amount: 200_000_000 }]);
     await createAgenda(lite, admin, agenda);
+    db.prepare("INSERT INTO ppk_invitations (id, source, wa_message_id, received_at, status, created_by, created_at, updated_by, updated_at) VALUES ('inv1','whatsapp','wamid.1','2026-12-01T01:00:00Z','menunggu_verifikasi','x','t','x','t')").run();
+    db.prepare("INSERT INTO ppk_files (id, owner_type, owner_id, filename, mime_type, size_bytes, sha256, content, created_by, created_at) VALUES ('f1','undangan','inv1','u.pdf','application/pdf',4,?,?,'x','t')").run('b'.repeat(64), Buffer.from([0, 1, 2, 255]));
 
     pool = await freshPool(); srv = pgStore(pool);
   }, 60_000);
@@ -111,6 +115,9 @@ describe.skipIf(!URL_)('PostgreSQL', () => {
     for (const cutoff of ['2026-01', '2026-03', '2026-12']) for (const ext of [false, true]) await same((s) => ppkReport(s, admin, fy, cutoff, ext));
     await same((s) => sp2dReport(s, admin, fy));
     await same((s) => listAgendas(s, admin, { include_cancelled: true }));
+    await same((s) => agendaHome(s, admin, '2026-12-07'));
+    await same((s) => listInvitations(s, admin));
+    expect((await pool.query("SELECT content FROM ppk_files WHERE id = 'f1'")).rows[0].content).toEqual(Buffer.from([0, 1, 2, 255]));
     // Server yang sudah berisi tidak bisa ditimpa.
     await expect(copyIntoServer(pool, sqliteSource(db))).rejects.toThrow(/sudah berisi data/);
   });
@@ -148,7 +155,7 @@ describe.skipIf(!URL_)('PostgreSQL', () => {
 
   it('masuk server wajib PIN dan tercatat di audit', async () => {
     expect((await listServerUsers(srv)).map((u) => u.id)).toContain(admin.id);
-    await expect(serverLogin(srv, admin.id, '000000')).rejects.toThrow(/PIN salah/);
+    await expect(serverLogin(srv, admin.id, '000000')).rejects.toThrow(/Kata sandi salah/);
     expect(await serverLogin(srv, admin.id, '123456')).toEqual(admin);
     const op = await createServerUser(srv, admin, { name: 'Operator Satu', pin: '4321' });
     await expect(createServerUser(srv, admin, { name: 'operator satu', pin: '4321' })).rejects.toThrow(/sudah dipakai/);
@@ -195,6 +202,25 @@ describe.skipIf(!URL_)('PostgreSQL', () => {
     const s = pgStore(p); const a = await serverLogin(s, 'adm', '123456');
     const made_ = await createAgenda(s, a, { ...agenda, pic_user_id: 'adm' });
     expect(made_.pic?.name).toBe('Admin');
+    const pdf = Buffer.from('%PDF-1.4 uji');
+    const up = await uploadInvitation(s, a, { filename: 'u.pdf', content: pdf });
+    expect((await uploadInvitation(s, a, { filename: 'u2.pdf', content: pdf })).duplicate_of).toBe(up.id);
+    const fromInv = await createAgenda(s, a, { ...agenda, title: 'Dari Undangan PG', invitation_id: up.id, letter_date: '2026-12-01', participants: 'Semua staf' });
+    expect(fromInv.verified_by).toBe('Admin');
+    expect((await listAgendas(s, a, { q: 'undangan pg', user_id: undefined })).map((x) => x.id)).toEqual([fromInv.id]);
+    expect((await listAgendas(s, a, { status: 'ditugaskan' })).map((x) => x.id)).toEqual([made_.id]);
+    expect((await fileContent(s, a, (await invitationFiles(s, a, up.id))[0].id)).content.equals(pdf)).toBe(true);
+    const up3 = await uploadInvitation(s, a, { filename: 'u3.pdf', content: Buffer.from('%PDF-1.4 tiga') });
+    await markInvitation(s, a, up3.id, 'diproses', 'bukan undangan');
+    expect([(await getInvitation(s, a, up3.id)).reject_reason, (await getInvitation(s, a, up.id)).agenda?.id]).toEqual(['bukan undangan', fromInv.id]);
+    expect((await listInvitations(s, a, { category: 'sudah' })).map((i) => i.id).sort()).toEqual([up.id, up3.id].sort());
+    await uploadReport(s, a, made_.id, { filename: 'notulen.pdf', content: pdf });
+    expect((await agendaReports(s, a, made_.id)).map((f) => f.filename)).toEqual(['notulen.pdf']);
+    const asg = await setAssignment(s, a, made_.id, 'adm', { duty: 'Pimpin rapat', status: 'diterima' });
+    expect([asg.pic?.duty, asg.pic?.status]).toEqual(['Pimpin rapat', 'diterima']);
+    await setAgendaArchived(s, a, fromInv.id, true);
+    expect((await agendaHistory(s, a, fromInv.id)).map((h) => h.action)).toEqual(['agenda.create', 'agenda.archive']);
+    expect((await agendaConflicts(s, a, { agenda_date: agenda.agenda_date, start_time: '10:00', end_time: '11:00', user_ids: ['adm'] }))[0].shared_staff).toEqual(['Admin']);
     await expect(p.query('DELETE FROM ppk_agendas')).rejects.toThrow(/tidak boleh dihapus/);
   });
 });

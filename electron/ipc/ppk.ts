@@ -1,4 +1,5 @@
-import { dialog } from 'electron';
+import { app, dialog, shell } from 'electron';
+import { changeOwnPassword, createAccount, resetAccountPassword, setAccountActive } from '../main/ppk/accounts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -12,19 +13,25 @@ import { getMainWindow } from '../main/window';
 import { runPpkImport } from '../main/ppk/import';
 import { ppkReport, reportSheets } from '../main/ppk/reports';
 import { addSp2d, sp2dReport, voidSp2d } from '../main/ppk/sp2d';
-import { agendaPeople, createAgenda, getAgenda, listAgendas, setAgendaStatus, updateAgenda } from '../main/ppk/agenda';
+import { agendaConflicts, agendaHistory, agendaPeople, createAgenda, deleteAgenda, getAgenda, restoreAgenda, listAgendas, setAgendaArchived, setAgendaStatus, setAssignment, updateAgenda } from '../main/ppk/agenda';
+import { MAX_FILE, agendaReports, fileContent, getInvitation, invitationFiles, markInvitation, uploadInvitation, uploadReport } from '../main/ppk/inbox';
 import { relatedDocuments } from '../main/ppk/documents';
+import { archiveTask, listTasks, saveTask, setTaskDone } from '../main/ppk/tasks';
+import { TASK_PRIORITIES } from '@shared/ppk/tasks';
+import { agendaHome, invitationCounts, listInvitations } from '../main/ppk/agendaHome';
 import { sqliteStore } from '../main/ppk/store';
 import { peekPpkActor, ppkActor, ppkStore } from '../main/ppk/server';
 import { registerPpkServerHandlers } from './ppkServer';
+import { registerPpkGatewayHandlers } from './ppkGateway';
 import { listPpkUsers, ppkAccess, setPpkRole } from '../main/ppk/access';
 import { listMaster, listTaxRates, saveMaster } from '../main/ppk/master';
 import { VENDOR_EXPORT_HEADER, createVendor, getVendor, listVendors, setVendorStatus, similarVendors, updateVendor, vendorExportRow } from '../main/ppk/vendors';
 import { addBudgetRevision, createBudgetLine, getBudgetPlan, listBudgetLines, listBudgetVersions, setBudgetPlan, updateBudgetLine } from '../main/ppk/budget';
 import { addAddendum, createContract, getContract, listContracts, setAllocations, setContractStatus, setSchedule, setYearValues, updateContract, voidAddendum } from '../main/ppk/contracts';
 import { BUDGET_KIND_LABEL, type BudgetKind } from '@shared/ppk/budget';
-import { CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, type ContractStatus, type ContractType } from '@shared/ppk/contracts';
-import { addPayment, getBill, listBills, saveBill, setBillStatus, voidPayment } from '../main/ppk/bills';
+import { CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, contractProject, projectMatches, type ContractStatus, type ContractType } from '@shared/ppk/contracts';
+import { budgetSheets, billSheets, contractSheets } from '../main/ppk/exports';
+import { addPayment, getBill, listBills, listPayments, saveBill, setBillStatus, voidPayment } from '../main/ppk/bills';
 import { BILL_STATUS_LABEL, PAYMENT_CHANNELS, type BillStatus } from '@shared/ppk/bills';
 import { MASTER_KEYS, type MasterKey } from '@shared/ppk/master';
 import { PPK_ROLES } from '@shared/ppk/access';
@@ -66,9 +73,15 @@ export function registerPpkHandlers() {
   const st = () => ppkStore(getDb());
   const actor = () => ppkActor(getDb());
   registerPpkServerHandlers();
+  registerPpkGatewayHandlers();
 
   handle('ppk:access', S.empty, async () => { const a = peekPpkActor(getDb()); return a ? ppkAccess(st(), a) : null; });
   handle('ppk:users', S.empty, () => listPpkUsers(st(), actor()));
+  const password = z.string().max(64);
+  handle('ppk:accounts:create', z.object({ name: z.string().max(80), password, ppk_role: z.enum(PPK_ROLES) }), (i) => createAccount(st(), actor(), i));
+  handle('ppk:accounts:setActive', z.object({ user_id: S.id, active: z.boolean() }), async ({ user_id, active }) => { await setAccountActive(st(), actor(), user_id, active); return true; });
+  handle('ppk:accounts:resetPassword', z.object({ user_id: S.id, password }), async ({ user_id, password: p }) => { await resetAccountPassword(st(), actor(), user_id, p); return true; });
+  handle('ppk:accounts:changeOwn', z.object({ old_password: password, password }), async (i) => { await changeOwnPassword(st(), actor(), i.old_password, i.password); return true; });
   handle('ppk:setRole', z.object({ user_id: S.id, role: z.enum(PPK_ROLES).nullable() }), async ({ user_id, role }) => { await setPpkRole(st(), actor(), user_id, role); return true; });
 
   handle('ppk:master:list', z.object({ key: masterKey }), ({ key }) => listMaster(st(), actor(), key));
@@ -116,6 +129,20 @@ export function registerPpkHandlers() {
   handle('ppk:bills:setStatus', z.object({ id: S.id, status: z.enum(['diverifikasi', 'dibatalkan']), reason: text(500) }), ({ id, status, reason }) => setBillStatus(st(), actor(), id, status, reason));
   handle('ppk:bills:addPayment', z.object({ bill_funding_id: S.id, payment: z.object({ channel: z.enum(PAYMENT_CHANNELS), reference_number: text(100), payment_date: day, amount: money, notes: text(1000) }) }),
     ({ bill_funding_id, payment }) => addPayment(st(), actor(), bill_funding_id, payment));
+  handle('ppk:bills:payments', z.object({ fiscal_year_id: S.id }), ({ fiscal_year_id }) => listPayments(st(), actor(), fiscal_year_id));
+
+  // Ekspor Excel memakai filter yang sama dengan halaman, jadi isi berkas = yang tampil di layar.
+  const stamp = () => new Date().toISOString().slice(0, 10);
+  handle('ppk:budget:export', z.object({ fiscal_year_id: S.id, include_inactive: z.boolean().optional() }), async (f) =>
+    saveFile(writeXlsx(budgetSheets(await listBudgetLines(st(), actor(), f))), `Database-Anggaran-${stamp()}.xlsx`, 'xlsx'));
+  handle('ppk:contracts:export', z.object({ fiscal_year_id: S.id, vendor_id: S.id.optional(), status: z.union([contractStatus, z.literal('semua')]).optional(), search: text(200).optional(), project: text(200).optional() }), async (f) =>
+    saveFile(writeXlsx(contractSheets((await listContracts(st(), actor(), f)).filter((c) => projectMatches(contractProject(c), f.project)))), `Database-Kontrak-${stamp()}.xlsx`, 'xlsx'));
+  handle('ppk:bills:export', z.object({ fiscal_year_id: S.id, status: z.union([billStatus, z.literal('semua')]).optional(), search: text(200).optional(), project: text(200).optional() }), async (f) => {
+    const [all, payments, contracts] = await Promise.all([listBills(st(), actor(), f), listPayments(st(), actor(), f.fiscal_year_id), listContracts(st(), actor(), { fiscal_year_id: f.fiscal_year_id })]);
+    const projectOf = new Map(contracts.map((c) => [c.id, contractProject(c)]));
+    const bills = all.filter((b) => projectMatches(projectOf.get(b.contract_id) ?? '', f.project));
+    return saveFile(writeXlsx(billSheets(bills, payments)), `Tagihan-dan-Pembayaran-${stamp()}.xlsx`, 'xlsx');
+  });
   handle('ppk:bills:voidPayment', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidPayment(st(), actor(), id, reason));
 
   // Impor spreadsheet PPK lama: pilih berkas → pratinjau (commit=false, semua dibatalkan) → simpan.
@@ -155,14 +182,69 @@ export function registerPpkHandlers() {
   handle('ppk:documents:related', z.object({ numbers: z.array(text(300)).max(20) }), ({ numbers }) => relatedDocuments(st(), sqliteStore(getDb()), actor(), numbers));
   const agendaInput = z.object({
     title: text(300), letter_number: text(200), source_document_id: S.id.nullable(), agenda_date: day, start_time: z.string().max(5), end_time: z.string().max(5),
-    location: text(500), meeting_url: text(500), organizer: text(300), agenda_text: text(4000), notes: text(2000), pic_user_id: S.id.nullable(), support_user_ids: z.array(S.id).max(30)
+    location: text(500), meeting_url: text(500), organizer: text(300), agenda_text: text(4000), notes: text(2000), pic_user_id: S.id.nullable(), support_user_ids: z.array(S.id).max(30),
+    letter_date: day.or(z.literal('')).nullish(), program_id: S.id.nullish(), participants: text(2000).optional(), invitation_id: S.id.nullish()
   });
-  handle('ppk:agendas:list', z.object({ from: day.optional(), to: day.optional(), include_cancelled: z.boolean().optional() }), (f) => listAgendas(st(), actor(), f));
+  handle('ppk:agendas:list', z.object({ from: day.optional(), to: day.optional(), include_cancelled: z.boolean().optional(), q: text(200).optional(), program_id: S.id.optional(),
+    user_id: S.id.optional(), organizer: text(300).optional(), status: z.enum(['aktif', 'belum_ditugaskan', 'ditugaskan', 'selesai', 'dibatalkan', 'diarsipkan', 'terhapus', 'semua']).optional() }), (f) => listAgendas(st(), actor(), f));
+  handle('ppk:agendas:delete', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => deleteAgenda(st(), actor(), id, reason));
+  handle('ppk:agendas:restore', z.object({ id: S.id }), ({ id }) => restoreAgenda(st(), actor(), id));
+  handle('ppk:agendas:archive', z.object({ id: S.id, archived: z.boolean() }), ({ id, archived }) => setAgendaArchived(st(), actor(), id, archived));
+  handle('ppk:agendas:conflicts', z.object({ agenda_date: day, start_time: z.string().max(5), end_time: z.string().max(5), exclude_id: S.id.optional(), user_ids: z.array(S.id).max(31).optional() }),
+    (q) => agendaConflicts(st(), actor(), q));
+  handle('ppk:agendas:history', z.object({ id: S.id }), ({ id }) => agendaHistory(st(), actor(), id));
+  handle('ppk:invitations:upload', z.object({ note: text(2000).optional() }), async ({ note }) => {
+    const res = await dialog.showOpenDialog(getMainWindow()!, { properties: ['openFile'], filters: [{ name: 'Surat undangan', extensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'] }] });
+    if (res.canceled || !res.filePaths[0]) return null;
+    const f = res.filePaths[0];
+    if (fs.statSync(f).size > MAX_FILE) throw new Error('Ukuran file maksimal 20 MB.');
+    return uploadInvitation(st(), actor(), { filename: path.basename(f), content: fs.readFileSync(f), note });
+  });
+  handle('ppk:invitations:files', z.object({ id: S.id }), ({ id }) => invitationFiles(st(), actor(), id));
+  handle('ppk:agendas:reports', z.object({ id: S.id }), ({ id }) => agendaReports(st(), actor(), id));
+  handle('ppk:agendas:uploadReport', z.object({ id: S.id }), async ({ id }) => {
+    const res = await dialog.showOpenDialog(getMainWindow()!, { properties: ['openFile'], filters: [{ name: 'Laporan rapat', extensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'] }] });
+    if (res.canceled || !res.filePaths[0]) return null;
+    const f = res.filePaths[0];
+    if (fs.statSync(f).size > MAX_FILE) throw new Error('Ukuran file maksimal 20 MB.');
+    return uploadReport(st(), actor(), id, { filename: path.basename(f), content: fs.readFileSync(f) });
+  });
+  handle('ppk:agendas:assignment', z.object({ id: S.id, user_id: S.id, duty: text(300).optional(), status: z.enum(['ditugaskan', 'diterima', 'selesai']) }),
+    ({ id, user_id, duty, status }) => setAssignment(st(), actor(), id, user_id, { duty, status }));
+  handle('ppk:files:open', z.object({ id: S.id }), async ({ id }) => {
+    const f = await fileContent(st(), actor(), id);
+    // Salinan sementara di folder data aplikasi (bukan URL), dibuka dengan aplikasi bawaan OS.
+    const dir = path.join(app.getPath('userData'), 'lihat-undangan');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const old of fs.readdirSync(dir)) { const p = path.join(dir, old); if (Date.now() - fs.statSync(p).mtimeMs > 864e5) fs.rmSync(p, { force: true }); }
+    const out = path.join(dir, `${id.slice(0, 8)}-${path.basename(f.filename).replace(/[^\w.\- ]+/g, '_')}`);
+    fs.writeFileSync(out, f.content);
+    const err = await shell.openPath(out);
+    if (err) throw new Error(`File tidak dapat dibuka: ${err}`);
+    return true;
+  });
   handle('ppk:agendas:get', z.object({ id: S.id }), ({ id }) => getAgenda(st(), actor(), id));
   handle('ppk:agendas:create', agendaInput, (i) => createAgenda(st(), actor(), i));
   handle('ppk:agendas:update', z.object({ id: S.id, version: z.number().int().min(1), values: agendaInput }), ({ id, version, values }) => updateAgenda(st(), actor(), id, version, values));
   handle('ppk:agendas:setStatus', z.object({ id: S.id, status: z.enum(['selesai', 'dibatalkan']), reason: text(500) }), ({ id, status, reason }) => setAgendaStatus(st(), actor(), id, status, reason));
   handle('ppk:agendas:people', S.empty, () => agendaPeople(st(), actor()));
+  const taskInput = z.object({ title: text(300), notes: text(2000), due_date: day.nullable(), priority: z.enum(TASK_PRIORITIES), category: text(60), assignee_user_id: S.id.nullable() });
+  handle('ppk:tasks:list', z.object({ include_old: z.boolean().optional() }), (f) => listTasks(st(), actor(), f));
+  handle('ppk:tasks:save', z.object({ id: S.id.nullable(), version: z.number().int().min(1).nullable(), values: taskInput }), ({ id, version, values }) => saveTask(st(), actor(), id, version, values));
+  handle('ppk:tasks:setDone', z.object({ id: S.id, done: z.boolean() }), ({ id, done }) => setTaskDone(st(), actor(), id, done));
+  handle('ppk:tasks:archive', z.object({ id: S.id }), async ({ id }) => { await archiveTask(st(), actor(), id); return true; });
+  handle('ppk:agendas:home', S.empty, () => agendaHome(st(), actor()));
+  handle('ppk:invitations:list', z.object({ status: z.enum(['baru', 'diproses', 'menunggu_verifikasi', 'dikonversi', 'gagal', 'ditolak', 'diarsipkan']).optional(),
+    category: z.enum(['baru', 'belum', 'sudah', 'arsip', 'gagal']).optional() }), (f) => listInvitations(st(), actor(), f));
+  handle('ppk:invitations:counts', S.empty, () => invitationCounts(st(), actor()));
+  handle('ppk:invitations:get', z.object({ id: S.id }), ({ id }) => getInvitation(st(), actor(), id));
+  handle('ppk:invitations:mark', z.object({ id: S.id, action: z.enum(['diproses', 'arsip']), reason: text(500) }), async ({ id, action, reason }) => { await markInvitation(st(), actor(), id, action, reason); return true; });
+  handle('ppk:files:preview', z.object({ id: S.id }), async ({ id }) => {
+    const f = await fileContent(st(), actor(), id);
+    // Pratinjau hanya PDF dan foto; isi dikirim ke renderer sebagai base64 (tanpa URL file).
+    if (!['application/pdf', 'image/jpeg', 'image/png'].includes(f.mime_type)) throw new Error('Pratinjau hanya untuk PDF dan foto. Buka file ini dengan aplikasinya.');
+    return { mime_type: f.mime_type, data: Buffer.from(f.content).toString('base64') };
+  });
   handle('ppk:sp2d:void', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidSp2d(st(), actor(), id, reason));
 }
 

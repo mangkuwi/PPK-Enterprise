@@ -13,7 +13,9 @@ import { PpkGate } from '@/features/ppk/PpkGate';
 import { ReasonDialog, RupiahInput, rp, useFiscalYears, useWarnings } from '@/features/ppk/inputs';
 import { api } from '@/services/api';
 import { RelatedDocs } from '@/features/ppk/RelatedDocs';
-import { Num, UNITS } from '@/features/ppk/Num';
+import { Num } from '@/features/ppk/Num';
+import { ExportButton, ProjectFilter, SlashWrap, TBL } from '@/features/ppk/table';
+import { contractProject, projectMatches } from '@shared/ppk/contracts';
 import { billMatrix } from '@shared/ppk/matrix';
 import { MONTH_LABEL } from '@shared/ppk/forecast';
 import { budgetLabel } from '@shared/ppk/budget';
@@ -26,6 +28,48 @@ import {
 const today = () => new Date().toISOString().slice(0, 10);
 const STAGE_TONE: Record<string, 'slate' | 'green' | 'amber' | 'red' | 'navy'> = { Draf: 'slate', Dibatalkan: 'red', Lunas: 'green', 'Dibayar sebagian': 'amber', 'Menunggu bayar': 'navy' };
 const ok = (n: number) => Number.isSafeInteger(n);
+const VIEW_LABEL = { daftar: 'Tagihan', pembayaran: 'Pembayaran', matriks: 'Matriks bulanan' } as const;
+const unpaid = (b: Bill) => (b.status === 'dibatalkan' ? 0 : b.total - b.paid);
+
+/** Semua pembayaran untuk tagihan yang sedang tampil (ikut filter status & pencarian tagihan). */
+function PaymentList({ fiscalYearId, bills, onOpen }: { fiscalYearId: string; bills: Bill[]; onOpen: (id: string) => void }) {
+  const list = useAsync(() => api.ppk.bills.payments(fiscalYearId), [fiscalYearId]);
+  const ids = new Set(bills.map((b) => b.id));
+  const rows = (list.data ?? []).filter((p) => ids.has(p.bill_id));
+  const total = rows.filter((p) => !p.voided_at).reduce((a, p) => a + p.amount, 0);
+  if (list.error) return <Empty>{list.error}</Empty>;
+  if (list.data && !rows.length) return <Empty>Belum ada pembayaran tercatat untuk tagihan yang tampil.</Empty>;
+  if (!list.data) return null;
+  return <>
+    <p className="mb-2 text-xs text-slate-500">{rows.length} pembayaran · angka dalam Rupiah penuh · klik baris untuk membuka tagihannya.</p>
+    <Card className={TBL.card}>
+      <table className={TBL.table}>
+        <thead className={TBL.head}><tr>
+          <th className={cn(TBL.th, TBL.first, 'z-30 bg-slate-50')}>Nomor SP2D / referensi</th><th className={TBL.th}>Tanggal</th><th className={TBL.th}>Saluran</th>
+          <th className={cn(TBL.thNum, 'bg-sky-100 text-navy-900')}>Jumlah</th><th className={TBL.th}>Tagihan</th><th className={TBL.th}>Kontrak / penyedia</th>
+          <th className={TBL.th}>Dibebankan ke</th><th className={TBL.th}>Status</th>
+        </tr></thead>
+        <tbody>{rows.map((p) => (
+          <tr key={p.id} className={cn(TBL.row, 'cursor-pointer', p.voided_at && 'text-slate-400 line-through decoration-slate-300')} onClick={() => onOpen(p.bill_id)}>
+            <td className={cn(TBL.td, TBL.first, 'font-medium text-navy-900')}>{p.reference_number || '—'}</td>
+            <td className={cn(TBL.td, 'whitespace-nowrap')}>{p.payment_date}</td>
+            <td className={TBL.td}>{p.channel}</td>
+            <td className={cn(TBL.num, 'bg-sky-50/60 font-medium')}><Num n={p.amount} unit={1} /></td>
+            <td className={cn(TBL.td, 'whitespace-nowrap')}>{p.bill_number}<div className="text-xs text-slate-500">bulan {p.service_month}</div></td>
+            <td className={cn(TBL.td, 'min-w-48')}>{p.contract_number}<div className="text-xs text-slate-500">{p.vendor_name}</div></td>
+            <td className={cn(TBL.td, 'whitespace-nowrap')}><span className="font-mono text-xs">{p.mak}</span> · {p.source_code}<div className="max-w-56 truncate text-xs text-slate-500" title={p.output_detail}>{p.output_detail}</div></td>
+            <td className={TBL.td}>{p.voided_at ? <Badge tone="red" className="no-underline">Dibatalkan</Badge> : <Badge tone="green">Sah</Badge>}</td>
+          </tr>))}
+        </tbody>
+        <tfoot><tr>
+          <td className={cn(TBL.foot, TBL.first, 'z-30 bg-slate-100')}>Total pembayaran sah</td><td className={TBL.foot} colSpan={2} />
+          <td className={cn(TBL.foot, 'whitespace-nowrap text-right tabular-nums')}><Num n={total} unit={1} /></td>
+          <td className={TBL.foot} colSpan={4} />
+        </tr></tfoot>
+      </table>
+    </Card>
+  </>;
+}
 
 export default function BillsPage() {
   const { can } = usePpkAccess();
@@ -33,10 +77,13 @@ export default function BillsPage() {
   const [status, setStatus] = useState<BillStatus | 'semua'>('semua');
   const [search, setSearch] = useState(''); const q = useDebounced(search);
   const list = useAsync(() => (fyId ? api.ppk.bills.list({ fiscal_year_id: fyId, status, search: q }) : Promise.resolve([])), [fyId, status, q]);
+  const [project, setProject] = useState('');
+  const contracts = useAsync(() => (fyId ? api.ppk.contracts.list({ fiscal_year_id: fyId }) : Promise.resolve([])), [fyId]);
+  const projectOf = useMemo(() => new Map((contracts.data ?? []).map((c) => [c.id, contractProject(c)])), [contracts.data]);
   const [form, setForm] = useState<Bill | 'new' | null>(null);
   const [open, setOpen] = useState<string | null>(null);
-  const [view, setView] = useState<'daftar' | 'matriks'>('daftar');
-  const rows = list.data ?? [];
+  const [view, setView] = useState<'daftar' | 'pembayaran' | 'matriks'>('daftar');
+  const rows = (list.data ?? []).filter((b) => projectMatches(projectOf.get(b.contract_id) ?? '', project));
   const live = rows.filter((b) => b.status !== 'dibatalkan');
   const sum = (k: 'total' | 'net' | 'paid') => live.reduce((a, b) => a + b[k], 0);
 
@@ -44,7 +91,10 @@ export default function BillsPage() {
     <Page>
       <PpkGate>
         <PageHeader title="Tagihan & Pembayaran" subtitle="Tagihan per bulan layanan, pajak sesuai faktur, pembagian sumber dana, dan SP2D/FO."
-          actions={can('write') && <Button onClick={() => setForm('new')} disabled={!fyId}><Plus size={16} />Tambah Tagihan</Button>} />
+          actions={<>
+            <ExportButton run={() => api.ppk.bills.exportXlsx({ fiscal_year_id: fyId, status, search: q, project })} disabled={!rows.length} />
+            {can('write') && <Button onClick={() => setForm('new')} disabled={!fyId}><Plus size={16} />Tambah Tagihan</Button>}
+          </>} />
         <div className="mb-4 flex flex-wrap gap-3">
           <Select className="w-40" value={fyId} onChange={(e) => setFy(e.target.value)} aria-label="Tahun anggaran">
             {years.map((y) => <option key={y.id} value={y.id}>TA {y.year}</option>)}
@@ -53,43 +103,51 @@ export default function BillsPage() {
             <option value="semua">Semua status</option>
             {Object.entries(BILL_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
+          <ProjectFilter projects={[...projectOf.values()]} value={project} onChange={setProject} />
           <Input className="max-w-sm" placeholder="Cari nomor tagihan, kontrak, atau penyedia" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Cari tagihan" />
           <div className="ml-auto flex rounded-md border border-slate-300 bg-white p-0.5 text-sm" role="tablist" aria-label="Tampilan">
-            {(['daftar', 'matriks'] as const).map((v) => <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)}
-              className={cn('rounded px-3 py-1', view === v ? 'bg-navy-800 text-white' : 'text-slate-600 hover:bg-slate-100')}>{v === 'daftar' ? 'Daftar' : 'Matriks bulanan'}</button>)}
+            {(['daftar', 'pembayaran', 'matriks'] as const).map((v) => <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)}
+              className={cn('rounded px-3 py-1', view === v ? 'bg-navy-800 text-white' : 'text-slate-600 hover:bg-slate-100')}>{VIEW_LABEL[v]}</button>)}
           </div>
         </div>
-        {view === 'matriks' && fyId && <BillMatrix fiscalYearId={fyId} year={Number(years.find((y) => String(y.id) === fyId)?.year)} bills={rows} onOpen={setOpen} />}
+        {view === 'matriks' && fyId && <BillMatrix fiscalYearId={fyId} year={Number(years.find((y) => String(y.id) === fyId)?.year)} bills={rows} project={project} onOpen={setOpen} />}
         {list.error && <Empty>{list.error}</Empty>}
-        {view === 'daftar' && list.data && !rows.length && <Empty>Belum ada tagihan{search ? ' yang cocok' : ''} untuk tahun ini.</Empty>}
-        {view === 'daftar' && !!rows.length && (
-          <Card className="overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs text-slate-600"><tr>
-                <th className="px-3 py-2 text-left">Bulan</th><th className="px-3 py-2 text-left">Nomor tagihan</th><th className="px-3 py-2 text-left">Kontrak / penyedia</th>
-                <th className="px-3 py-2 text-right">Nilai tagihan</th><th className="px-3 py-2 text-right">PPN + PPh 23</th><th className="px-3 py-2 text-right">Bersih</th>
-                <th className="px-3 py-2 text-right">Terbayar</th><th className="px-3 py-2 text-left">Status</th>
+        {view === 'daftar' && list.data && !rows.length && <Empty>Belum ada tagihan{search || project ? ' yang cocok' : ''} untuk tahun ini.</Empty>}
+        {view === 'daftar' && !!rows.length && (<>
+          <p className="mb-2 text-xs text-slate-500">{rows.length} tagihan · angka dalam Rupiah penuh · klik baris untuk detail dan pembayaran.</p>
+          <Card className={TBL.card}>
+            <table className={TBL.table}>
+              <thead className={TBL.head}><tr>
+                <th className={cn(TBL.th, TBL.first, 'z-30 bg-slate-50')}>Nomor tagihan</th><th className={TBL.th}>Bulan</th><th className={TBL.th}>Kontrak / penyedia</th>
+                <th className={TBL.thNum}>Nilai tagihan</th><th className={TBL.thNum}>PPN + PPh 23</th><th className={TBL.thNum}>Bersih</th>
+                <th className={TBL.thNum}>Terbayar</th><th className={cn(TBL.thNum, 'bg-sky-100 text-navy-900')}>Belum dibayar</th><th className={TBL.th}>Status</th>
               </tr></thead>
               <tbody>{rows.map((b) => (
-                <tr key={b.id} className={cn('cursor-pointer border-t border-slate-100 hover:bg-slate-50', b.status === 'dibatalkan' && 'text-slate-400')} onClick={() => setOpen(b.id)}>
-                  <td className="whitespace-nowrap px-3 py-2">{b.service_month}</td>
-                  <td className="whitespace-nowrap px-3 py-2 font-medium text-navy-900"><button className="hover:underline" onClick={() => setOpen(b.id)}>{b.bill_number}</button></td>
-                  <td className="px-3 py-2"><div>{b.contract_number}</div><div className="text-xs text-slate-500">{b.vendor_name}</div></td>
-                  <td className="px-3 py-2 text-right tabular-nums">{rp(b.total)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{rp(b.ppn + b.pph23)}{b.faktur_code && <div className="text-xs text-slate-500">FP {b.faktur_code}</div>}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{rp(b.net)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{rp(b.paid)}</td>
-                  <td className="px-3 py-2"><Badge tone={STAGE_TONE[billStage(b)]}>{billStage(b)}</Badge></td>
+                <tr key={b.id} className={cn(TBL.row, 'cursor-pointer', b.status === 'dibatalkan' && 'text-slate-400')} onClick={() => setOpen(b.id)}>
+                  <td className={cn(TBL.td, TBL.first, 'font-medium text-navy-900')}><button className="text-left hover:underline" onClick={() => setOpen(b.id)}><SlashWrap text={b.bill_number} /></button></td>
+                  <td className={cn(TBL.td, 'whitespace-nowrap')}>{b.service_month}</td>
+                  <td className={cn(TBL.td, 'min-w-48')}>{projectOf.get(b.contract_id) && <div className="font-semibold text-navy-900">{projectOf.get(b.contract_id)}</div>}<div>{b.contract_number}</div><div className="text-xs text-slate-500">{b.vendor_name}</div></td>
+                  <td className={TBL.num}><Num n={b.total} unit={1} /></td>
+                  <td className={TBL.num}><Num n={b.ppn + b.pph23} unit={1} />{b.faktur_code && <div className="text-xs text-slate-500">FP {b.faktur_code}</div>}</td>
+                  <td className={TBL.num}><Num n={b.net} unit={1} /></td>
+                  <td className={TBL.num}><Num n={b.paid} unit={1} /></td>
+                  <td className={cn(TBL.num, 'bg-sky-50/60 font-medium')}><Num n={unpaid(b)} unit={1} /></td>
+                  <td className={TBL.td}><Badge tone={STAGE_TONE[billStage(b)]}>{billStage(b)}</Badge></td>
                 </tr>))}
               </tbody>
-              <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-semibold"><tr>
-                <td className="px-3 py-2" colSpan={3}>Total tidak dibatalkan</td>
-                <td className="px-3 py-2 text-right tabular-nums">{rp(sum('total'))}</td><td />
-                <td className="px-3 py-2 text-right tabular-nums">{rp(sum('net'))}</td><td className="px-3 py-2 text-right tabular-nums">{rp(sum('paid'))}</td><td />
+              <tfoot><tr>
+                <td className={cn(TBL.foot, TBL.first, 'z-30 bg-slate-100')}>Total {live.length} tagihan tidak dibatalkan</td><td className={TBL.foot} colSpan={2} />
+                <td className={cn(TBL.foot, 'whitespace-nowrap text-right tabular-nums')}><Num n={sum('total')} unit={1} /></td>
+                <td className={cn(TBL.foot, 'whitespace-nowrap text-right tabular-nums')}><Num n={live.reduce((a, b) => a + b.ppn + b.pph23, 0)} unit={1} /></td>
+                <td className={cn(TBL.foot, 'whitespace-nowrap text-right tabular-nums')}><Num n={sum('net')} unit={1} /></td>
+                <td className={cn(TBL.foot, 'whitespace-nowrap text-right tabular-nums')}><Num n={sum('paid')} unit={1} /></td>
+                <td className={cn(TBL.foot, 'whitespace-nowrap text-right tabular-nums')}><Num n={live.reduce((a, b) => a + unpaid(b), 0)} unit={1} /></td>
+                <td className={TBL.foot} />
               </tr></tfoot>
             </table>
           </Card>
-        )}
+        </>)}
+        {view === 'pembayaran' && fyId && <PaymentList fiscalYearId={fyId} bills={rows} onOpen={setOpen} />}
         <p className="mt-3 text-xs text-slate-500">Realisasi di sini adalah catatan internal PPK. Angka resmi tetap mengikuti SAKTI/SP2D dan aplikasi FO.</p>
         {form && <BillForm fiscalYearId={fyId} bill={form === 'new' ? null : form} onClose={() => setForm(null)} onSaved={(b) => { setForm(null); list.reload(); setOpen(b.id); }} />}
         {open && !form && <BillDetailDialog id={open} canWrite={can('write')} onClose={() => setOpen(null)} onEdit={setForm} onChanged={list.reload} />}
@@ -344,10 +402,10 @@ const CELL_TONE: Record<string, string> = {
 };
 
 /** Kontrak × bulan layanan: nilai tagihan per bulan dengan warna tahap pembayaran; klik sel untuk membuka tagihan. */
-function BillMatrix({ fiscalYearId, year, bills, onOpen }: { fiscalYearId: string; year: number; bills: Bill[]; onOpen: (id: string) => void }) {
+function BillMatrix({ fiscalYearId, year, bills, project, onOpen }: { fiscalYearId: string; year: number; bills: Bill[]; project: string; onOpen: (id: string) => void }) {
   const contracts = useAsync(() => api.ppk.contracts.list({ fiscal_year_id: fiscalYearId }), [fiscalYearId]);
-  const [unit, setUnit] = useState<number>(1e6);
-  const rows = useMemo(() => billMatrix(contracts.data ?? [], bills, year), [contracts.data, bills, year]);
+  const unit = 1; // rupiah penuh, sama dengan tabel lain
+  const rows = useMemo(() => billMatrix((contracts.data ?? []).filter((c) => projectMatches(contractProject(c), project)), bills, year), [contracts.data, bills, year, project]);
   if (contracts.error) return <Empty>{contracts.error}</Empty>;
   if (!contracts.data) return null;
   if (!rows.length) return <Empty>Belum ada kontrak untuk tahun ini.</Empty>;
@@ -357,13 +415,11 @@ function BillMatrix({ fiscalYearId, year, bills, onOpen }: { fiscalYearId: strin
     <div className="mb-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
       {Object.entries(CELL_TONE).map(([k, cls]) => <span key={k} className={cn('rounded px-2 py-0.5', cls)}>{k}</span>)}
       <span>Filter status dan pencarian di atas ikut berlaku.</span>
-      <Select className="ml-auto w-32" value={unit} onChange={(e) => setUnit(Number(e.target.value))} aria-label="Satuan angka">
-        {UNITS.map(([u, label]) => <option key={u} value={u}>{label}</option>)}
-      </Select>
+      <span className="ml-auto">Angka dalam Rupiah penuh. Geser tabel ke kanan untuk Okt–Des dan total.</span>
     </div>
     <Card className="max-h-[70vh] overflow-auto">
-      <table className="w-full border-separate border-spacing-0 text-xs">
-        <thead className="sticky top-0 z-20 bg-slate-50 text-slate-600"><tr>
+      <table className="w-full border-separate border-spacing-0 text-[13px]">
+        <thead className="sticky top-0 z-20 bg-slate-50 text-xs text-slate-600"><tr>
           <th className={cn(first, 'z-30 bg-slate-50')}>Kontrak / penyedia</th>
           {MONTH_LABEL.map((m) => <th key={m} className="border-b border-slate-200 px-2 py-2 text-right">{m}</th>)}
           <th className="border-b border-l border-slate-200 px-2 py-2 text-right">Nilai kontrak</th><th className="border-b border-slate-200 px-2 py-2 text-right">Tertagih</th>
@@ -374,7 +430,7 @@ function BillMatrix({ fiscalYearId, year, bills, onOpen }: { fiscalYearId: strin
             <td className={cn(first, 'border-b border-slate-100')} title={`${r.contract_number} · ${r.vendor_name}`}>
               <div className="truncate font-medium text-slate-800">{r.vendor_name}</div><div className="truncate text-[11px] text-slate-500">{r.contract_number}</div>
             </td>
-            {r.months.map((m, i) => <td key={i} className="border-b border-slate-100 p-0.5">
+            {r.months.map((m, i) => <td key={i} className="min-w-[8.5rem] whitespace-nowrap border-b border-slate-100 p-0.5">
               {m ? <button className={cn('w-full rounded px-1.5 py-1 text-right tabular-nums hover:ring-1 hover:ring-navy-700', CELL_TONE[m.stage])}
                 onClick={() => onOpen(m.bill_ids[0])} title={`${m.stage}${m.count > 1 ? ` · ${m.count} tagihan` : ''}`}>
                 <Num n={m.total} unit={unit} />{m.count > 1 && <sup className="ml-0.5">{m.count}</sup>}</button>

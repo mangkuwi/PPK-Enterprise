@@ -25,12 +25,16 @@ export const CHANNELS = [
   'ppk:contracts:list', 'ppk:contracts:get', 'ppk:contracts:create', 'ppk:contracts:update', 'ppk:contracts:setStatus',
   'ppk:contracts:addAddendum', 'ppk:contracts:voidAddendum', 'ppk:contracts:setSchedule', 'ppk:contracts:setAllocations',
   'ppk:bills:list', 'ppk:bills:get', 'ppk:bills:save', 'ppk:bills:setStatus', 'ppk:bills:addPayment', 'ppk:bills:voidPayment',
+  'ppk:bills:payments', 'ppk:budget:export', 'ppk:contracts:export', 'ppk:bills:export',
   'ppk:import:pick', 'ppk:import:run', 'ppk:reports:get', 'ppk:reports:export',
   'ppk:budget:plan', 'ppk:budget:setPlan', 'ppk:contracts:setYearValues', 'ppk:sp2d:report', 'ppk:sp2d:add', 'ppk:sp2d:void', 'ppk:documents:related',
+  'ppk:tasks:list', 'ppk:tasks:save', 'ppk:tasks:setDone', 'ppk:tasks:archive',
+  'ppk:accounts:create', 'ppk:accounts:setActive', 'ppk:accounts:resetPassword', 'ppk:accounts:changeOwn',
   'ppk:server:status', 'ppk:server:test', 'ppk:server:configure', 'ppk:server:setup', 'ppk:server:useLocal', 'ppk:server:users', 'ppk:server:login',
   'ppk:server:logout', 'ppk:server:createUser', 'ppk:server:setPin', 'ppk:server:setActive', 'ppk:server:backup', 'ppk:server:restore',
   'wa:preparePdf', 'wa:openPdf', 'wa:open', 'wa:recipients', 'wa:saveRecipients', 'wa:delivered', 'wa:cloudStatus', 'wa:cloudConfigure', 'wa:cloudForget', 'wa:cloudSend',
-  'ppk:agendas:list', 'ppk:agendas:get', 'ppk:agendas:create', 'ppk:agendas:update', 'ppk:agendas:setStatus', 'ppk:agendas:people',
+  'ppk:agendas:list', 'ppk:agendas:get', 'ppk:agendas:create', 'ppk:agendas:update', 'ppk:agendas:setStatus', 'ppk:agendas:people', 'ppk:agendas:home', 'ppk:invitations:list', 'ppk:agendas:archive', 'ppk:agendas:delete', 'ppk:agendas:restore', 'ppk:agendas:conflicts', 'ppk:agendas:history',
+  'ppk:invitations:upload', 'ppk:invitations:files', 'ppk:files:open', 'ppk:invitations:counts', 'ppk:invitations:get', 'ppk:invitations:mark', 'ppk:files:preview', 'ppk:agendas:reports', 'ppk:agendas:uploadReport', 'ppk:agendas:assignment', 'ppk:gateway:status', 'ppk:gateway:configure', 'ppk:gateway:sync',
   'ai:run'
 ] as const;
 export type Channel = (typeof CHANNELS)[number];

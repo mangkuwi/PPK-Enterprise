@@ -21,12 +21,12 @@ export function PpkGate({ children }: { children: ReactNode }) {
     <p className="mb-3 text-sm">Data PPK tidak dapat dibuka tanpa server. Data di server tetap aman.</p><Link to="/ppk/server" className="text-sm underline">Pengaturan server</Link></Empty>;
   if (!access && server) return <ServerLogin host={`${server.conf?.host}:${server.conf?.port}`} />;
   if (!access) return <Empty><p className="mb-3">Masuk sebagai pengguna untuk membuka modul PPK.</p><Button onClick={openLogin}>Masuk</Button></Empty>;
-  if (!access.perms.includes('read')) return <Empty>Anda ({access.user_name}) belum memiliki peran di modul PPK. Minta administrator menambahkannya di Pengaturan PPK → Peran Pengguna.</Empty>;
+  if (!access.perms.includes('read')) return <Empty>Anda ({access.user_name}) belum memiliki peran di modul PPK. Minta administrator menambahkannya di Pengaturan PPK → Akun Staf.</Empty>;
   return <>
     {access.perms.length > 1 && !access.has_pin && (
       <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">
-        Pengguna {access.user_name} belum ber-PIN, jadi data PPK hanya bisa dilihat.{' '}
-        <Link to="/penomoran/pengaturan?tab=users" className="font-semibold underline">Atur PIN sekarang</Link>
+        Akun {access.user_name} belum punya kata sandi, jadi data PPK hanya bisa dilihat.{' '}
+        <Link to="/penomoran/pengaturan?tab=users" className="font-semibold underline">Atur kata sandi sekarang</Link>
       </div>
     )}
     <PpkErrorBoundary>{children}</PpkErrorBoundary>

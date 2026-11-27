@@ -31,7 +31,7 @@ if (!app.requestSingleInstanceLock()) {
       initDatabase();
     } catch (e) {
       log('error', 'Gagal membuka database', e);
-      dialog.showErrorBox('NASKAHDINAS AI', `Database tidak dapat dibuka:\n${e instanceof Error ? e.message : e}\n\nLokasi data: ${app.getPath('userData')}`);
+      dialog.showErrorBox('PPK Management', `Database tidak dapat dibuka:\n${e instanceof Error ? e.message : e}\n\nLokasi data: ${app.getPath('userData')}`);
       app.quit();
       return;
     }

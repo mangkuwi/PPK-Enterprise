@@ -58,7 +58,7 @@ export async function createBackup(db: DB, type: BackupType, destFile: string): 
 export function readManifest(zipFile: string): Manifest {
   const zip = new AdmZip(zipFile);
   const e = zip.getEntry('manifest.json');
-  if (!e) throw new Error('Berkas bukan backup NASKAHDINAS AI (manifest tidak ditemukan).');
+  if (!e) throw new Error('Berkas bukan backup aplikasi ini (manifest tidak ditemukan).');
   const m = JSON.parse(e.getData().toString('utf8')) as Manifest;
   if (m.app !== 'NASKAHDINAS AI' || m.format !== 1 || !['full', 'templates', 'documents'].includes(m.type)) {
     throw new Error('Format backup tidak dikenali.');

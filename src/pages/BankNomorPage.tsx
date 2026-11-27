@@ -11,7 +11,7 @@ import { useActor } from '@/features/numbering/NumberingContext';
 import { useAsync, useDebounced } from '@/hooks/useAsync';
 import { api } from '@/services/api';
 import { todayISO } from '@shared/date';
-import { REGISTER_CODES, REGISTER_LABEL, STATUS_LABEL, STATUS_TONE, type BatchPreview, type NumberRecord, type NumberStatus, type RegisterCode } from '@shared/numbering';
+import { REGISTER_CODES, REGISTER_LABEL, REGISTER_PATH, STATUS_LABEL, STATUS_TONE, type BatchPreview, type NumberRecord, type NumberStatus, type RegisterCode } from '@shared/numbering';
 import { cn } from '@/lib/utils';
 import { DetailDialog } from './RegisterPage';
 
@@ -19,7 +19,7 @@ const LONG_MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Ju
 const longDate = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); return m >= 1 && m <= 12 ? `${d} ${LONG_MONTHS[m - 1]} ${y}` : iso; };
 const isIso = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 
-/** BANK NOMOR DOKUMEN: nomor dibuat lebih dulu (AVAILABLE), dipilih saat membuat dokumen, terbit saat dokumen final. */
+/** BANK NOMOR: nomor dibuat lebih dulu (AVAILABLE), dipilih saat membuat dokumen, terbit saat dokumen final. */
 export default function BankNomorPage() {
   const { toast, confirm } = useFeedback();
   const { actor, isAdmin } = useActor();
@@ -50,10 +50,10 @@ export default function BankNomorPage() {
 
   return (
     <Page>
-      <PageHeader title="BANK NOMOR DOKUMEN" subtitle="Buat nomor resmi lebih dulu, lalu pilih saat membuat dokumen. Membatalkan atau menghapus draf tidak membatalkan nomor — nomor kembali Tersedia."
+      <PageHeader title="Bank Nomor" subtitle="Tambahkan nomor resmi lebih dulu, lalu pilih saat membuat dokumen. Menghapus draf tidak membatalkan nomor; nomor kembali Tersedia."
         actions={<>
           {isAdmin && (sum?.review ?? 0) > 0 && <Button variant="outline" size="sm" onClick={() => setReview(true)}><ShieldCheck size={14} /> Tinjauan migrasi ({sums.data?.reduce((a, s) => a + s.review, 0)})</Button>}
-          <Link to={`/register/${reg ? reg.code.toLowerCase().replace(/_/g, '-') : ''}`}><Button variant="outline" size="sm">Register</Button></Link>
+          {reg && <Link to={`/register/${REGISTER_PATH[reg.code]}`}><Button variant="outline" size="sm">Lihat register {REGISTER_LABEL[reg.code]}</Button></Link>}
         </>} />
 
       <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Kategori">
@@ -64,7 +64,7 @@ export default function BankNomorPage() {
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        {([['Total Available', sum?.available, 'navy'], ['Total Assigned', sum?.assigned, 'amber'], ['Total Issued', sum?.issued, 'green'], ['Total Void', sum?.void, 'red']] as const).map(([l, n, t]) => (
+        {([['Tersedia', sum?.available, 'navy'], ['Dipakai draf', sum?.assigned, 'amber'], ['Terbit', sum?.issued, 'green'], ['Void', sum?.void, 'red']] as const).map(([l, n, t]) => (
           <Card key={l} className="p-3 text-center"><div className="text-2xl font-bold text-navy-900">{n ?? '—'}</div><Badge tone={t}>{l}</Badge></Card>
         ))}
       </div>
@@ -104,7 +104,7 @@ export default function BankNomorPage() {
             ))}
           </tbody>
         </table>
-        {!list.loading && !list.data?.rows.length && <div className="p-6"><Empty>Belum ada nomor pada filter ini. Buat nomor di panel “Buat nomor” di atas.</Empty></div>}
+        {!list.loading && !list.data?.rows.length && <div className="p-6"><Empty>Belum ada nomor pada filter ini. Tambahkan nomor lewat panel “Tambahkan nomor” di atas.</Empty></div>}
       </Card>
       <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
         <span>{list.data ? `${list.data.total} nomor` : ''}</span>
@@ -152,19 +152,19 @@ export function GeneratePanel({ registerId, registerName, onDone }: { registerId
   const ok = isIso(date) && Number.isInteger(n) && n >= 1 && n <= 500;
   return (
     <Card className="mb-4 p-4">
-      <h2 className="mb-2 flex items-center gap-2 font-semibold text-navy-900"><Plus size={16} /> Buat nomor — {registerName}</h2>
-      <div className="grid items-end gap-3 md:grid-cols-4">
+      <h2 className="mb-2 flex items-center gap-2 font-semibold text-navy-900"><Plus size={16} /> Tambahkan nomor {registerName}</h2>
+      <div className="grid items-start gap-3 md:grid-cols-4">
         <Field label="Tanggal penomoran" hint={isIso(date) ? longDate(date) : undefined}><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
         <Field label="Jumlah nomor" hint="1–500; maks. 99 per kategori per tanggal (format DDSS)."><Input type="number" min={1} max={500} value={qty} onChange={(e) => setQty(e.target.value)} /></Field>
-        <Button variant="outline" onClick={preview} disabled={!ok || busy}>Pratinjau nomor</Button>
-        <Button onClick={commit} disabled={!pv || busy}>Konfirmasi & daftarkan</Button>
+        <Button className="md:mt-5" variant={pv ? 'outline' : 'default'} onClick={preview} disabled={!ok || busy}><Plus size={15} /> Tambahkan Nomor</Button>
+        {pv ? <Button className="md:mt-5" onClick={commit} disabled={busy}>Simpan ke Bank Nomor</Button> : <span />}
       </div>
       {error && <div className="mt-3 flex items-start gap-2 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800"><AlertTriangle size={16} className="mt-0.5 shrink-0" />{error}</div>}
       {pv && (
         <div className="mt-3 rounded border border-navy-200 bg-navy-50/40 p-3 text-sm">
-          <div className="mb-1 font-medium text-navy-900">Pratinjau {pv.quantity} nomor ({pv.format_label}) — {longDate(pv.date)}: {pv.first}{pv.quantity > 1 ? ` s.d. ${pv.last}` : ''} · sisa kapasitas tanggal ini {pv.remaining}</div>
+          <div className="mb-1 font-medium text-navy-900">{pv.quantity} nomor akan ditambahkan ({pv.format_label}) — {longDate(pv.date)}: {pv.first}{pv.quantity > 1 ? ` s.d. ${pv.last}` : ''} · sisa kapasitas tanggal ini {pv.remaining}</div>
           <div className="flex max-h-28 flex-wrap gap-1 overflow-auto">{pv.numbers.map((t) => <span key={t} className="rounded bg-white px-1.5 py-0.5 font-mono text-xs ring-1 ring-slate-300">{t}</span>)}</div>
-          <p className="mt-2 text-xs text-slate-600">Belum tersimpan. Tekan “Konfirmasi & daftarkan” untuk mendaftarkan semuanya sekaligus (atomik); status awal Tersedia.</p>
+          <p className="mt-2 text-xs text-slate-600">Belum tersimpan. Periksa nomornya, lalu tekan “Simpan ke Bank Nomor” untuk menyimpan semuanya sekaligus; status awal Tersedia.</p>
         </div>
       )}
     </Card>

@@ -34,7 +34,7 @@ describe('laporan prognosis', () => {
       { id: 'rm', label: 'RM', mak: 'M', detail: 'D', source_code: 'RM', kind: 'dipa', pagu_terakhir: 350, allocated: 0, billed: 300, paid: 200 }
     ],
     actuals: [{ budget_line_id: 'rm', month: '2026-01', amount: 100 }, { budget_line_id: 'rm', month: '2026-02', amount: 200 }],
-    contracts: [c(), c({ id: 'k2', contract_number: 'KTR-2', sisa_kontrak: 50, effective_end: '2026-04-30' })],
+    contracts: [c(), c({ id: 'k2', contract_number: 'KTR-2', project: 'SATRIA 1', sisa_kontrak: 50, effective_end: '2026-04-30' })],
     schedules: [], plans: [{ budget_line_id: 'rm', month: '2026-01', amount: 120 }, { budget_line_id: 'rm', month: '2026-05', amount: 80 }], contractLines: [{ contract_id: 'k1', budget_line_id: 'rm' }, { contract_id: 'k1', budget_line_id: 'blu' }],
     bills: [{ status: 'diverifikasi', total: 300, paid: 200 }, { status: 'draft', total: 10, paid: 0 }, { status: 'dibatalkan', total: 99, paid: 0 }]
   };
@@ -48,7 +48,7 @@ describe('laporan prognosis', () => {
     expect([rm.plan, rm.plan_to_cutoff, rm.actual_to_cutoff, rm.months[4].plan]).toEqual([200, 120, 300, 80]);
     expect(r.total).toMatchObject({ pagu: 1350, billed: 300, estimate: 350, prognosis: 650, kebutuhan: -700 });
     expect(r.bills).toEqual({ draft: 1, draft_amount: 10, unpaid: 1, unpaid_amount: 100 });
-    expect(r.ending.map((e) => e.contract_number)).toEqual(['KTR-2']);
+    expect(r.ending.map((e) => [e.contract_number, e.project])).toEqual([['KTR-2', 'SATRIA 1']]);
   });
   it('prognosis = realisasi + estimasi; jumlah bulan sama dengan total', () => {
     const r = buildReport({ ...base, extend: true });

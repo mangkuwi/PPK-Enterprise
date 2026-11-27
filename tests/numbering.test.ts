@@ -285,7 +285,7 @@ describe('otorisasi', () => {
   it('minimal satu admin aktif; PIN diverifikasi', () => {
     expect(err(() => updateUser(db, admin, admin.id, { is_active: false }))).toContain('minimal satu administrator');
     setPin(db, admin, op.id, '1234');
-    expect(err(() => authenticate(db, op.id, '0000'))).toContain('PIN salah');
+    expect(err(() => authenticate(db, op.id, '0000'))).toContain('Kata sandi salah');
     expect(authenticate(db, op.id, '1234').id).toBe(op.id);
     expect(err(() => setPin(db, op2, op.id, '9999'))).toContain('FORBIDDEN');
     expect(err(() => setPin(db, admin, op.id, '12'))).toContain('4–12');

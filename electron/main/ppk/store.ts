@@ -1,6 +1,6 @@
 import type { DB } from '../db';
 
-export type Param = string | number | null;
+export type Param = string | number | null | Buffer;
 
 /**
  * Akses data modul PPK. Sengaja async agar implementasi PostgreSQL (Tahap 6) bisa dipasang tanpa mengubah domain.

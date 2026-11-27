@@ -2,9 +2,11 @@
  * Modul PPK di PostgreSQL (Tahap 6, multiuser LAN). Hanya tabel PPK + pengguna + audit yang pindah ke server;
  * modul dokumen dan penomoran tetap di SQLite lokal tiap komputer (keputusan Fase 0, jalur A).
  */
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import pg from 'pg';
-import type { Actor } from '@shared/numbering';
+import { validSecret, type Actor } from '@shared/numbering';
+import { hash, verifySecret } from '../numbering/users';
+import { clearFails, lockedMinutes, lockMessage, recordFail } from '../numbering/lockout';
 import { MIGRATIONS } from '../migrations';
 import type { Param, PpkStore } from './store';
 import { PpkError, ppkAudit, requirePpk } from './access';
@@ -100,17 +102,19 @@ export function pgStore(pool: pg.Pool): PpkStore {
 export const PG_TABLES = ['app_users', 'audit_log', 'ppk_user_roles', 'ppk_fiscal_years', 'ppk_units', 'ppk_officials', 'ppk_programs', 'ppk_activities',
   'ppk_funding_sources', 'ppk_budget_accounts', 'ppk_service_categories', 'ppk_service_packages', 'ppk_tax_rates', 'ppk_vendors',
   'ppk_budget_lines', 'ppk_budget_versions', 'ppk_contracts', 'ppk_contract_addendums', 'ppk_contract_schedules', 'ppk_contract_funding_allocations',
-  'ppk_bills', 'ppk_bill_funding', 'ppk_payments', 'ppk_budget_plans', 'ppk_sp2d_records', 'ppk_contract_year_values', 'ppk_agendas', 'ppk_agenda_assignees'] as const;
+  'ppk_bills', 'ppk_bill_funding', 'ppk_payments', 'ppk_budget_plans', 'ppk_sp2d_records', 'ppk_contract_year_values', 'ppk_invitations', 'ppk_files', 'ppk_invitation_extractions', 'ppk_agendas', 'ppk_agenda_assignees',
+  'ppk_user_phones', 'ppk_notifications', 'ppk_tasks'] as const;
 
 /** Migrasi SQLite yang berisi tabel PPK (v12 = tabel undangan modul dokumen, tetap lokal). */
-const PG_MIGRATIONS = [8, 9, 10, 11, 13];
+const PG_MIGRATIONS = [8, 9, 10, 11, 13, 14, 15, 16];
 export const PG_SCHEMA_VERSION = PG_MIGRATIONS[PG_MIGRATIONS.length - 1];
 
 /** Satu migrasi SQLite → PostgreSQL: INTEGER → BIGINT, trigger dan data awal SQLite dibuang (trigger ditulis ulang di PG_TRIGGERS). */
 const convert = (v: number) => MIGRATIONS.find((m) => m.version === v)!.sql
   .replace(/CREATE TRIGGER[\s\S]*?\bEND;/g, '')
   .replace(/INSERT INTO[\s\S]*?\);\s*(?=\n|$)/g, '')
-  .replace(/\bINTEGER\b/g, 'BIGINT');
+  .replace(/\bINTEGER\b/g, 'BIGINT')
+  .replace(/\bBLOB\b/g, 'BYTEA');
 
 /**
  * Skema server = migrasi SQLite PPK (satu sumber kolom dan constraint) + trigger PostgreSQL dengan aturan yang sama.
@@ -188,8 +192,13 @@ CREATE TRIGGER trg_ppk_sp2d_upd BEFORE UPDATE ON ppk_sp2d_records FOR EACH ROW E
 
 /** Trigger PostgreSQL per migrasi, aturan sama dengan trigger SQLite. */
 const PG_TRIGGERS: Record<number, string> = {
+  16: `CREATE TRIGGER trg_ppk_tasks_nodel BEFORE DELETE ON ppk_tasks FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Tugas tidak boleh dihapus; arsipkan.');`,
   11: TRIGGERS_V8_11,
-  13: `CREATE TRIGGER trg_ppk_agendas_nodel BEFORE DELETE ON ppk_agendas FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Agenda tidak boleh dihapus; batalkan dengan alasan.');`
+  13: `CREATE TRIGGER trg_ppk_agendas_nodel BEFORE DELETE ON ppk_agendas FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Agenda tidak boleh dihapus; batalkan dengan alasan.');`,
+  14: `
+CREATE TRIGGER trg_ppk_inv_nodel BEFORE DELETE ON ppk_invitations FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Undangan tidak boleh dihapus; arsipkan saja.');
+CREATE TRIGGER trg_ppk_files_noupd BEFORE UPDATE OR DELETE ON ppk_files FOR EACH ROW EXECUTE FUNCTION ppk_forbid('File asli tidak boleh diubah atau dihapus.');
+CREATE TRIGGER trg_ppk_ext_noupd BEFORE UPDATE OR DELETE ON ppk_invitation_extractions FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Hasil ekstraksi bersifat append-only.');`
 };
 
 /** Data awal untuk server baru yang tidak diisi dari data lama (sama dengan migrasi v8 SQLite). */
@@ -242,12 +251,11 @@ export async function installPgSchema(pool: pg.Pool) {
 
 // ---------- Pengguna server ----------
 
-const hash = (pin: string, salt: string) => scryptSync(pin, salt, 32).toString('hex'); // sama dengan numbering/users.ts
-const validPin = (pin: string) => /^\d{4,12}$/.test(pin);
+const validPin = validSecret;
 
 /** Server baru tanpa data lama: administrator pertama + data awal. PIN wajib karena server dipakai bersama. */
 export async function initFreshServer(pool: pg.Pool, admin: { id: string; name: string }, pin: string) {
-  if (!validPin(pin)) throw new PpkError('INVALID', 'PIN harus 4–12 digit angka.');
+  if (!validPin(pin)) throw new PpkError('INVALID', 'Kata sandi minimal 8 karakter, atau PIN 4–12 digit angka.');
   const st = await pgStatus(pool);
   if (st.users > 0) throw new PpkError('CONFLICT', 'Server sudah berisi pengguna. Masuk dengan pengguna yang ada.');
   const now = new Date().toISOString(); const salt = randomBytes(16).toString('hex');
@@ -270,17 +278,20 @@ export async function serverLogin(s: PpkStore, userId: string, pin: string): Pro
   const r = await s.get<{ id: string; name: string; role: 'admin' | 'operator'; pin_hash: string | null; pin_salt: string | null }>(
     'SELECT id, name, role, pin_hash, pin_salt FROM app_users WHERE id = ? AND is_active = 1', [userId]);
   if (!r) throw new PpkError('NOT_FOUND', 'Pengguna tidak ditemukan atau nonaktif.');
-  const ok = !!r.pin_hash && !!r.pin_salt && !!pin && timingSafeEqual(Buffer.from(hash(pin, r.pin_salt), 'hex'), Buffer.from(r.pin_hash, 'hex'));
+  const key = `server:${r.id}`; const min = lockedMinutes(key);
+  if (min) throw new PpkError('FORBIDDEN', lockMessage(min));
+  const ok = verifySecret(pin, r);
   const actor: Actor = { id: r.id, name: r.name, role: r.role };
   await ppkAudit(s, actor, ok ? 'server.login' : 'server.login_failed', 'user', r.id, {});
-  if (!ok) throw new PpkError('FORBIDDEN', 'PIN salah.');
+  if (!ok) { recordFail(key); throw new PpkError('FORBIDDEN', 'Kata sandi salah.'); }
+  clearFails(key);
   return actor;
 }
 
 export async function createServerUser(s: PpkStore, actor: Actor, i: { name: string; pin: string }) {
   const name = i.name.trim();
   if (!name || name.length > 80) throw new PpkError('INVALID', 'Nama pengguna wajib diisi (maks. 80 karakter).');
-  if (!validPin(i.pin)) throw new PpkError('INVALID', 'PIN harus 4–12 digit angka.');
+  if (!validPin(i.pin)) throw new PpkError('INVALID', 'Kata sandi minimal 8 karakter, atau PIN 4–12 digit angka.');
   return s.tx(async (t) => {
     await requirePpk(t, actor, 'roles');
     if (await t.get('SELECT 1 FROM app_users WHERE lower(name) = lower(?)', [name])) throw new PpkError('DUPLICATE', `Nama pengguna "${name}" sudah dipakai.`);
@@ -292,7 +303,7 @@ export async function createServerUser(s: PpkStore, actor: Actor, i: { name: str
 }
 
 export async function setServerUserPin(s: PpkStore, actor: Actor, userId: string, pin: string) {
-  if (!validPin(pin)) throw new PpkError('INVALID', 'PIN harus 4–12 digit angka.');
+  if (!validPin(pin)) throw new PpkError('INVALID', 'Kata sandi minimal 8 karakter, atau PIN 4–12 digit angka.');
   await s.tx(async (t) => {
     if (actor.id !== userId) await requirePpk(t, actor, 'roles');
     const salt = randomBytes(16).toString('hex');

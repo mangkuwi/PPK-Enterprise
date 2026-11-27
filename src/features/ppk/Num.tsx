@@ -1,7 +1,6 @@
 import { cn } from '@/lib/utils';
 import { rp } from './inputs';
 
-export const UNITS = [[1e9, 'Miliar Rp'], [1e6, 'Juta Rp'], [1, 'Rupiah']] as const;
 /** Angka ringkas sesuai satuan; nilai persis tampil saat kursor diarahkan. */
 export function Num({ n, unit, signed = false, className }: { n: number; unit: number; signed?: boolean; className?: string }) {
   if (!n) return <span className="text-slate-300">–</span>;

@@ -13,13 +13,17 @@ import { PpkGate } from '@/features/ppk/PpkGate';
 import { ReasonDialog, RupiahInput, rp, useFiscalYears, useWarnings } from '@/features/ppk/inputs';
 import { api } from '@/services/api';
 import { RelatedDocs } from '@/features/ppk/RelatedDocs';
+import { Num } from '@/features/ppk/Num';
+import { ExportButton, ProjectFilter, SlashWrap, TBL } from '@/features/ppk/table';
 import type { MasterRow } from '@shared/ppk/master';
 import { budgetLabel } from '@shared/ppk/budget';
 import {
-  CONTRACT_NEXT, CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, daysUntil, monthsBetween, splitEven,
+  CONTRACT_NEXT, CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, contractProject, projectMatches, daysUntil, monthsBetween, splitEven,
   type AddendumInput, type AllocationRow, type Contract, type ContractDetail, type ContractInput, type ContractStatus, type ContractType, type ScheduleRow
 } from '@shared/ppk/contracts';
 
+/** Kolom Project sempit agar nomor kontrak dan angka tetap muat di layar. */
+const PROJECT_COL = 'w-36 min-w-36 max-w-36';
 const TONE: Record<ContractStatus, 'slate' | 'green' | 'navy' | 'red'> = { draft: 'slate', aktif: 'green', selesai: 'navy', dibatalkan: 'red' };
 const opts = (rows: MasterRow[] | undefined, label = (r: MasterRow) => [r.code, r.name].filter(Boolean).join(' — ')) =>
   rows?.map((r) => <option key={r.id} value={r.id}>{label(r)}</option>);
@@ -37,7 +41,9 @@ export default function ContractsPage() {
   const { years, id: fyId, setId: setFy } = useFiscalYears();
   const [status, setStatus] = useState<ContractStatus | 'semua'>('semua');
   const [search, setSearch] = useState(''); const q = useDebounced(search);
+  const [project, setProject] = useState('');
   const list = useAsync(() => (fyId ? api.ppk.contracts.list({ fiscal_year_id: fyId, status, search: q }) : Promise.resolve([])), [fyId, status, q]);
+  const shown = list.data?.filter((c) => projectMatches(contractProject(c), project));
   const [form, setForm] = useState<Contract | 'new' | null>(null);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -45,7 +51,10 @@ export default function ContractsPage() {
     <Page>
       <PpkGate>
         <PageHeader title="Database Kontrak" subtitle="Kontrak induk, addendum, jadwal nilai per bulan, dan pembebanan ke anggaran."
-          actions={can('write') && <Button onClick={() => setForm('new')} disabled={!fyId}><Plus size={16} />Tambah Kontrak</Button>} />
+          actions={<>
+            <ExportButton run={() => api.ppk.contracts.exportXlsx({ fiscal_year_id: fyId, status, search: q, project })} disabled={!shown?.length} />
+            {can('write') && <Button onClick={() => setForm('new')} disabled={!fyId}><Plus size={16} />Tambah Kontrak</Button>}
+          </>} />
         <div className="mb-4 flex flex-wrap gap-3">
           <Select className="w-40" value={fyId} onChange={(e) => setFy(e.target.value)} aria-label="Tahun anggaran">
             {years.map((y) => <option key={y.id} value={y.id}>TA {y.year}</option>)}
@@ -54,32 +63,47 @@ export default function ContractsPage() {
             <option value="semua">Semua status</option>
             {Object.entries(CONTRACT_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
-          <Input className="max-w-sm" placeholder="Cari nomor, uraian, atau penyedia" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Cari kontrak" />
+          <ProjectFilter projects={list.data?.map(contractProject) ?? []} value={project} onChange={setProject} />
+          <Input className="max-w-sm" placeholder="Cari nomor, uraian, project, atau penyedia" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Cari kontrak" />
         </div>
         {list.error && <Empty>{list.error}</Empty>}
-        {list.data && !list.data.length && <Empty>Belum ada kontrak{search ? ' yang cocok' : ''} untuk tahun ini.</Empty>}
-        {!!list.data?.length && (
-          <Card className="overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs text-slate-600"><tr>
-                <th className="px-3 py-2 text-left">Nomor kontrak</th><th className="px-3 py-2 text-left">Penyedia</th><th className="px-3 py-2 text-left">Uraian</th>
-                <th className="px-3 py-2 text-right">Nilai terakhir</th><th className="px-3 py-2 text-right">Tertagih / sisa</th><th className="px-3 py-2 text-left">Selesai</th><th className="px-3 py-2 text-left">Status</th>
-              </tr></thead>
-              <tbody>{list.data.map((c) => (
-                <tr key={c.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => setOpen(c.id)}>
-                  <td className="whitespace-nowrap px-3 py-2 font-medium text-navy-900"><button className="text-left hover:underline" onClick={() => setOpen(c.id)}>{c.contract_number}</button>
-                    {c.contract_type === 'kpbu' && <Badge className="ml-2">KPBU</Badge>}</td>
-                  <td className="px-3 py-2">{c.vendor_name}</td>
-                  <td className="max-w-xs truncate px-3 py-2" title={c.description}>{c.description}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{rp(c.latest_value)}{c.addendum_count > 0 && <div className="text-xs text-slate-500">{c.addendum_count} addendum</div>}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{rp(c.billed)}<div className="text-xs text-slate-500">sisa {rp(c.sisa_kontrak)}</div></td>
-                  <td className="whitespace-nowrap px-3 py-2">{c.effective_end}<EndBadge c={c} /></td>
-                  <td className="px-3 py-2"><Badge tone={TONE[c.status]}>{CONTRACT_STATUS_LABEL[c.status]}</Badge></td>
-                </tr>))}
-              </tbody>
-            </table>
-          </Card>
-        )}
+        {shown && !shown.length && <Empty>Belum ada kontrak{search || project ? ' yang cocok' : ''} untuk tahun ini.</Empty>}
+        {!!shown?.length && (() => {
+          const rows = shown; const live = rows.filter((c) => c.status !== 'dibatalkan');
+          const sum = (k: 'latest_value' | 'billed' | 'paid' | 'sisa_kontrak') => live.reduce((a, c) => a + c[k], 0);
+          return <>
+            <p className="mb-2 text-xs text-slate-500">{rows.length} kontrak · angka dalam Rupiah penuh · klik baris untuk detail.</p>
+            <Card className={TBL.card}>
+              <table className={TBL.table}>
+                <thead className={TBL.head}><tr>
+                  <th className={cn(TBL.th, TBL.first, PROJECT_COL, 'z-30 bg-slate-50')}>Project</th><th className={TBL.th}>Nomor kontrak</th><th className={TBL.th}>Penyedia</th><th className={TBL.th}>Uraian</th>
+                  <th className={TBL.thNum}>Nilai terakhir</th><th className={TBL.thNum}>Tertagih</th><th className={TBL.thNum}>Dibayar</th><th className={cn(TBL.thNum, 'bg-sky-100 text-navy-900')}>Sisa kontrak</th>
+                  <th className={TBL.th}>Status / selesai</th>
+                </tr></thead>
+                <tbody>{rows.map((c) => (
+                  <tr key={c.id} className={cn(TBL.row, 'cursor-pointer', c.status === 'dibatalkan' && 'text-slate-400')} onClick={() => setOpen(c.id)}>
+                    <td className={cn(TBL.td, TBL.first, PROJECT_COL, 'font-semibold text-navy-900')}>{contractProject(c) || <span className="font-normal text-slate-400">—</span>}</td>
+                    <td className={cn(TBL.td, 'min-w-56 max-w-64 [overflow-wrap:anywhere] font-medium text-navy-900')}><button className="text-left hover:underline" onClick={() => setOpen(c.id)}><SlashWrap text={c.contract_number} /></button>
+                      {c.contract_type === 'kpbu' && <Badge className="ml-2">KPBU</Badge>}</td>
+                    <td className={cn(TBL.td, 'min-w-40')}>{c.vendor_name}</td>
+                    <td className={cn(TBL.td, 'min-w-72 max-w-md')}>{c.description}</td>
+                    <td className={TBL.num}><Num n={c.latest_value} unit={1} />{c.addendum_count > 0 && <div className="text-xs text-slate-500">{c.addendum_count} addendum</div>}</td>
+                    <td className={TBL.num}><Num n={c.billed} unit={1} /></td>
+                    <td className={TBL.num}><Num n={c.paid} unit={1} /></td>
+                    <td className={cn(TBL.num, 'bg-sky-50/60 font-medium', c.sisa_kontrak < 0 && 'text-red-700')}><Num n={c.sisa_kontrak} unit={1} /></td>
+                    <td className={cn(TBL.td, 'whitespace-nowrap')}><Badge tone={TONE[c.status]}>{CONTRACT_STATUS_LABEL[c.status]}</Badge>
+                      <div className="mt-1 text-xs text-slate-500">{c.effective_end}</div><div className="-ml-2"><EndBadge c={c} /></div></td>
+                  </tr>))}
+                </tbody>
+                <tfoot><tr>
+                  <td className={cn(TBL.foot, TBL.first, PROJECT_COL, 'z-30 bg-slate-100')}>Total {live.length} kontrak</td><td className={TBL.foot} colSpan={3}>tidak termasuk yang dibatalkan</td>
+                  {(['latest_value', 'billed', 'paid', 'sisa_kontrak'] as const).map((k) => <td key={k} className={cn(TBL.foot, 'whitespace-nowrap text-right tabular-nums')}><Num n={sum(k)} unit={1} /></td>)}
+                  <td className={TBL.foot} />
+                </tr></tfoot>
+              </table>
+            </Card>
+          </>;
+        })()}
         {form && <ContractForm fiscalYearId={fyId} contract={form === 'new' ? null : form} onClose={() => setForm(null)}
           onSaved={(c) => { setForm(null); list.reload(); setOpen(c.id); }} />}
         {open && !form && <ContractDetailDialog id={open} canWrite={can('write')} onClose={() => setOpen(null)} onEdit={(c) => setForm(c)} onChanged={list.reload} />}
@@ -223,6 +247,7 @@ function Summary({ c }: { c: Contract }) {
         {row('Status', <><Badge tone={TONE[c.status]}>{CONTRACT_STATUS_LABEL[c.status]}</Badge><EndBadge c={c} /></>)}
         {row('Jenis', CONTRACT_TYPE_LABEL[c.contract_type])}
         {row('Program / kegiatan', `${c.program_code} · ${c.activity_name}`)}
+        {row('Project', contractProject(c) || '—')}
         {row('Paket layanan', c.package_code ?? '—')}
         {row('Tanggal kontrak', c.contract_date)}
         {row('Masa pelaksanaan', `${c.start_date} s.d. ${c.effective_end}${c.effective_end !== c.end_date ? ` (awal ${c.end_date})` : ''}`)}

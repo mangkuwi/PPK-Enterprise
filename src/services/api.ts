@@ -12,11 +12,12 @@ import type { PpkImportReport } from '@shared/ppk/import';
 import type { PpkReport } from '@shared/ppk/forecast';
 import type { RelatedDocument } from '@shared/ppk/documents';
 import type { ReconRow, Sp2dInput, Sp2dRecord } from '@shared/ppk/sp2d';
-import type { Bill, BillDetail, BillFilter, BillInput, PaymentInput } from '@shared/ppk/bills';
+import type { Bill, BillDetail, BillFilter, BillInput, PaymentInput, PaymentRow } from '@shared/ppk/bills';
 import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, PlanRow, Warned } from '@shared/ppk/budget';
 import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow, YearValueRow } from '@shared/ppk/contracts';
 import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
-import type { Agenda, AgendaInput } from '@shared/ppk/agenda';
+import type { Task, TaskInput } from '@shared/ppk/tasks';
+import type { Agenda, AssignStatus, AgendaConflict, AgendaFilter, AgendaHistoryRow, AgendaHome, AgendaInput, InboxCategory, InvitationDetail, InvitationFile, InvitationRow, InvitationStatus } from '@shared/ppk/agenda';
 import type { DeliveryLog, Recipient } from '@shared/whatsapp';
 
 export interface PpkServerConf { host: string; port: number; database: string; user: string; password: string }
@@ -29,6 +30,9 @@ import type {
   Actor, AppUser, AuditRow, CategoryMapRow, ConfigHistoryRow, DocNumbering, ImportCommitInput, ImportPreview, ImportRecordRow, ImportReport, ImportResult, NextInfo,
   AvailableQuery, BatchPreview, MigrationReview, NumberBatch, NumberEvent, NumberRecord, NumberRef, NumberingContext, RecordPage, RecordQuery, Register, RegisterSummary, Role, TemplateMapRow
 } from '@shared/numbering';
+
+export type GatewaySync = { at: string; ok: boolean; added: number; error: string };
+export type GatewayState = { url: string; has_key: boolean; last: GatewaySync | null };
 
 declare global {
   interface Window {
@@ -89,7 +93,7 @@ export const api = {
     setAiKey: (key: string) => call<Settings>('settings:setAiKey', { key })
   },
   numbering: {
-    whoami: () => call<{ actor: Actor | null; users: AppUser[] }>('numbering:whoami'),
+    whoami: () => call<{ actor: Actor | null; users: AppUser[]; setup: boolean }>('numbering:whoami'),
     login: (user_id: string, pin?: string) => call<Actor>('numbering:login', { user_id, pin }),
     logout: () => call<boolean>('numbering:logout'),
     users: () => call<AppUser[]>('numbering:users'),
@@ -161,6 +165,12 @@ export const api = {
     access: () => call<PpkAccess | null>('ppk:access'),
     users: () => call<PpkUserRow[]>('ppk:users'),
     setRole: (user_id: string, role: PpkRole | null) => call<boolean>('ppk:setRole', { user_id, role }),
+    accounts: {
+      create: (name: string, password: string, ppk_role: PpkRole) => call<{ id: string; name: string }>('ppk:accounts:create', { name, password, ppk_role }),
+      setActive: (user_id: string, active: boolean) => call<boolean>('ppk:accounts:setActive', { user_id, active }),
+      resetPassword: (user_id: string, password: string) => call<boolean>('ppk:accounts:resetPassword', { user_id, password }),
+      changeOwn: (old_password: string, password: string) => call<boolean>('ppk:accounts:changeOwn', { old_password, password })
+    },
     masterList: (key: MasterKey) => call<MasterRow[]>('ppk:master:list', { key }),
     masterSave: (key: MasterKey, values: Record<string, string | number | boolean | null>) => call<MasterRow>('ppk:master:save', { key, values }),
     taxRates: () => call<Array<{ id: string; valid_from: string; ppn_bp: number; pph23_bp: number; note: string }>>('ppk:taxRates'),
@@ -178,7 +188,8 @@ export const api = {
       create: (line: BudgetLineInput, pagu: BudgetAmountInput) => call<BudgetLine>('ppk:budget:create', { line, pagu }),
       update: (id: string, version: number, description: string, is_active: boolean) => call<BudgetLine>('ppk:budget:update', { id, version, description, is_active }),
       revise: (id: string, revision: BudgetAmountInput) => call<Warned<BudgetLine>>('ppk:budget:revise', { id, revision }),
-      versions: (id: string) => call<BudgetVersion[]>('ppk:budget:versions', { id })
+      versions: (id: string) => call<BudgetVersion[]>('ppk:budget:versions', { id }),
+      exportXlsx: (f: { fiscal_year_id: string; include_inactive?: boolean }) => call<SaveResult>('ppk:budget:export', f)
     },
     contracts: {
       list: (f: ContractFilter = {}) => call<Contract[]>('ppk:contracts:list', f),
@@ -190,7 +201,8 @@ export const api = {
       voidAddendum: (id: string, reason: string) => call<Warned<Contract>>('ppk:contracts:voidAddendum', { id, reason }),
       setSchedule: (id: string, rows: ScheduleRow[]) => call<Warned<Contract>>('ppk:contracts:setSchedule', { id, rows }),
       setAllocations: (id: string, rows: AllocationRow[]) => call<Warned<Contract>>('ppk:contracts:setAllocations', { id, rows }),
-      setYearValues: (id: string, rows: YearValueRow[]) => call<Warned<Contract>>('ppk:contracts:setYearValues', { id, rows })
+      setYearValues: (id: string, rows: YearValueRow[]) => call<Warned<Contract>>('ppk:contracts:setYearValues', { id, rows }),
+      exportXlsx: (f: ContractFilter & { fiscal_year_id: string; project?: string }) => call<SaveResult>('ppk:contracts:export', f)
     },
     bills: {
       list: (f: BillFilter = {}) => call<Bill[]>('ppk:bills:list', f),
@@ -198,7 +210,9 @@ export const api = {
       save: (id: string | null, version: number | null, values: BillInput) => call<Warned<Bill>>('ppk:bills:save', { id, version, values }),
       setStatus: (id: string, status: 'diverifikasi' | 'dibatalkan', reason = '') => call<Bill>('ppk:bills:setStatus', { id, status, reason }),
       addPayment: (bill_funding_id: string, payment: PaymentInput) => call<Warned<Bill>>('ppk:bills:addPayment', { bill_funding_id, payment }),
-      voidPayment: (id: string, reason: string) => call<Bill>('ppk:bills:voidPayment', { id, reason })
+      voidPayment: (id: string, reason: string) => call<Bill>('ppk:bills:voidPayment', { id, reason }),
+      payments: (fiscal_year_id: string) => call<PaymentRow[]>('ppk:bills:payments', { fiscal_year_id }),
+      exportXlsx: (f: BillFilter & { fiscal_year_id: string; project?: string }) => call<SaveResult>('ppk:bills:export', f)
     },
     import: {
       pick: () => call<{ canceled: true } | { canceled: false; token: string; file_name: string }>('ppk:import:pick', {}),
@@ -218,13 +232,44 @@ export const api = {
       void: (id: string, reason: string) => call<void>('ppk:sp2d:void', { id, reason })
     },
     relatedDocuments: (numbers: string[]) => call<RelatedDocument[]>('ppk:documents:related', { numbers }),
+    invitations: {
+      list: (status?: InvitationStatus) => call<InvitationRow[]>('ppk:invitations:list', status ? { status } : {}),
+      byCategory: (category?: InboxCategory) => call<InvitationRow[]>('ppk:invitations:list', category ? { category } : {}),
+      counts: () => call<Partial<Record<InvitationStatus, number>>>('ppk:invitations:counts', {}),
+      get: (id: string) => call<InvitationDetail>('ppk:invitations:get', { id }),
+      mark: (id: string, action: 'diproses' | 'arsip', reason: string) => call<boolean>('ppk:invitations:mark', { id, action, reason }),
+      preview: (id: string) => call<{ mime_type: string; data: string }>('ppk:files:preview', { id }),
+      upload: (note = '') => call<{ id: string; duplicate_of: string | null } | null>('ppk:invitations:upload', { note }),
+      files: (id: string) => call<InvitationFile[]>('ppk:invitations:files', { id }),
+      openFile: (id: string) => call<boolean>('ppk:files:open', { id })
+    },
+    gateway: {
+      status: () => call<GatewayState>('ppk:gateway:status', {}),
+      configure: (url: string, api_key: string) => call<{ messages: number; last_webhook: string | null }>('ppk:gateway:configure', { url, api_key }),
+      sync: () => call<GatewaySync>('ppk:gateway:sync', {})
+    },
+    tasks: {
+      list: (include_old = false) => call<Task[]>('ppk:tasks:list', { include_old }),
+      save: (id: string | null, version: number | null, values: TaskInput) => call<Task>('ppk:tasks:save', { id, version, values }),
+      setDone: (id: string, done: boolean) => call<Task>('ppk:tasks:setDone', { id, done }),
+      archive: (id: string) => call<boolean>('ppk:tasks:archive', { id })
+    },
     agendas: {
-      list: (f: { from?: string; to?: string; include_cancelled?: boolean } = {}) => call<Agenda[]>('ppk:agendas:list', f),
+      list: (f: AgendaFilter & { include_cancelled?: boolean } = {}) => call<Agenda[]>('ppk:agendas:list', f),
       get: (id: string) => call<Agenda>('ppk:agendas:get', { id }),
       create: (v: AgendaInput) => call<Agenda>('ppk:agendas:create', v),
       update: (id: string, version: number, values: AgendaInput) => call<Agenda>('ppk:agendas:update', { id, version, values }),
       setStatus: (id: string, status: 'selesai' | 'dibatalkan', reason = '') => call<Agenda>('ppk:agendas:setStatus', { id, status, reason }),
-      people: () => call<Array<{ id: string; name: string }>>('ppk:agendas:people')
+      people: () => call<Array<{ id: string; name: string }>>('ppk:agendas:people'),
+      home: () => call<AgendaHome>('ppk:agendas:home'),
+      archive: (id: string, archived: boolean) => call<Agenda>('ppk:agendas:archive', { id, archived }),
+      remove: (id: string, reason: string) => call<Agenda>('ppk:agendas:delete', { id, reason }),
+      restore: (id: string) => call<Agenda>('ppk:agendas:restore', { id }),
+      conflicts: (q: { agenda_date: string; start_time: string; end_time: string; exclude_id?: string; user_ids?: string[] }) => call<AgendaConflict[]>('ppk:agendas:conflicts', q),
+      history: (id: string) => call<AgendaHistoryRow[]>('ppk:agendas:history', { id }),
+      reports: (id: string) => call<InvitationFile[]>('ppk:agendas:reports', { id }),
+      uploadReport: (id: string) => call<InvitationFile | null>('ppk:agendas:uploadReport', { id }),
+      assignment: (id: string, user_id: string, status: AssignStatus, duty?: string) => call<Agenda>('ppk:agendas:assignment', { id, user_id, status, ...(duty === undefined ? {} : { duty }) })
     },
     server: {
       status: () => call<PpkServerStatus>('ppk:server:status'),

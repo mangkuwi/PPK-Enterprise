@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
 import { Sidebar } from './components/layout/Sidebar';
+import { TopBar } from './components/layout/TopBar';
 import DashboardPage from './pages/DashboardPage';
 import TemplatesPage from './pages/TemplatesPage';
 import TemplateEditorPage from './pages/TemplateEditorPage';
@@ -26,12 +27,17 @@ import ReportsPage from './pages/ppk/ReportsPage';
 import Sp2dPage from './pages/ppk/Sp2dPage';
 import ServerPage from './pages/ppk/ServerPage';
 import AgendaPage from './pages/ppk/AgendaPage';
+import InboxPage from './pages/ppk/InboxPage';
+import AgendaDetailPage from './pages/ppk/AgendaDetailPage';
+import InboxDetailPage from './pages/ppk/InboxDetailPage';
 
 export default function App() {
   return (
     <div className="flex h-full">
       <Sidebar />
-      <main className="min-w-0 flex-1 overflow-hidden">
+      <main className="flex min-w-0 flex-1 flex-col overflow-clip">
+        <TopBar />
+        <div className="min-h-0 flex-1">
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/generator" element={<GeneratorPage />} />
@@ -62,9 +68,13 @@ export default function App() {
           <Route path="/ppk/pengaturan" element={<PpkSettingsPage />} />
           <Route path="/ppk/server" element={<ServerPage />} />
           <Route path="/ppk/agenda" element={<AgendaPage />} />
+          <Route path="/ppk/agenda/:id" element={<AgendaDetailPage />} />
+          <Route path="/ppk/kotak-masuk" element={<InboxPage />} />
+          <Route path="/ppk/kotak-masuk/:id" element={<InboxDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<DashboardPage />} />
         </Routes>
+        </div>
       </main>
     </div>
   );

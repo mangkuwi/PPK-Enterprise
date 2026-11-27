@@ -84,7 +84,7 @@ export function registerImporterHandlers() {
         const ap = applyToValues(db, i.templateId, i.number_record_id, values, refs);
         values = ap.values; docDate = ap.record.number_date; letterNumber = ap.record.number_text;
       } else if (contextForTemplate(db, i.templateId).register) {
-        throw new Error('Template ini terhubung ke register penomoran, tetapi nomor belum dipilih. Pilih nomor yang tersedia dari Bank Nomor Dokumen.');
+        throw new Error('Template ini terhubung ke register penomoran, tetapi nomor belum dipilih. Pilih nomor yang tersedia dari Bank Nomor.');
       }
       const doc = svc.createDocxDocument(db, { template_id: i.templateId, title: i.title, values, category_id: i.categoryId, template_name: i.templateName, doc_date: docDate, letter_number: letterNumber, recipient: i.recipient, subject: i.subject });
       if (i.number_record_id) bindDocument(db, currentActor(db), { record_id: i.number_record_id, document_id: doc.id, values, refs, template_id: i.templateId });

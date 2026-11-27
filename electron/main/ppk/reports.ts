@@ -1,5 +1,6 @@
 import type { Actor } from '@shared/numbering';
 import { budgetLabel } from '@shared/ppk/budget';
+import { contractProject } from '@shared/ppk/contracts';
 import { MONTH_LABEL, buildReport, type PpkReport, type ReportTotal } from '@shared/ppk/forecast';
 import type { WriteSheet } from '../numbering/xlsx';
 import type { PpkStore } from './store';
@@ -35,7 +36,7 @@ export async function ppkReport(s: PpkStore, actor: Actor, fiscal_year_id: strin
   return buildReport({
     year: fy.year, cutoff, extend, actuals, schedules, contractLines, plans,
     lines: lines.map((l) => ({ id: l.id, label: budgetLabel(l), mak: l.mak, detail: l.output_detail, source_code: l.source_code, kind: l.kind, pagu_terakhir: l.pagu_terakhir, allocated: l.allocated, billed: l.billed, paid: l.paid })),
-    contracts: contracts.map((c) => ({ ...c, year_value: yearValues.get(c.id) ?? null })), bills
+    contracts: contracts.map((c) => ({ ...c, project: contractProject(c), year_value: yearValues.get(c.id) ?? null })), bills
   });
 }
 
@@ -46,11 +47,11 @@ export function reportSheets(r: PpkReport): WriteSheet[] {
   return [
     { name: 'Prognosis', header: ['Baris anggaran', 'Sumber dana', 'Jenis', 'Pagu terakhir', 'Realisasi', 'Dibayar', ...months, 'Estimasi', 'Prognosis', 'Kebutuhan (+) / sisa (−)'],
       rows: r.lines.map((l) => [l.label, l.source_code, l.kind, l.pagu, l.billed, l.paid, ...l.months.map((m) => m.actual + m.estimate), l.estimate, l.prognosis, l.kebutuhan]),
-      widths: [48, 10, 10, 18, 18, 18, ...months.map(() => 16), 18, 18, 20] },
+      widths: [48, 10, 10, 18, 18, 18, ...months.map(() => 16), 18, 18, 20], money: Array.from({ length: months.length + 6 }, (_, i) => i + 3) },
     { name: 'RPD vs realisasi', header: ['Baris anggaran', 'Sumber dana', 'Pagu terakhir', ...months.map((m) => `RPD ${m.split(' ')[0]}`), 'Total RPD', `RPD s.d. ${r.cutoff}`, `Realisasi s.d. ${r.cutoff}`, 'Deviasi (realisasi − RPD)'],
       rows: r.lines.filter((l) => l.id).map((l) => [l.label, l.source_code, l.pagu, ...l.months.map((m) => m.plan), l.plan, l.plan_to_cutoff, l.actual_to_cutoff, l.actual_to_cutoff - l.plan_to_cutoff]),
-      widths: [48, 10, 18, ...months.map(() => 14), 18, 18, 18, 20] },
+      widths: [48, 10, 18, ...months.map(() => 14), 18, 18, 18, 20], money: Array.from({ length: months.length + 5 }, (_, i) => i + 2) },
     { name: 'Per sumber dana', header: ['Sumber dana', 'Pagu terakhir', 'Realisasi', 'Dibayar', 'Estimasi', 'Prognosis', 'Kebutuhan (+) / sisa (−)'],
-      rows: [...r.sources.map((t) => [t.source_code || 'Belum terbebankan', ...total(t)]), ['Total', ...total(r.total)]], widths: [22, 18, 18, 18, 18, 18, 20] }
+      rows: [...r.sources.map((t) => [t.source_code || 'Belum terbebankan', ...total(t)]), ['Total', ...total(r.total)]], widths: [22, 18, 18, 18, 18, 18, 20], money: [1, 2, 3, 4, 5, 6] }
   ];
 }

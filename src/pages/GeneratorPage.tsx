@@ -98,7 +98,7 @@ export default function GeneratorPage() {
 
   const generate = () => {
     if (!tpl) return;
-    if (numbering.loading || numbering.error || (nctx?.register && !nrec)) { toast('Nomor resmi belum dipilih. Pilih nomor Tersedia dari Bank Nomor Dokumen (isian nomor), atau buat nomor di menu Bank Nomor Dokumen.', 'error'); return; }
+    if (numbering.loading || numbering.error || (nctx?.register && !nrec)) { toast('Nomor resmi belum dipilih. Pilih nomor Tersedia dari Bank Nomor (isian nomor), atau buat nomor di menu Bank Nomor.', 'error'); return; }
     const b = build(tpl);
     setResult({ content: b.content, draft: b.draft, key: Date.now() });
     const parts = [`Dokumen berhasil dibuat dari template "${tpl.name}".`];

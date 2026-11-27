@@ -21,7 +21,7 @@ Aplikasi desktop Windows offline (Electron + React + TypeScript + SQLite). Bahas
 - Rupiah = bilangan bulat (`INTEGER`), tidak pernah float. Kurs/valas = teks desimal.
 - Nilai turunan (sisa kontrak, sisa pagu, realisasi) dihitung query, tidak disimpan.
 - Data keuangan final tidak diubah; koreksi = baris penyesuaian + audit (`before`/`after`).
-- Setiap channel `ppk:*` wajib cek izin (`requirePpk`). Modul PPK tidak boleh memanggil AI.
+- Setiap channel `ppk:*` wajib cek izin (`requirePpk`). Modul PPK tidak boleh memanggil AI atau OCR berbayar, termasuk Agenda Center dan Gateway (keputusan pemilik 2026-11-27, menggantikan izin Gemini). Undangan dibaca dengan parser format "AGENDA PPK" (`shared/ppk/agendaMessage.ts`); hasilnya hanya mengisi formulir yang wajib diverifikasi staf.
 - SQL PPK ditulis portabel (rencana PostgreSQL di Tahap 6): hindari fungsi khusus SQLite di query domain.
 - Rancangan domain: dokumen "Fase 0 — Analisis Spreadsheet" dan "Fase 0 — Audit Repositori" (lihat project).
 

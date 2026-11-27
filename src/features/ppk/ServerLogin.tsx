@@ -20,13 +20,13 @@ export function ServerLogin({ host }: { host: string }) {
   };
   return (
     <form onSubmit={submit} className="mx-auto max-w-sm space-y-3 rounded-lg border border-slate-200 bg-white p-5 text-left">
-      <p className="text-sm text-slate-600">Data PPK disimpan di server <b>{host}</b>. Masuk dengan pengguna server.</p>
+      <p className="text-sm text-slate-600">Data PPK disimpan di server <b>{host}</b>. Masuk dengan akun Anda di server.</p>
       {users.error && <p className="text-sm text-red-700" role="alert">{users.error}</p>}
       <Field label="Pengguna" required>
         <Select value={userId} onChange={(e) => setUserId(e.target.value)} required><option value="">— Pilih —</option>
           {users.data?.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select>
       </Field>
-      <Field label="PIN" required><Input type="password" inputMode="numeric" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value)} required /></Field>
+      <Field label="Kata sandi" required><Input type="password" autoComplete="current-password" value={pin} onChange={(e) => setPin(e.target.value)} required /></Field>
       <div className="flex items-center justify-between">
         <Link to="/ppk/server" className="text-xs text-slate-500 underline">Pengaturan server</Link>
         <Button type="submit" disabled={busy || !userId || !pin}>Masuk</Button>
