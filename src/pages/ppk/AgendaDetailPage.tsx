@@ -44,7 +44,7 @@ function Detail({ a, reload }: { a: Agenda; reload: () => void }) {
     if (ok) await run(() => api.ppk.agendas.setStatus(a.id, 'dibatalkan', reason.current), 'Agenda dibatalkan.');
   };
   const rows: Array<[string, React.ReactNode]> = [
-    ['Tanggal acara', `${dayName(a.agenda_date)}, ${formatDateID(a.agenda_date)} · ${timeText(a)} WIB`],
+    ['Tanggal & jam kegiatan', `${dayName(a.agenda_date)}, ${formatDateID(a.agenda_date)} · ${timeText(a)} WIB`],
     ['Penyelenggara', a.organizer], ['Nomor surat', a.letter_number], ['Tanggal surat', a.letter_date && formatDateID(a.letter_date)],
     ['Lokasi', a.location], ['Tautan rapat', a.meeting_url && <a href={a.meeting_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 break-all text-navy-700 underline">{a.meeting_url}<ExternalLink size={12} /></a>],
     ['Program', program && `${program.code ?? ''} ${program.name ?? ''}`],
