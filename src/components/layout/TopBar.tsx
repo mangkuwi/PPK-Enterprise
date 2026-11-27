@@ -9,7 +9,9 @@ import { cn } from '@/lib/utils';
 /** Kepala halaman bersama: nama menu, tanggal, profil, dan tab halaman yang digabung ke menu ini. */
 export function TopBar() {
   const loc = useLocation();
-  const { actor, openLogin } = useActor();
+  const { actor, openLogin, serverUser } = useActor();
+  // Mode server: tampilkan akun server PPK yang sedang masuk, bukan pengguna lokal.
+  const name = serverUser ?? actor?.name ?? null;
   const s = sectionFor(loc.pathname);
   const group = s && GROUPS.find((g) => g.sections.includes(s.key))?.label;
   const tab = s && activeTab(s, loc.pathname, loc.search);
@@ -23,8 +25,8 @@ export function TopBar() {
         </div>
         <div className="ml-auto hidden text-right text-xs text-slate-500 md:block"><b className="block text-sm text-navy-900">{dayName(today)}, {formatDateID(today)}</b>TA {today.slice(0, 4)}</div>
         <button onClick={openLogin} className="flex items-center gap-2 rounded-lg px-2 py-1 text-left hover:bg-slate-100" title="Profil pengguna / ganti pengguna" aria-label="Profil pengguna">
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-blue-100 text-sm font-bold text-blue-800">{actor ? actor.name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') : <UserCircle2 size={20} />}</span>
-          <span className="hidden text-xs leading-tight lg:block"><b className="block text-sm text-navy-900">{actor?.name ?? 'Belum masuk'}</b><span className="text-slate-500">{actor ? (actor.role === 'admin' ? 'Admin' : 'Operator') : 'Klik untuk masuk'}</span></span>
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-blue-100 text-sm font-bold text-blue-800">{name ? name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') : <UserCircle2 size={20} />}</span>
+          <span className="hidden text-xs leading-tight lg:block"><b className="block text-sm text-navy-900">{name ?? 'Belum masuk'}</b><span className="text-slate-500">{serverUser ? 'Akun server PPK' : actor ? (actor.role === 'admin' ? 'Admin' : 'Operator') : 'Klik untuk masuk'}</span></span>
         </button>
       </div>
       {s && s.tabs.length > 0 && (

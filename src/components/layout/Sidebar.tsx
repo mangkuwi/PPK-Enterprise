@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { BarChart3, Building2, CalendarDays, Database, ChevronDown, ChevronsLeft, ChevronsRight, FilePlus2, FileSignature, Files, FileText, Hash, LayoutDashboard, Layers, Library, Receipt, Settings, Wallet, type LucideIcon } from 'lucide-react';
 import { GROUPS, sectionByKey, sectionFor } from '@shared/nav';
+import { useActor } from '@/features/numbering/NumberingContext';
 import { cn } from '@/lib/utils';
 
 const ICON: Record<string, LucideIcon> = {
@@ -20,6 +21,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(read);
   const [open, setOpen] = useState(readOpen);
   const loc = useLocation();
+  const { serverUser } = useActor();
   const current = sectionFor(loc.pathname)?.key;
   useEffect(() => { try { localStorage.setItem(KEY, collapsed ? '1' : '0'); localStorage.setItem(OPEN_KEY, JSON.stringify(open)); } catch { /* penyimpanan tidak tersedia */ } }, [collapsed, open]);
 
@@ -62,7 +64,7 @@ export function Sidebar() {
           );
         })}
       </nav>
-      {!collapsed && <div className="border-t border-white/10 px-5 py-2 text-[11px] text-slate-400">Data tersimpan lokal · offline</div>}
+      {!collapsed && <div className="border-t border-white/10 px-5 py-2 text-[11px] text-slate-400">{serverUser ? 'Terhubung ke server PPK' : 'Data tersimpan lokal · offline'}</div>}
     </aside>
   );
 }

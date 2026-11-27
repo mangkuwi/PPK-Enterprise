@@ -59,7 +59,8 @@ function usePpkOverview(enabled: boolean) {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { actor } = useActor();
+  const { actor, serverUser } = useActor();
+  const userName = serverUser ?? actor?.name;
   const { access } = usePpkAccess();
   const ppk = !!access?.perms.includes('read');
   const o = usePpkOverview(ppk);
@@ -85,7 +86,7 @@ export default function DashboardPage() {
   return (
     <Page>
       <div className="mb-5">
-        <h1 className="text-2xl text-navy-900">Selamat datang{actor ? <>, <b>{actor.name}</b></> : ''}</h1>
+        <h1 className="text-2xl text-navy-900">Selamat datang{userName ? <>, <b>{userName}</b></> : ''}</h1>
         <p className="text-sm text-slate-600">Ringkasan agenda, kontrak, tagihan, anggaran, dan naskah dinas.</p>
       </div>
 
