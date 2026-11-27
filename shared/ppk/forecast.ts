@@ -30,6 +30,8 @@ export interface ForecastContract {
   start_date: string; effective_end: string; latest_value: number; sisa_kontrak: number;
   /** Kontrak tahun jamak: nilai estimasi tahun ini; bila ada, estimasi memakai nilai ini dikurangi tagihan tahun ini. */
   billed?: number; year_value?: number | null;
+  /** Jenis project (lihat contractProject), untuk daftar kontrak yang segera selesai. */
+  project?: string;
 }
 
 /**
@@ -77,7 +79,7 @@ export interface PpkReport {
   lines: ReportLine[]; sources: ReportTotal[]; total: ReportTotal;
   bills: { draft: number; draft_amount: number; unpaid: number; unpaid_amount: number };
   /** Kontrak aktif yang sudah atau akan selesai dalam 2 bulan sesudah bulan laporan. */
-  ending: Array<{ id: string; contract_number: string; vendor_name: string; effective_end: string; sisa_kontrak: number }>;
+  ending: Array<{ id: string; contract_number: string; project: string; vendor_name: string; effective_end: string; sisa_kontrak: number }>;
 }
 
 export interface ReportInput {
@@ -152,6 +154,6 @@ export function buildReport(i: ReportInput): PpkReport {
     sources: codes.map((c) => sum(c, lines.filter((r) => r.source_code === c))), total: sum('Total', lines),
     bills: { draft: drafts.length, draft_amount: drafts.reduce((a, b) => a + b.total, 0), unpaid: unpaid.length, unpaid_amount: unpaid.reduce((a, b) => a + b.total - b.paid, 0) },
     ending: i.contracts.filter((c) => c.status === 'aktif' && c.effective_end.slice(0, 7) <= soon).sort((a, b) => a.effective_end.localeCompare(b.effective_end))
-      .map(({ id, contract_number, vendor_name, effective_end, sisa_kontrak }) => ({ id, contract_number, vendor_name, effective_end, sisa_kontrak }))
+      .map(({ id, contract_number, project = '', vendor_name, effective_end, sisa_kontrak }) => ({ id, contract_number, project, vendor_name, effective_end, sisa_kontrak }))
   };
 }
