@@ -132,11 +132,11 @@ export async function setAgendaStatus(s: PpkStore, actor: Actor, id: string, sta
   return getAgenda(s, actor, id);
 }
 
-/** Pengguna yang dapat ditugaskan: aktif dan punya peran PPK (administrator aplikasi otomatis). */
+/** Pengguna yang dapat ditugaskan sebagai PJ/pendukung agenda dan To Do. */
 export async function agendaPeople(s: PpkStore, actor: Actor): Promise<Array<{ id: string; name: string }>> {
   await requirePpk(s, actor, 'read');
-  return s.all(`SELECT u.id, u.name FROM app_users u LEFT JOIN ppk_user_roles r ON r.user_id = u.id
-    WHERE u.is_active = 1 AND (u.role = 'admin' OR r.role IS NOT NULL) ORDER BY u.name`);
+  // Semua akun aktif, juga yang belum diberi peran PPK: staf tetap bisa ditugaskan.
+  return s.all('SELECT id, name FROM app_users WHERE is_active = 1 ORDER BY name');
 }
 
 /** Agenda dari undangan = verifikasi staf: undangan ditandai dikonversi, agenda menyimpan siapa dan kapan memverifikasi. */
