@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { DialogContent } from '@/components/ui/dialog';
 import { Field, Input, Select, Textarea } from '@/components/ui/form';
@@ -7,6 +8,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { api } from '@/services/api';
 import { formatDateID } from '@shared/date';
 import { dayName, type Agenda, type AgendaConflict, type AgendaInput } from '@shared/ppk/agenda';
+import { AGENDA_MESSAGE_LABEL, matchProgram, type AgendaMessage } from '@shared/ppk/agendaMessage';
 
 /** ' (6 jam)' / ' (1 jam 30 menit)'; kosong bila jam selesai tidak setelah jam mulai. */
 const duration = (a: string, b: string) => {
@@ -15,11 +17,14 @@ const duration = (a: string, b: string) => {
 };
 
 /** Formulir agenda (baru dari surat undangan, atau ubah). Penanggung jawab dipilih dari pengguna yang punya peran PPK. */
-export function AgendaForm({ initial, existing, onSaved }: { initial: AgendaInput; existing?: Agenda; onSaved: (a: Agenda) => void }) {
+export function AgendaForm({ initial, existing, parsed, onSaved }: { initial: AgendaInput; existing?: Agenda; parsed?: AgendaMessage | null; onSaved: (a: Agenda) => void }) {
   const { toast } = useFeedback();
   const people = useAsync(() => api.ppk.agendas.people(), []);
   const programs = useAsync(() => api.ppk.masterList('programs'), []);
   const [v, setV] = useState<AgendaInput>(initial);
+  useEffect(() => { // Program dari pesan AGENDA PPK: isi hanya bila cocok persis dan staf belum memilih
+    if (parsed?.program && programs.data) { const id = matchProgram(parsed.program, programs.data as Array<{ id: string }>); if (id) setV((x) => (x.program_id ? x : { ...x, program_id: id })); }
+  }, [parsed, programs.data]);
   const [clash, setClash] = useState<AgendaConflict[]>([]);
   const staff = [...(v.pic_user_id ? [v.pic_user_id] : []), ...v.support_user_ids].join(',');
   useEffect(() => { // peringatan bentrok, tidak memblokir simpan
@@ -40,6 +45,7 @@ export function AgendaForm({ initial, existing, onSaved }: { initial: AgendaInpu
     <DialogContent wide title={existing ? 'Ubah agenda' : 'Buat agenda'} description={v.invitation_id && !existing ? 'Dari undangan masuk. Buka file undangan dan cocokkan isinya; menyimpan berarti Anda memverifikasi undangan ini.' : 'Periksa sebelum menyimpan. Agenda tidak bergantung pada pengiriman WhatsApp.'}
       footer={<Button disabled={busy} onClick={save}>{existing ? 'Simpan perubahan' : 'Simpan agenda'}</Button>}>
       {people.error && <p className="mb-2 text-sm text-red-700" role="alert">{people.error}</p>}
+      {parsed && <ParsedBox m={parsed} programMatched={!!v.program_id} />}
       <div className="grid gap-3 text-sm md:grid-cols-2">
         <Field label="Judul kegiatan" required className="md:col-span-2"><Input value={v.title} onChange={set('title')} /></Field>
         <fieldset className="grid gap-3 rounded-lg border border-navy-200 bg-navy-50/50 p-3 md:col-span-2 md:grid-cols-3">
@@ -79,6 +85,27 @@ export function AgendaForm({ initial, existing, onSaved }: { initial: AgendaInpu
         <Field label="Catatan" className="md:col-span-2"><Textarea rows={2} value={v.notes} onChange={set('notes')} /></Field>
       </div>
     </DialogContent>
+  );
+}
+
+/** Hasil pembacaan format AGENDA PPK: nilai asli, label yang tidak ada, dan nilai yang ditolak. */
+function ParsedBox({ m, programMatched }: { m: AgendaMessage; programMatched: boolean }) {
+  const bad = new Map(m.invalid.map((x) => [x.field, x.reason]));
+  return (
+    <div className="mb-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950" role="status">
+      <div className="font-semibold">Terbaca dari format AGENDA PPK</div>
+      <p className="text-xs text-emerald-900">Formulir sudah diisi dari pesan. Periksa setiap kolom; agenda baru tersimpan setelah Anda menekan Simpan.</p>
+      <dl className="mt-2 grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5">
+        {(Object.keys(AGENDA_MESSAGE_LABEL) as Array<keyof typeof AGENDA_MESSAGE_LABEL>).map((f) => (<Fragment key={f}>
+          <dt className="text-emerald-800">{AGENDA_MESSAGE_LABEL[f]}</dt>
+          <dd className={cn(!m.raw[f] || bad.has(f) ? 'text-amber-800' : '')}>
+            {m.raw[f] ? m.raw[f] : <i>tidak ada di pesan, isi manual</i>}
+            {bad.has(f) && <> · <b>{bad.get(f)}</b> Kolom dikosongkan.</>}
+            {f === 'program' && m.raw.program && !programMatched && !bad.has(f) && <> · <b>Tidak cocok dengan program PPK, pilih sendiri.</b></>}
+          </dd>
+        </Fragment>))}
+      </dl>
+    </div>
   );
 }
 
