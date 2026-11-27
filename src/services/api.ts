@@ -202,7 +202,7 @@ export const api = {
       setSchedule: (id: string, rows: ScheduleRow[]) => call<Warned<Contract>>('ppk:contracts:setSchedule', { id, rows }),
       setAllocations: (id: string, rows: AllocationRow[]) => call<Warned<Contract>>('ppk:contracts:setAllocations', { id, rows }),
       setYearValues: (id: string, rows: YearValueRow[]) => call<Warned<Contract>>('ppk:contracts:setYearValues', { id, rows }),
-      exportXlsx: (f: ContractFilter & { fiscal_year_id: string }) => call<SaveResult>('ppk:contracts:export', f)
+      exportXlsx: (f: ContractFilter & { fiscal_year_id: string; project?: string }) => call<SaveResult>('ppk:contracts:export', f)
     },
     bills: {
       list: (f: BillFilter = {}) => call<Bill[]>('ppk:bills:list', f),
@@ -212,7 +212,7 @@ export const api = {
       addPayment: (bill_funding_id: string, payment: PaymentInput) => call<Warned<Bill>>('ppk:bills:addPayment', { bill_funding_id, payment }),
       voidPayment: (id: string, reason: string) => call<Bill>('ppk:bills:voidPayment', { id, reason }),
       payments: (fiscal_year_id: string) => call<PaymentRow[]>('ppk:bills:payments', { fiscal_year_id }),
-      exportXlsx: (f: BillFilter & { fiscal_year_id: string }) => call<SaveResult>('ppk:bills:export', f)
+      exportXlsx: (f: BillFilter & { fiscal_year_id: string; project?: string }) => call<SaveResult>('ppk:bills:export', f)
     },
     import: {
       pick: () => call<{ canceled: true } | { canceled: false; token: string; file_name: string }>('ppk:import:pick', {}),

@@ -13,8 +13,9 @@ import { PpkGate } from '@/features/ppk/PpkGate';
 import { ReasonDialog, RupiahInput, rp, useFiscalYears, useWarnings } from '@/features/ppk/inputs';
 import { api } from '@/services/api';
 import { RelatedDocs } from '@/features/ppk/RelatedDocs';
-import { Num, UNITS } from '@/features/ppk/Num';
-import { ExportButton, SlashWrap, TBL } from '@/features/ppk/table';
+import { Num } from '@/features/ppk/Num';
+import { ExportButton, ProjectFilter, SlashWrap, TBL } from '@/features/ppk/table';
+import { contractProject, projectMatches } from '@shared/ppk/contracts';
 import { billMatrix } from '@shared/ppk/matrix';
 import { MONTH_LABEL } from '@shared/ppk/forecast';
 import { budgetLabel } from '@shared/ppk/budget';
@@ -76,10 +77,13 @@ export default function BillsPage() {
   const [status, setStatus] = useState<BillStatus | 'semua'>('semua');
   const [search, setSearch] = useState(''); const q = useDebounced(search);
   const list = useAsync(() => (fyId ? api.ppk.bills.list({ fiscal_year_id: fyId, status, search: q }) : Promise.resolve([])), [fyId, status, q]);
+  const [project, setProject] = useState('');
+  const contracts = useAsync(() => (fyId ? api.ppk.contracts.list({ fiscal_year_id: fyId }) : Promise.resolve([])), [fyId]);
+  const projectOf = useMemo(() => new Map((contracts.data ?? []).map((c) => [c.id, contractProject(c)])), [contracts.data]);
   const [form, setForm] = useState<Bill | 'new' | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [view, setView] = useState<'daftar' | 'pembayaran' | 'matriks'>('daftar');
-  const rows = list.data ?? [];
+  const rows = (list.data ?? []).filter((b) => projectMatches(projectOf.get(b.contract_id) ?? '', project));
   const live = rows.filter((b) => b.status !== 'dibatalkan');
   const sum = (k: 'total' | 'net' | 'paid') => live.reduce((a, b) => a + b[k], 0);
 
@@ -88,7 +92,7 @@ export default function BillsPage() {
       <PpkGate>
         <PageHeader title="Tagihan & Pembayaran" subtitle="Tagihan per bulan layanan, pajak sesuai faktur, pembagian sumber dana, dan SP2D/FO."
           actions={<>
-            <ExportButton run={() => api.ppk.bills.exportXlsx({ fiscal_year_id: fyId, status, search: q })} disabled={!rows.length} />
+            <ExportButton run={() => api.ppk.bills.exportXlsx({ fiscal_year_id: fyId, status, search: q, project })} disabled={!rows.length} />
             {can('write') && <Button onClick={() => setForm('new')} disabled={!fyId}><Plus size={16} />Tambah Tagihan</Button>}
           </>} />
         <div className="mb-4 flex flex-wrap gap-3">
@@ -99,15 +103,16 @@ export default function BillsPage() {
             <option value="semua">Semua status</option>
             {Object.entries(BILL_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
+          <ProjectFilter projects={[...projectOf.values()]} value={project} onChange={setProject} />
           <Input className="max-w-sm" placeholder="Cari nomor tagihan, kontrak, atau penyedia" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Cari tagihan" />
           <div className="ml-auto flex rounded-md border border-slate-300 bg-white p-0.5 text-sm" role="tablist" aria-label="Tampilan">
             {(['daftar', 'pembayaran', 'matriks'] as const).map((v) => <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)}
               className={cn('rounded px-3 py-1', view === v ? 'bg-navy-800 text-white' : 'text-slate-600 hover:bg-slate-100')}>{VIEW_LABEL[v]}</button>)}
           </div>
         </div>
-        {view === 'matriks' && fyId && <BillMatrix fiscalYearId={fyId} year={Number(years.find((y) => String(y.id) === fyId)?.year)} bills={rows} onOpen={setOpen} />}
+        {view === 'matriks' && fyId && <BillMatrix fiscalYearId={fyId} year={Number(years.find((y) => String(y.id) === fyId)?.year)} bills={rows} project={project} onOpen={setOpen} />}
         {list.error && <Empty>{list.error}</Empty>}
-        {view === 'daftar' && list.data && !rows.length && <Empty>Belum ada tagihan{search ? ' yang cocok' : ''} untuk tahun ini.</Empty>}
+        {view === 'daftar' && list.data && !rows.length && <Empty>Belum ada tagihan{search || project ? ' yang cocok' : ''} untuk tahun ini.</Empty>}
         {view === 'daftar' && !!rows.length && (<>
           <p className="mb-2 text-xs text-slate-500">{rows.length} tagihan · angka dalam Rupiah penuh · klik baris untuk detail dan pembayaran.</p>
           <Card className={TBL.card}>
@@ -121,7 +126,7 @@ export default function BillsPage() {
                 <tr key={b.id} className={cn(TBL.row, 'cursor-pointer', b.status === 'dibatalkan' && 'text-slate-400')} onClick={() => setOpen(b.id)}>
                   <td className={cn(TBL.td, TBL.first, 'font-medium text-navy-900')}><button className="text-left hover:underline" onClick={() => setOpen(b.id)}><SlashWrap text={b.bill_number} /></button></td>
                   <td className={cn(TBL.td, 'whitespace-nowrap')}>{b.service_month}</td>
-                  <td className={cn(TBL.td, 'min-w-48')}><div>{b.contract_number}</div><div className="text-xs text-slate-500">{b.vendor_name}</div></td>
+                  <td className={cn(TBL.td, 'min-w-48')}>{projectOf.get(b.contract_id) && <div className="font-semibold text-navy-900">{projectOf.get(b.contract_id)}</div>}<div>{b.contract_number}</div><div className="text-xs text-slate-500">{b.vendor_name}</div></td>
                   <td className={TBL.num}><Num n={b.total} unit={1} /></td>
                   <td className={TBL.num}><Num n={b.ppn + b.pph23} unit={1} />{b.faktur_code && <div className="text-xs text-slate-500">FP {b.faktur_code}</div>}</td>
                   <td className={TBL.num}><Num n={b.net} unit={1} /></td>
@@ -397,10 +402,10 @@ const CELL_TONE: Record<string, string> = {
 };
 
 /** Kontrak × bulan layanan: nilai tagihan per bulan dengan warna tahap pembayaran; klik sel untuk membuka tagihan. */
-function BillMatrix({ fiscalYearId, year, bills, onOpen }: { fiscalYearId: string; year: number; bills: Bill[]; onOpen: (id: string) => void }) {
+function BillMatrix({ fiscalYearId, year, bills, project, onOpen }: { fiscalYearId: string; year: number; bills: Bill[]; project: string; onOpen: (id: string) => void }) {
   const contracts = useAsync(() => api.ppk.contracts.list({ fiscal_year_id: fiscalYearId }), [fiscalYearId]);
-  const [unit, setUnit] = useState<number>(1e6);
-  const rows = useMemo(() => billMatrix(contracts.data ?? [], bills, year), [contracts.data, bills, year]);
+  const unit = 1; // rupiah penuh, sama dengan tabel lain
+  const rows = useMemo(() => billMatrix((contracts.data ?? []).filter((c) => projectMatches(contractProject(c), project)), bills, year), [contracts.data, bills, year, project]);
   if (contracts.error) return <Empty>{contracts.error}</Empty>;
   if (!contracts.data) return null;
   if (!rows.length) return <Empty>Belum ada kontrak untuk tahun ini.</Empty>;
@@ -410,13 +415,11 @@ function BillMatrix({ fiscalYearId, year, bills, onOpen }: { fiscalYearId: strin
     <div className="mb-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
       {Object.entries(CELL_TONE).map(([k, cls]) => <span key={k} className={cn('rounded px-2 py-0.5', cls)}>{k}</span>)}
       <span>Filter status dan pencarian di atas ikut berlaku.</span>
-      <Select className="ml-auto w-32" value={unit} onChange={(e) => setUnit(Number(e.target.value))} aria-label="Satuan angka">
-        {UNITS.map(([u, label]) => <option key={u} value={u}>{label}</option>)}
-      </Select>
+      <span className="ml-auto">Angka dalam Rupiah penuh. Geser tabel ke kanan untuk Okt–Des dan total.</span>
     </div>
     <Card className="max-h-[70vh] overflow-auto">
-      <table className="w-full border-separate border-spacing-0 text-xs">
-        <thead className="sticky top-0 z-20 bg-slate-50 text-slate-600"><tr>
+      <table className="w-full border-separate border-spacing-0 text-[13px]">
+        <thead className="sticky top-0 z-20 bg-slate-50 text-xs text-slate-600"><tr>
           <th className={cn(first, 'z-30 bg-slate-50')}>Kontrak / penyedia</th>
           {MONTH_LABEL.map((m) => <th key={m} className="border-b border-slate-200 px-2 py-2 text-right">{m}</th>)}
           <th className="border-b border-l border-slate-200 px-2 py-2 text-right">Nilai kontrak</th><th className="border-b border-slate-200 px-2 py-2 text-right">Tertagih</th>
@@ -427,7 +430,7 @@ function BillMatrix({ fiscalYearId, year, bills, onOpen }: { fiscalYearId: strin
             <td className={cn(first, 'border-b border-slate-100')} title={`${r.contract_number} · ${r.vendor_name}`}>
               <div className="truncate font-medium text-slate-800">{r.vendor_name}</div><div className="truncate text-[11px] text-slate-500">{r.contract_number}</div>
             </td>
-            {r.months.map((m, i) => <td key={i} className="border-b border-slate-100 p-0.5">
+            {r.months.map((m, i) => <td key={i} className="min-w-[8.5rem] whitespace-nowrap border-b border-slate-100 p-0.5">
               {m ? <button className={cn('w-full rounded px-1.5 py-1 text-right tabular-nums hover:ring-1 hover:ring-navy-700', CELL_TONE[m.stage])}
                 onClick={() => onOpen(m.bill_ids[0])} title={`${m.stage}${m.count > 1 ? ` · ${m.count} tagihan` : ''}`}>
                 <Num n={m.total} unit={unit} />{m.count > 1 && <sup className="ml-0.5">{m.count}</sup>}</button>

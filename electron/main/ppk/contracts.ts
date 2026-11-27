@@ -14,7 +14,7 @@ const now = () => new Date().toISOString();
 const VALID_ADD = 'a.voided_at IS NULL';
 
 /** Nilai kontrak terakhir, tanggal selesai efektif, pembebanan, dan jadwal dihitung dari riwayat, tidak disimpan. */
-const SELECT = `SELECT c.*, fy.year, v.name AS vendor_name, p.code AS program_code, act.name AS activity_name, sp.code AS package_code,
+const SELECT = `SELECT c.*, fy.year, v.name AS vendor_name, p.code AS program_code, act.name AS activity_name, sp.code AS package_code, sp.name AS package_name,
   COALESCE((SELECT SUM(a.value_change) FROM ppk_contract_addendums a WHERE a.contract_id = c.id AND ${VALID_ADD}), 0) AS addendum_total,
   (SELECT COUNT(*) FROM ppk_contract_addendums a WHERE a.contract_id = c.id AND ${VALID_ADD}) AS addendum_count,
   COALESCE((SELECT a.new_end_date FROM ppk_contract_addendums a WHERE a.contract_id = c.id AND ${VALID_ADD} AND a.new_end_date IS NOT NULL
@@ -47,7 +47,8 @@ export async function listContracts(s: PpkStore, actor: Actor, f: ContractFilter
   if (f.vendor_id) { w.push('c.vendor_id = ?'); p.push(f.vendor_id); }
   if (f.search?.trim()) {
     const q = `%${f.search.trim().toLowerCase().replace(/[\\%_]/g, (x) => `\\${x}`)}%`;
-    w.push(`(lower(c.contract_number) LIKE ? ESCAPE '\\' OR lower(c.description) LIKE ? ESCAPE '\\' OR lower(v.name) LIKE ? ESCAPE '\\')`); p.push(q, q, q);
+    w.push(`(lower(c.contract_number) LIKE ? ESCAPE '\\' OR lower(c.description) LIKE ? ESCAPE '\\' OR lower(v.name) LIKE ? ESCAPE '\\'
+      OR lower(c.notes) LIKE ? ESCAPE '\\' OR lower(COALESCE(sp.name, '')) LIKE ? ESCAPE '\\' OR lower(COALESCE(sp.code, '')) LIKE ? ESCAPE '\\')`); p.push(q, q, q, q, q, q);
   }
   // shortcut: daftar dibatasi 5000 kontrak per filter tanpa paging, tambah paging bila satu TA melebihi itu.
   return (await s.all<Contract>(`${SELECT} ${w.length ? `WHERE ${w.join(' AND ')}` : ''} ORDER BY fy.year DESC, v.name, c.start_date LIMIT 5000`, p)).map(withLatest);

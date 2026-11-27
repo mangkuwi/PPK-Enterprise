@@ -1,5 +1,6 @@
 import type { Actor } from '@shared/numbering';
 import { budgetLabel } from '@shared/ppk/budget';
+import { contractProject } from '@shared/ppk/contracts';
 import { MONTH_LABEL, buildReport, type PpkReport, type ReportTotal } from '@shared/ppk/forecast';
 import type { WriteSheet } from '../numbering/xlsx';
 import type { PpkStore } from './store';
@@ -35,7 +36,7 @@ export async function ppkReport(s: PpkStore, actor: Actor, fiscal_year_id: strin
   return buildReport({
     year: fy.year, cutoff, extend, actuals, schedules, contractLines, plans,
     lines: lines.map((l) => ({ id: l.id, label: budgetLabel(l), mak: l.mak, detail: l.output_detail, source_code: l.source_code, kind: l.kind, pagu_terakhir: l.pagu_terakhir, allocated: l.allocated, billed: l.billed, paid: l.paid })),
-    contracts: contracts.map((c) => ({ ...c, year_value: yearValues.get(c.id) ?? null })), bills
+    contracts: contracts.map((c) => ({ ...c, project: contractProject(c), year_value: yearValues.get(c.id) ?? null })), bills
   });
 }
 

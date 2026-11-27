@@ -29,7 +29,7 @@ import { VENDOR_EXPORT_HEADER, createVendor, getVendor, listVendors, setVendorSt
 import { addBudgetRevision, createBudgetLine, getBudgetPlan, listBudgetLines, listBudgetVersions, setBudgetPlan, updateBudgetLine } from '../main/ppk/budget';
 import { addAddendum, createContract, getContract, listContracts, setAllocations, setContractStatus, setSchedule, setYearValues, updateContract, voidAddendum } from '../main/ppk/contracts';
 import { BUDGET_KIND_LABEL, type BudgetKind } from '@shared/ppk/budget';
-import { CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, type ContractStatus, type ContractType } from '@shared/ppk/contracts';
+import { CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, contractProject, projectMatches, type ContractStatus, type ContractType } from '@shared/ppk/contracts';
 import { budgetSheets, billSheets, contractSheets } from '../main/ppk/exports';
 import { addPayment, getBill, listBills, listPayments, saveBill, setBillStatus, voidPayment } from '../main/ppk/bills';
 import { BILL_STATUS_LABEL, PAYMENT_CHANNELS, type BillStatus } from '@shared/ppk/bills';
@@ -135,10 +135,12 @@ export function registerPpkHandlers() {
   const stamp = () => new Date().toISOString().slice(0, 10);
   handle('ppk:budget:export', z.object({ fiscal_year_id: S.id, include_inactive: z.boolean().optional() }), async (f) =>
     saveFile(writeXlsx(budgetSheets(await listBudgetLines(st(), actor(), f))), `Database-Anggaran-${stamp()}.xlsx`, 'xlsx'));
-  handle('ppk:contracts:export', z.object({ fiscal_year_id: S.id, vendor_id: S.id.optional(), status: z.union([contractStatus, z.literal('semua')]).optional(), search: text(200).optional() }), async (f) =>
-    saveFile(writeXlsx(contractSheets(await listContracts(st(), actor(), f))), `Database-Kontrak-${stamp()}.xlsx`, 'xlsx'));
-  handle('ppk:bills:export', z.object({ fiscal_year_id: S.id, status: z.union([billStatus, z.literal('semua')]).optional(), search: text(200).optional() }), async (f) => {
-    const [bills, payments] = await Promise.all([listBills(st(), actor(), f), listPayments(st(), actor(), f.fiscal_year_id)]);
+  handle('ppk:contracts:export', z.object({ fiscal_year_id: S.id, vendor_id: S.id.optional(), status: z.union([contractStatus, z.literal('semua')]).optional(), search: text(200).optional(), project: text(200).optional() }), async (f) =>
+    saveFile(writeXlsx(contractSheets((await listContracts(st(), actor(), f)).filter((c) => projectMatches(contractProject(c), f.project)))), `Database-Kontrak-${stamp()}.xlsx`, 'xlsx'));
+  handle('ppk:bills:export', z.object({ fiscal_year_id: S.id, status: z.union([billStatus, z.literal('semua')]).optional(), search: text(200).optional(), project: text(200).optional() }), async (f) => {
+    const [all, payments, contracts] = await Promise.all([listBills(st(), actor(), f), listPayments(st(), actor(), f.fiscal_year_id), listContracts(st(), actor(), { fiscal_year_id: f.fiscal_year_id })]);
+    const projectOf = new Map(contracts.map((c) => [c.id, contractProject(c)]));
+    const bills = all.filter((b) => projectMatches(projectOf.get(b.contract_id) ?? '', f.project));
     return saveFile(writeXlsx(billSheets(bills, payments)), `Tagihan-dan-Pembayaran-${stamp()}.xlsx`, 'xlsx');
   });
   handle('ppk:bills:voidPayment', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidPayment(st(), actor(), id, reason));
