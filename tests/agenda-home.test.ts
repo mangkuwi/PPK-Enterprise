@@ -136,3 +136,13 @@ describe('rapat daring di beranda', () => {
     expect(liveState(a, addDays(TODAY, 1), '09:30')).toBe(null);
   });
 });
+
+describe('grid jam', () => {
+  it('posisi dari jam mulai, lajur untuk jadwal beririsan, tanpa jam tidak masuk grid', async () => {
+    const { layoutDay } = await import('@shared/ppk/agenda');
+    const a = (start_time: string, end_time: string) => ({ agenda_date: TODAY, start_time, end_time });
+    const r = layoutDay([a('10:00', '10:45'), a('09:00', '11:00'), a('', ''), a('13:00', ''), a('09:30', '09:40')], 7);
+    expect(r.map((x) => [x.item.start_time, x.top, x.height, x.lane, x.lanes])).toEqual([
+      ['09:00', 120, 120, 0, 2], ['09:30', 150, 30, 1, 2], ['10:00', 180, 45, 1, 2], ['13:00', 360, 60, 0, 1]]);
+  });
+});

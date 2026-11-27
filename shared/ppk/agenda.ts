@@ -136,3 +136,24 @@ export function overlaps(a: Pick<Agenda, 'agenda_date' | 'start_time' | 'end_tim
 export interface AgendaConflict { id: string; title: string; agenda_date: string; start_time: string; end_time: string; shared_staff: string[] }
 export interface AgendaHistoryRow { at: string; actor_name: string; action: string; detail: Record<string, unknown> }
 export interface InvitationFile { id: string; filename: string; mime_type: string; size_bytes: number; created_at: string }
+
+/** Posisi kartu di grid jam satu hari: menit dari awal grid, durasi, dan lajur bila jam beririsan. Agenda tanpa jam tidak masuk grid. */
+export function layoutDay<T extends Pick<Agenda, 'agenda_date' | 'start_time' | 'end_time'>>(items: T[], startHour: number):
+  Array<{ item: T; top: number; height: number; lane: number; lanes: number }> {
+  const timed = items.filter((a) => a.start_time).sort((a, b) => a.start_time.localeCompare(b.start_time));
+  const out = timed.map((item) => {
+    const s = mins(item.start_time); const e = item.end_time ? mins(item.end_time) : s + 60;
+    return { item, top: s - startHour * 60, height: Math.max(e - s, 30), lane: 0, lanes: 1 };
+  });
+  // Kelompok = rangkaian kartu yang saling beririsan; tiap kelompok dibagi rata ke lajur.
+  let group: typeof out = []; let groupEnd = -1;
+  const close = () => { const n = Math.max(...group.map((g) => g.lane)) + 1; group.forEach((g) => { g.lanes = n; }); };
+  for (const g of out) {
+    if (group.length && g.top >= groupEnd) { close(); group = []; }
+    const used = new Set(group.filter((x) => x.top + x.height > g.top).map((x) => x.lane));
+    while (used.has(g.lane)) g.lane++;
+    group.push(g); groupEnd = Math.max(groupEnd, g.top + g.height);
+  }
+  if (group.length) close();
+  return out;
+}

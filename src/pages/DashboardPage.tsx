@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CalendarCheck, CalendarDays, CalendarRange, ClipboardCheck, FileClock, FilePlus2, FileText, Files, Hash, ListTodo, Mail, MessageCircle, Pencil, Plus, Send, Star, UserX } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, FileClock, FilePlus2, FileText, Files, Hash, ListTodo, Mail, MessageCircle, Pencil, Plus, Send, Star } from 'lucide-react';
 import { Page } from '@/components/layout/Page';
 import { Button } from '@/components/ui/button';
 import { Badge, Card, Empty, STATUS_LABEL, STATUS_TONE } from '@/components/ui/card';
@@ -8,12 +8,13 @@ import { Dialog } from '@/components/ui/dialog';
 import { PpkGate } from '@/features/ppk/PpkGate';
 import { usePpkAccess } from '@/features/ppk/usePpkAccess';
 import { AgendaForm, EMPTY_AGENDA } from '@/features/ppk/AgendaForm';
-import { AgendaCalendar, AgendaRow } from '@/features/ppk/AgendaViews';
+import { AgendaCalendar, MiniMonth, TimeGrid, timeText } from '@/features/ppk/AgendaViews';
 import { useAsync } from '@/hooks/useAsync';
 import { api } from '@/services/api';
 import { formatDateTime } from '@/lib/utils';
 import { REGISTER_PATH } from '@shared/numbering';
-import { calendarDays, dayName, type Agenda, type AgendaInput, type CalendarView } from '@shared/ppk/agenda';
+import { calendarDays, dayName, shiftCursor, type Agenda, type AgendaInput, type CalendarView } from '@shared/ppk/agenda';
+import { cn } from '@/lib/utils';
 import { formatDateID, jakartaToday } from '@shared/date';
 
 function Stat({ icon: Icon, label, value, hint, to }: { icon: typeof Files; label: string; value: string | number; hint?: string; to?: string }) {
@@ -27,17 +28,6 @@ function Stat({ icon: Icon, label, value, hint, to }: { icon: typeof Files; labe
   return to ? <Link to={to}>{body}</Link> : body;
 }
 
-function Count({ icon: Icon, label, value, to, tone = 'navy' }: { icon: typeof Files; label: string; value: number | undefined; to: string; tone?: 'navy' | 'amber' }) {
-  return (
-    <Link to={to} className="block min-w-0">
-      <Card className="flex h-full items-center gap-3 p-3 transition-shadow hover:shadow-md">
-        <div className={tone === 'amber' ? 'grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-800' : 'grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-navy-100 text-navy-800'}><Icon size={20} /></div>
-        <div className="min-w-0"><div className="text-2xl font-bold leading-tight text-navy-900">{value ?? '–'}</div><div className="text-xs leading-tight text-slate-600">{label}</div></div>
-      </Card>
-    </Link>
-  );
-}
-
 /** Jam WIB 'HH:MM', diperbarui tiap 30 detik (untuk tanda "Sedang berlangsung"). */
 function useJakartaClock() {
   const read = () => new Date().toLocaleTimeString('sv-SE', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
@@ -46,103 +36,118 @@ function useJakartaClock() {
   return t;
 }
 
-const Box = ({ title, link, children, id }: { title: React.ReactNode; link?: React.ReactNode; children: React.ReactNode; id?: string }) => (
-  <Card className="min-w-0 p-4" id={id}>
-    <div className="mb-2 flex items-center justify-between gap-2 font-semibold text-navy-900"><span className="flex items-center gap-2">{title}</span>{link}</div>
-    {children}
-  </Card>
-);
+type Kind = 'daring' | 'tatap_muka' | 'belum_ditugaskan' | 'ditugaskan' | 'selesai';
+const KINDS: Array<[Kind, string, (a: Agenda) => boolean]> = [
+  ['daring', 'Rapat daring', (a) => !!a.meeting_url], ['tatap_muka', 'Tatap muka', (a) => !a.meeting_url],
+  ['belum_ditugaskan', 'Belum ditugaskan', (a) => a.status === 'terjadwal' && !a.pic], ['ditugaskan', 'Ditugaskan', (a) => a.status === 'terjadwal' && !!a.pic],
+  ['selesai', 'Selesai', (a) => a.status === 'selesai']
+];
+const VIEW_TABS: Array<[CalendarView, string]> = [['hari', 'Harian'], ['minggu', 'Mingguan'], ['bulan', 'Bulanan']];
 
-/** Beranda: Agenda PPK sebagai isi utama. Semua angka dari query database (ppk:agendas:home). */
+/** Beranda: jadwal Agenda PPK sebagai isi utama. Semua angka dari query database (ppk:agendas:home). */
 function AgendaHomeSection() {
   const navigate = useNavigate();
   const { can } = usePpkAccess();
   const home = useAsync(() => api.ppk.agendas.home(), []);
   const today = home.data?.today ?? jakartaToday();
-  const [view, setView] = useState<CalendarView>('bulan');
+  const [view, setView] = useState<CalendarView>('minggu');
   const now = useJakartaClock();
   const [cursor, setCursor] = useState(today);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [form, setForm] = useState<{ initial: AgendaInput; existing?: Agenda } | null>(null);
+  const [hidden, setHidden] = useState<Set<Kind>>(new Set());
+  const [form, setForm] = useState<{ initial: AgendaInput } | null>(null);
   const days = calendarDays(view, cursor);
-  const cal = useAsync(() => api.ppk.agendas.list({ from: days[0], to: days[days.length - 1] }), [days[0], days[days.length - 1]]);
+  const month = calendarDays('bulan', cursor);
+  const cal = useAsync(() => api.ppk.agendas.list({ from: month[0] < days[0] ? month[0] : days[0], to: month.at(-1)! > days.at(-1)! ? month.at(-1)! : days.at(-1)!, status: 'semua' }),
+    [month[0], days[0], days.at(-1)]);
   const h = home.data;
+  const shown = (cal.data ?? []).filter((a) => a.status !== 'dibatalkan' && !a.archived_at && !KINDS.some(([k, , m]) => hidden.has(k) && m(a)));
   const setOpen = (a: Agenda) => navigate(`/ppk/agenda/${a.id}`);
-  const listed = (cal.data ?? []).filter((a) => (selected ? a.agenda_date === selected : true));
-  const reload = () => { home.reload(); cal.reload(); };
-  const pendingTotal = h ? h.counts.pending_verification + h.counts.pending_assignment + h.needs_report.length : undefined;
+  const toggle = (k: Kind) => setHidden((x) => { const n = new Set(x); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const nextUp = (h?.today_agendas ?? []).filter((a) => a.status === 'terjadwal' && (!a.end_time || a.end_time > now));
+  const range = view === 'hari' ? `${dayName(cursor)}, ${formatDateID(cursor)}` : view === 'minggu' ? `${formatDateID(days[0])} – ${formatDateID(days[6])}` : formatDateID(cursor).replace(/^\d+ /, '');
 
   return (
-    <>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-xs font-semibold uppercase tracking-wider text-navy-600">PPK Management</div>
-          <h1 className="text-2xl font-bold text-navy-900">Agenda PPK</h1>
-          <div className="text-sm text-slate-600">{dayName(today)}, {formatDateID(today)} · WIB</div>
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[270px_minmax(0,1fr)]">
+      <aside className="min-w-0 space-y-4">
+        <Card className="p-4"><MiniMonth cursor={cursor} setCursor={setCursor} today={today} week={view === 'bulan' ? [] : days} marked={new Set((cal.data ?? []).filter((a) => a.status === 'terjadwal').map((a) => a.agenda_date))} /></Card>
+        <Card className="p-4">
+          <div className="mb-2 font-semibold text-navy-900">Jenis agenda</div>
+          <ul className="space-y-2 text-sm">{KINDS.map(([k, l, m]) => (
+            <li key={k} className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500" />{l} <span className="text-xs text-slate-400">{(cal.data ?? []).filter((a) => days.includes(a.agenda_date) && a.status !== 'dibatalkan' && !a.archived_at && m(a)).length}</span></span>
+              <button role="switch" aria-checked={!hidden.has(k)} aria-label={`Tampilkan ${l}`} onClick={() => toggle(k)}
+                className={cn('relative h-5 w-9 rounded-full transition-colors', hidden.has(k) ? 'bg-slate-300' : 'bg-emerald-500')}>
+                <span className={cn('absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all', hidden.has(k) ? 'left-0.5' : 'left-[18px]')} /></button>
+            </li>))}</ul>
+        </Card>
+        <Card className="p-4">
+          <div className="mb-2 flex items-center justify-between font-semibold text-navy-900">Pengingat{h && <Badge tone="amber">{h.counts.pending_verification + h.counts.pending_assignment + h.needs_report.length}</Badge>}</div>
+          <ul className="space-y-2 text-sm">
+            {nextUp.map((a) => <li key={a.id}><button onClick={() => setOpen(a)} className="w-full rounded-md border border-slate-200 p-2 text-left hover:bg-slate-50">
+              <div className="flex items-center justify-between gap-2"><span className="truncate font-medium">{a.title}</span><Badge tone={a.meeting_url ? 'navy' : 'green'}>{a.meeting_url ? 'Daring' : 'Rapat'}</Badge></div>
+              <div className="text-xs text-slate-500">Hari ini · {timeText(a)}</div></button></li>)}
+            {!!h?.counts.pending_verification && <li><Link to="/ppk/kotak-masuk?status=menunggu_verifikasi" className="block rounded-md border border-amber-200 bg-amber-50 p-2 hover:bg-amber-100">
+              <b>{h.counts.pending_verification}</b> undangan menunggu verifikasi</Link></li>}
+            {!!h?.counts.pending_assignment && <li><Link to="/ppk/agenda?status=belum_ditugaskan" className="block rounded-md border border-amber-200 bg-amber-50 p-2 hover:bg-amber-100">
+              <b>{h.counts.pending_assignment}</b> agenda belum ada penanggung jawab</Link></li>}
+            {h?.needs_report.map((a) => <li key={a.id}><button onClick={() => setOpen(a)} className="w-full rounded-md border border-slate-200 p-2 text-left hover:bg-slate-50">
+              <div className="truncate font-medium">{a.title}</div><div className="text-xs text-slate-500">{formatDateID(a.agenda_date)} · lewat, belum ditutup</div></button></li>)}
+            {h && !nextUp.length && !h.counts.pending_verification && !h.counts.pending_assignment && !h.needs_report.length && <li className="text-slate-500">Tidak ada pengingat.</li>}
+          </ul>
+        </Card>
+      </aside>
+
+      <section className="min-w-0 space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div><div className="text-xs font-semibold uppercase tracking-wider text-navy-600">PPK Management</div>
+            <h1 className="text-2xl font-bold text-navy-900">Jadwal Agenda PPK</h1>
+            <div className="text-sm text-slate-600">{dayName(today)}, {formatDateID(today)} · {now} WIB</div></div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => navigate('/ppk/kotak-masuk')}><MessageCircle size={16} /> Kotak Masuk WhatsApp{h && h.counts.wa_incoming > 0 && <Badge tone="amber">{h.counts.wa_incoming}</Badge>}</Button>
+            <Button variant="outline" onClick={() => navigate('/ppk/agenda')}><ListTodo size={16} /> Semua agenda</Button>
+            {can('write') && <Button className="bg-violet-700 hover:bg-violet-800" onClick={() => setForm({ initial: { ...EMPTY_AGENDA, agenda_date: view === 'hari' ? cursor : today } })}><Plus size={16} /> Tambah Agenda</Button>}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {can('write') && <Button onClick={() => setForm({ initial: { ...EMPTY_AGENDA, agenda_date: selected ?? today } })}><Plus size={16} /> Tambah Agenda</Button>}
-          <Button variant="outline" onClick={() => navigate('/ppk/kotak-masuk')}><MessageCircle size={16} /> Kotak Masuk WhatsApp{h && h.counts.wa_incoming > 0 && <Badge tone="amber">{h.counts.wa_incoming}</Badge>}</Button>
-          <Button variant="outline" onClick={() => document.getElementById('kalender')?.scrollIntoView({ behavior: 'smooth' })}><CalendarDays size={16} /> Kalender</Button>
+        {home.error && <div className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800" role="alert">{home.error}</div>}
+
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 via-white to-navy-50 p-4">
+          <span className="grid h-11 w-11 place-items-center rounded-lg bg-violet-700 text-white"><MessageCircle size={20} /></span>
+          <div className="min-w-0 flex-1"><div className="font-semibold text-navy-900">Undangan dari WhatsApp</div>
+            <div className="text-sm text-slate-600">{h ? `${h.inbox.baru} baru · ${h.inbox.menunggu_verifikasi} menunggu verifikasi · ${h.inbox.gagal} gagal diproses · ${h.inbox.dikonversi_bulan_ini} jadi agenda bulan ini` : 'Memuat…'}</div></div>
+          <Button variant="outline" onClick={() => navigate('/ppk/kotak-masuk?status=menunggu_verifikasi')}>Verifikasi undangan <ArrowRight size={14} /></Button>
         </div>
-      </div>
-      {home.error && <div className="mb-3 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800" role="alert">{home.error}</div>}
 
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <Count icon={CalendarRange} label="Agenda bulan ini" value={h?.counts.month_total} to="/ppk/agenda" />
-        <Count icon={CalendarCheck} label="Agenda hari ini" value={h?.counts.today_total} to="/ppk/agenda" />
-        <Count icon={MessageCircle} label="Undangan WhatsApp masuk" value={h?.counts.wa_incoming} to="/ppk/kotak-masuk?status=baru" />
-        <Count icon={ClipboardCheck} label="Menunggu verifikasi" value={h?.counts.pending_verification} to="/ppk/kotak-masuk?status=menunggu_verifikasi" tone="amber" />
-        <Count icon={UserX} label="Belum ditugaskan" value={h?.counts.pending_assignment} to="/ppk/agenda" tone="amber" />
-      </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          {([['Agenda bulan ini', h?.counts.month_total, '/ppk/agenda'], ['Agenda hari ini', h?.counts.today_total, '/ppk/agenda'], ['Undangan WA masuk', h?.counts.wa_incoming, '/ppk/kotak-masuk?status=baru'],
+            ['Menunggu verifikasi', h?.counts.pending_verification, '/ppk/kotak-masuk?status=menunggu_verifikasi'], ['Belum ditugaskan', h?.counts.pending_assignment, '/ppk/agenda?status=belum_ditugaskan']] as const).map(([l, v, to]) => (
+            <Link key={l} to={to} className="rounded-lg border border-slate-200 bg-white px-3 py-2 hover:border-navy-300"><div className="text-xl font-bold text-navy-900">{v ?? '–'}</div><div className="text-xs text-slate-600">{l}</div></Link>))}
+        </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <Box title={<><CalendarDays size={18} /> {selected ? `Agenda ${dayName(selected)}, ${formatDateID(selected)}` : 'Agenda kegiatan'}</>}
-          link={selected ? <button className="text-sm font-normal text-navy-600 hover:underline" onClick={() => setSelected(null)}>Kembali ke hari ini</button>
-            : <Link to="/ppk/agenda" className="text-sm font-normal text-navy-600 hover:underline">Semua agenda</Link>}>
-          {selected ? (cal.data && (listed.length ? <ul className="divide-y divide-slate-100">{listed.map((a) => <AgendaRow key={a.id} a={a} onOpen={setOpen} today={today} now={now} />)}</ul>
-            : <Empty>Tidak ada agenda pada tanggal ini.</Empty>)) : <>
-            <h3 className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Hari ini</h3>
-            {h?.today_agendas.length ? <ul className="divide-y divide-slate-100">{h.today_agendas.map((a) => <AgendaRow key={a.id} a={a} onOpen={setOpen} today={today} now={now} />)}</ul>
-              : <p className="py-3 text-sm text-slate-500">Tidak ada agenda hari ini.</p>}
-            <h3 className="mt-4 border-t border-slate-100 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">7 hari ke depan</h3>
-            {h?.upcoming.length ? <ul className="divide-y divide-slate-100">{h.upcoming.map((a) => <AgendaRow key={a.id} a={a} onOpen={setOpen} showDate />)}</ul>
-              : <p className="py-3 text-sm text-slate-500">Tidak ada agenda 7 hari ke depan.</p>}
-          </>}
-        </Box>
-
-        <div className="min-w-0 space-y-4">
-          <Box id="kalender" title={<><CalendarRange size={16} /> Kalender</>}>
-            <AgendaCalendar compact view={view} setView={setView} cursor={cursor} setCursor={setCursor} today={today} agendas={cal.data ?? []}
-              selected={selected} onSelect={(d) => { setSelected(d); if (d && view === 'hari') setCursor(d); }} onOpen={setOpen} />
-            {cal.error && <p className="mt-2 text-sm text-red-700">{cal.error}</p>}
-          </Box>
-          <Box title={<><MessageCircle size={16} /> Kotak Masuk WhatsApp</>} link={<Link to="/ppk/kotak-masuk" className="text-sm font-normal text-navy-600 hover:underline">Buka</Link>}>
-            <div className="grid grid-cols-2 gap-2 text-center">
-              {([['Undangan baru', h?.inbox.baru, 'baru'], ['Menunggu verifikasi', h?.inbox.menunggu_verifikasi, 'menunggu_verifikasi'],
-                ['Gagal diproses', h?.inbox.gagal, 'gagal'], ['Dikonversi bulan ini', h?.inbox.dikonversi_bulan_ini, 'dikonversi']] as const).map(([l, v, st]) => (
-                <Link key={st} to={`/ppk/kotak-masuk?status=${st}`} className="rounded-lg border border-slate-200 p-2 hover:border-navy-300 hover:bg-slate-50">
-                  <div className="text-xl font-bold text-navy-900">{v ?? '–'}</div><div className="text-xs text-slate-600">{l}</div>
-                </Link>))}
+        <Card className="p-4" id="kalender">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-1">
+              <span className="mr-2 text-lg font-semibold text-navy-900">{range}</span>
+              <Button size="icon" variant="outline" aria-label="Sebelumnya" onClick={() => setCursor(shiftCursor(view, cursor, -1))}><ChevronLeft size={16} /></Button>
+              <Button size="icon" variant="outline" aria-label="Berikutnya" onClick={() => setCursor(shiftCursor(view, cursor, 1))}><ChevronRight size={16} /></Button>
+              {!days.includes(today) && <Button size="sm" variant="ghost" onClick={() => setCursor(today)}>Hari ini</Button>}
             </div>
-          </Box>
-          <Box title={<><ListTodo size={16} /> Tindakan tertunda{pendingTotal ? <Badge tone="amber">{pendingTotal}</Badge> : null}</>}>
-            {h && !pendingTotal ? <Empty>Tidak ada tindakan tertunda.</Empty> : (
-              <ul className="space-y-3 text-sm">
-                {!!h?.awaiting_verification.length && <li><div className="mb-1 text-xs font-semibold uppercase text-slate-500">Undangan menunggu verifikasi</div>
-                  {h.awaiting_verification.map((i) => <Link key={i.id} to="/ppk/kotak-masuk?status=menunggu_verifikasi" className="block truncate text-navy-800 hover:underline">{i.sender_name || i.sender_phone || 'Unggah manual'} · {formatDateTime(i.received_at)}</Link>)}</li>}
-                {!!h?.unassigned.length && <li><div className="mb-1 text-xs font-semibold uppercase text-slate-500">Agenda tanpa penanggung jawab</div>
-                  {h.unassigned.map((a) => <button key={a.id} onClick={() => setOpen(a)} className="block w-full truncate text-left text-navy-800 hover:underline">{formatDateID(a.agenda_date)} · {a.title}</button>)}</li>}
-                {!!h?.needs_report.length && <li><div className="mb-1 text-xs font-semibold uppercase text-slate-500">Kegiatan lewat, belum ditutup / dilaporkan</div>
-                  {h.needs_report.map((a) => <button key={a.id} onClick={() => setOpen(a)} className="block w-full truncate text-left text-navy-800 hover:underline">{formatDateID(a.agenda_date)} · {a.title}</button>)}</li>}
-              </ul>)}
-          </Box>
-        </div>
-      </div>
+            <div className="flex rounded-lg bg-slate-100 p-1" role="tablist" aria-label="Tampilan jadwal">
+              {VIEW_TABS.map(([v, l]) => <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)}
+                className={cn('rounded-md px-4 py-1 text-sm', view === v ? 'bg-white font-semibold text-navy-900 shadow-sm' : 'text-slate-500 hover:text-navy-800')}>{l}</button>)}
+            </div>
+          </div>
+          {cal.error && <p className="mb-2 text-sm text-red-700">{cal.error}</p>}
+          {view === 'bulan'
+            ? <AgendaCalendar view="bulan" setView={setView} cursor={cursor} setCursor={setCursor} today={today} agendas={shown} selected={null} hideHeader
+              onSelect={(d) => { if (d) { setCursor(d); setView('hari'); } }} onOpen={setOpen} />
+            : <TimeGrid days={days} agendas={shown.filter((a) => days.includes(a.agenda_date))} today={today} now={now} onOpen={setOpen} />}
+        </Card>
+      </section>
+
       <Dialog open={!!form} onOpenChange={(o) => { if (!o) setForm(null); }}>
-        {form && <AgendaForm initial={form.initial} existing={form.existing} onSaved={() => { setForm(null); reload(); }} />}
+        {form && <AgendaForm initial={form.initial} onSaved={(a) => { setForm(null); navigate(`/ppk/agenda/${a.id}`); }} />}
       </Dialog>
-    </>
+    </div>
   );
 }
 
