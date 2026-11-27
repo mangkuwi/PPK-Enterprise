@@ -241,7 +241,7 @@ export async function buildDocx(input: ExportInput): Promise<Buffer> {
   }));
 
   const doc = new Document({
-    creator: 'NASKAHDINAS AI',
+    creator: 'PPK Management',
     title: input.title,
     styles: { default: { document: { run: { font: l.fontFamily, size: Math.round(l.fontSize * 2) } } } },
     numbering: { config: [{ reference: 'ol', levels }] },

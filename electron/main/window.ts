@@ -19,7 +19,7 @@ export function isTrustedUrl(url: string | undefined): boolean {
 export function createMainWindow(): BrowserWindow {
   win = new BrowserWindow({
     width: 1360, height: 860, minWidth: 1024, minHeight: 680,
-    show: false, backgroundColor: '#f1f5f9', title: 'NASKAHDINAS AI', autoHideMenuBar: true,
+    show: false, backgroundColor: '#f1f5f9', title: 'PPK Management', autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

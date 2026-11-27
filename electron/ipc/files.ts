@@ -71,7 +71,7 @@ export function registerFileHandlers() {
     const s = getSettings(getDb());
     const pick = await dialog.showOpenDialog(win, {
       properties: ['openFile'], defaultPath: validDir(s.backup_dir) ? s.backup_dir : defaultBackupDir(),
-      filters: [{ name: 'Backup NASKAHDINAS AI', extensions: ['zip'] }]
+      filters: [{ name: 'Backup PPK Management', extensions: ['zip'] }]
     });
     if (pick.canceled || !pick.filePaths[0]) return { canceled: true };
     const zipFile = pick.filePaths[0];

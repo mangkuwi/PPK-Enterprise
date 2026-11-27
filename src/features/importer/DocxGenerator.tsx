@@ -70,7 +70,7 @@ export function DocxGenerator({ tpl, settings, onBack }: { tpl: Template; settin
   const shownFields = tpl.fields.filter((f) => !variantKeys.has(f.key) && visible(f));
 
   const generate = async () => {
-    if (numbering.loading || numbering.error || (nctx?.register && !nrec)) { toast('Nomor resmi belum dipilih. Pilih nomor Tersedia dari Bank Nomor Dokumen (isian nomor), atau buat nomor di menu Bank Nomor Dokumen.', 'error'); return; }
+    if (numbering.loading || numbering.error || (nctx?.register && !nrec)) { toast('Nomor resmi belum dipilih. Pilih nomor Tersedia dari Bank Nomor (isian nomor), atau buat nomor di menu Bank Nomor.', 'error'); return; }
     const auto = new Set([...(nctx?.own_keys ?? []), ...(nctx?.date_key ? [nctx.date_key] : [])]);
     const missing = shownFields.filter((f) => f.required && !auto.has(f.key) && !(values[f.key] ?? '').trim());
     if (missing.length) { toast(`Isian wajib belum terisi: ${missing.map((m) => m.label).join(', ')}`, 'error'); return; }

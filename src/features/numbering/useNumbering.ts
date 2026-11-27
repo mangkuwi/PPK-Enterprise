@@ -5,7 +5,7 @@ import type { NumberRecord, NumberRef, NumberingContext } from '@shared/numberin
 export interface NumberingState {
   templateId: string | null; ctx: NumberingContext | null; record: NumberRecord | null; refs: Record<string, NumberRecord | null>; loading: boolean; error: string;
   refList: NumberRef[]; setRef: (key: string, rec: NumberRecord | null) => void;
-  /** Pilih (atau ganti) nomor dari Bank Nomor Dokumen. Nomor lama dilepas dan yang baru ditugaskan secara atomik. */
+  /** Pilih (atau ganti) nomor dari Bank Nomor. Nomor lama dilepas dan yang baru ditugaskan secara atomik. */
   select: (rec: NumberRecord) => Promise<void>;
   /** Lepas nomor terpilih kembali ke Bank Nomor (hanya bila draf belum tersimpan). */
   clear: () => Promise<void>;
@@ -14,7 +14,7 @@ export interface NumberingState {
 
 /**
  * Memuat konfigurasi penomoran template. TIDAK membuat atau memesan nomor secara otomatis:
- * nomor hanya dipilih pengguna dari Bank Nomor Dokumen. Bila formulir ditinggalkan tanpa menyimpan,
+ * nomor hanya dipilih pengguna dari Bank Nomor. Bila formulir ditinggalkan tanpa menyimpan,
  * nomor terpilih dikembalikan ke AVAILABLE (nomor tidak dibatalkan).
  */
 export function useNumbering(templateId: string | null, _initialDate?: string): NumberingState {

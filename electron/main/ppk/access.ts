@@ -22,7 +22,7 @@ export async function ppkAccess(s: PpkStore, actor: Actor): Promise<PpkAccess> {
 export async function requirePpk(s: PpkStore, actor: Actor, perm: PpkPerm): Promise<PpkAccess> {
   const a = await ppkAccess(s, actor);
   if (!a.perms.includes(perm)) throw new PpkError('FORBIDDEN', a.role ? 'Peran Anda tidak mengizinkan tindakan ini.' : 'Anda belum memiliki peran di modul PPK. Minta administrator menambahkannya.');
-  if (perm !== 'read' && !a.has_pin) throw new PpkError('PIN_REQUIRED', 'Pengguna Anda belum ber-PIN. Administrator mengatur PIN di menu Administrasi → Register Lainnya & Impor → Pengaturan → Pengguna.');
+  if (perm !== 'read' && !a.has_pin) throw new PpkError('PIN_REQUIRED', 'Pengguna Anda belum ber-PIN. Administrator mengatur PIN di menu Pengaturan → Penomoran & Pengguna → Pengguna.');
   return a;
 }
 

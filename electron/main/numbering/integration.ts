@@ -62,7 +62,7 @@ export function applyToValues(db: DB, templateId: string, recordId: string, valu
   const record = getRecord(db, recordId);
   if (record.register_id !== ctx.register.id) throw new NumberingError('INVALID', `Nomor ${record.number_text} berasal dari register lain, bukan ${ctx.register.name}.`);
   if (record.status === 'void') throw new NumberingError('STATE', `Nomor ${record.number_text} berstatus VOID dan tidak dapat dipakai.`);
-  if (record.status === 'available') throw new NumberingError('STATE', `Nomor ${record.number_text} belum dipilih untuk draf ini. Pilih nomor dari Bank Nomor Dokumen.`);
+  if (record.status === 'available') throw new NumberingError('STATE', `Nomor ${record.number_text} belum dipilih untuk draf ini. Pilih nomor dari Bank Nomor.`);
   if (record.status === 'issued' && record.document_id !== opts.documentId) throw new NumberingError('STATE', `Nomor ${record.number_text} sudah terbit dan tidak dapat dipakai ulang.`);
   if (record.document_id && record.document_id !== opts.documentId) throw new NumberingError('LINKED', `Nomor ${record.number_text} sudah terhubung ke dokumen lain.`);
   const out = { ...values };

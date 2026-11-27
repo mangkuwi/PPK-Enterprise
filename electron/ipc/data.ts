@@ -39,7 +39,7 @@ export function registerDataHandlers() {
     const win = getMainWindow();
     const res = await dialog.showSaveDialog(win!, {
       defaultPath: `template-naskahdinas-${new Date().toISOString().slice(0, 10)}.json`,
-      filters: [{ name: 'Template NASKAHDINAS (JSON)', extensions: ['json'] }]
+      filters: [{ name: 'Template PPK Management (JSON)', extensions: ['json'] }]
     });
     if (res.canceled || !res.filePath) return { canceled: true };
     fs.writeFileSync(res.filePath, JSON.stringify(payload, null, 2), 'utf8');
@@ -48,14 +48,14 @@ export function registerDataHandlers() {
 
   handle('templates:import', S.empty, async () => {
     const win = getMainWindow();
-    const res = await dialog.showOpenDialog(win!, { properties: ['openFile'], filters: [{ name: 'Template NASKAHDINAS (JSON)', extensions: ['json'] }] });
+    const res = await dialog.showOpenDialog(win!, { properties: ['openFile'], filters: [{ name: 'Template PPK Management (JSON)', extensions: ['json'] }] });
     if (res.canceled || !res.filePaths[0]) return { canceled: true };
     const file = res.filePaths[0];
     if (fs.statSync(file).size > 50 * 1024 * 1024) throw new Error('Berkas terlalu besar (maks 50 MB).');
     let parsed: unknown;
     try { parsed = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { throw new Error('Berkas bukan JSON yang valid.'); }
     const check = S.templateImportFile.safeParse(parsed);
-    if (!check.success) throw new Error('Format berkas template tidak valid atau bukan berkas template NASKAHDINAS.');
+    if (!check.success) throw new Error('Format berkas template tidak valid atau bukan berkas template aplikasi ini.');
     return { canceled: false, imported: repo.importTemplates(getDb(), check.data as repo.TemplateExport) };
   });
 
@@ -80,7 +80,7 @@ export function registerDataHandlers() {
     const db = getDb();
     return db.transaction(() => {
       if (!doc.id && doc.template_id && !number_record_id && contextForTemplate(db, doc.template_id).register) {
-        throw new Error('Template ini terhubung ke register penomoran, tetapi nomor belum dipilih. Pilih nomor yang tersedia dari Bank Nomor Dokumen.');
+        throw new Error('Template ini terhubung ke register penomoran, tetapi nomor belum dipilih. Pilih nomor yang tersedia dari Bank Nomor.');
       }
       let saved = repo.saveDocument(db, doc);
       let numbering: { number_text: string; in_content: boolean } | null = null;

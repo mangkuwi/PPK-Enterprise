@@ -64,7 +64,7 @@ export default function RegisterPage() {
   if (!code) return <Page><Empty>Register tidak dikenal.</Empty></Page>;
   return (
     <Page>
-      <PageHeader title={`Register ${reg?.name ?? ''}`} subtitle="Nomor resmi hanya dibuat oleh sistem (Bank Nomor Dokumen). Nomor terbit/void tidak dapat dihapus atau dipakai ulang."
+      <PageHeader title={`Register ${reg?.name ?? ''}`} subtitle="Daftar nomor surat yang sudah dibuat. Nomor baru ditambahkan di Bank Nomor; nomor terbit/void tidak dapat dihapus atau dipakai ulang."
         actions={<>
           <Button variant="outline" size="sm" onClick={() => doExport('xlsx')}><FileSpreadsheet size={14} /> Excel</Button>
           <Button variant="outline" size="sm" onClick={() => doExport('pdf')}><FileText size={14} /> PDF</Button>
@@ -72,7 +72,7 @@ export default function RegisterPage() {
           <Button size="sm" onClick={() => setCreate(true)}><Plus size={14} /> Catat Nomor</Button>
         </>} />
       <Card className="mb-4 p-3">
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
           <div className="relative col-span-2"><Search size={14} className="absolute left-2 top-2.5 text-slate-400" /><Input className="pl-7" placeholder="Cari nomor, perihal, pihak…" value={f.search} onChange={(e) => setF({ ...f, search: e.target.value })} /></div>
           <Select value={f.year} onChange={(e) => setF({ ...f, year: e.target.value })} aria-label="Tahun"><option value="">Semua tahun</option>{years.map((y) => <option key={y} value={y}>{y}</option>)}</Select>
           <Select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} aria-label="Status"><option value="">Semua status</option>{(['available', 'assigned', 'issued', 'void'] as const).map((s) => <option key={s} value={s}>{NUM_STATUS[s]}</option>)}</Select>

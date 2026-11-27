@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
 import { Sidebar } from './components/layout/Sidebar';
+import { TopBar } from './components/layout/TopBar';
 import DashboardPage from './pages/DashboardPage';
 import TemplatesPage from './pages/TemplatesPage';
 import TemplateEditorPage from './pages/TemplateEditorPage';
@@ -33,7 +34,9 @@ export default function App() {
   return (
     <div className="flex h-full">
       <Sidebar />
-      <main className="min-w-0 flex-1 overflow-hidden">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <TopBar />
+        <div className="min-h-0 flex-1">
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/generator" element={<GeneratorPage />} />
@@ -69,6 +72,7 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<DashboardPage />} />
         </Routes>
+        </div>
       </main>
     </div>
   );
