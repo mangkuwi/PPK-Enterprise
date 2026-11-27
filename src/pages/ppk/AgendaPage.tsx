@@ -10,14 +10,14 @@ import { errMsg, useFeedback } from '@/components/ui/feedback';
 import { useAsync } from '@/hooks/useAsync';
 import { PpkGate } from '@/features/ppk/PpkGate';
 import { usePpkAccess } from '@/features/ppk/usePpkAccess';
-import { AgendaForm, EMPTY_AGENDA } from '@/features/ppk/AgendaForm';
-import { AgendaRow } from '@/features/ppk/AgendaViews';
+import { AgendaForm, EMPTY_AGENDA, agendaToInput } from '@/features/ppk/AgendaForm';
+import { AgendaRow, useDeleteAgenda } from '@/features/ppk/AgendaViews';
 import { api } from '@/services/api';
 import { jakartaToday } from '@shared/date';
-import type { AgendaFilter, AgendaFilterStatus, AgendaInput } from '@shared/ppk/agenda';
+import type { Agenda, AgendaFilter, AgendaFilterStatus, AgendaInput } from '@shared/ppk/agenda';
 
 const STATUS: Array<[AgendaFilterStatus, string]> = [['aktif', 'Semua aktif'], ['belum_ditugaskan', 'Belum ditugaskan'], ['ditugaskan', 'Ditugaskan'],
-  ['selesai', 'Selesai'], ['dibatalkan', 'Dibatalkan'], ['diarsipkan', 'Diarsipkan'], ['semua', 'Semua status']];
+  ['selesai', 'Selesai'], ['dibatalkan', 'Dibatalkan'], ['diarsipkan', 'Diarsipkan'], ['terhapus', 'Terhapus'], ['semua', 'Semua status (kecuali terhapus)']];
 const KEYS = ['q', 'from', 'to', 'program_id', 'user_id', 'organizer', 'status'] as const;
 
 /** Semua agenda: cari, saring, tambah manual, unggah surat undangan. Klik agenda = halaman detail. */
@@ -34,6 +34,8 @@ export default function AgendaPage() {
   const people = useAsync(() => api.ppk.agendas.people(), []);
   const programs = useAsync(() => api.ppk.masterList('programs'), []);
   const [form, setForm] = useState<AgendaInput | null>(null);
+  const [editing, setEditing] = useState<Agenda | null>(null);
+  const remove = useDeleteAgenda(() => list.reload());
 
   const upload = async () => {
     try {
@@ -73,8 +75,11 @@ export default function AgendaPage() {
         {list.error && <Empty>{list.error}</Empty>}
         {list.data && !list.data.length && <Empty>Tidak ada agenda yang cocok.</Empty>}
         {!!list.data?.length && <Card className="px-4"><div className="pt-3 text-xs text-slate-500">{list.data.length} agenda</div>
-          <ul className="divide-y divide-slate-100">{list.data.map((a) => <AgendaRow key={a.id} a={a} showDate onOpen={() => navigate(`/ppk/agenda/${a.id}`)} />)}</ul></Card>}
+          <ul className="divide-y divide-slate-100">{list.data.map((a) => <AgendaRow key={a.id} a={a} showDate onOpen={() => navigate(`/ppk/agenda/${a.id}`)} onEdit={can('write') ? setEditing : undefined} onDelete={can('master') ? remove : undefined} />)}</ul></Card>}
 
+        <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+          {editing && <AgendaForm initial={agendaToInput(editing)} existing={editing} onSaved={() => { setEditing(null); list.reload(); toast('Agenda diperbarui.', 'success'); }} />}
+        </Dialog>
         <Dialog open={!!form} onOpenChange={(o) => { if (!o) setForm(null); }}>
           {form && <AgendaForm initial={form} onSaved={(a) => { setForm(null); navigate(`/ppk/agenda/${a.id}`); }} />}
         </Dialog>

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Archive, ArchiveRestore, ArrowLeft, CheckCircle2, ExternalLink, FileText, Pencil, Video, XCircle } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowLeft, CheckCircle2, ExternalLink, FileText, Pencil, RotateCcw, Trash2, Video, XCircle } from 'lucide-react';
 import { Page } from '@/components/layout/Page';
 import { Badge, Card, Empty } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,14 +12,14 @@ import { formatDateTime } from '@/lib/utils';
 import { PpkGate } from '@/features/ppk/PpkGate';
 import { usePpkAccess } from '@/features/ppk/usePpkAccess';
 import { AgendaForm, agendaToInput } from '@/features/ppk/AgendaForm';
-import { timeText } from '@/features/ppk/AgendaViews';
+import { timeText, useDeleteAgenda } from '@/features/ppk/AgendaViews';
 import { api } from '@/services/api';
 import { formatDateID } from '@shared/date';
 import { agendaDisplay, dayName, joinLabel, type Agenda } from '@shared/ppk/agenda';
 
 const ACTION: Record<string, string> = {
   'agenda.create': 'Agenda dibuat', 'agenda.update': 'Agenda diubah', 'agenda.selesai': 'Ditandai selesai', 'agenda.dibatalkan': 'Dibatalkan',
-  'agenda.archive': 'Diarsipkan', 'agenda.unarchive': 'Dikembalikan dari arsip'
+  'agenda.archive': 'Diarsipkan', 'agenda.unarchive': 'Dikembalikan dari arsip', 'agenda.delete': 'Dihapus', 'agenda.restore': 'Dikembalikan dari hapus'
 };
 
 function Detail({ a, reload }: { a: Agenda; reload: () => void }) {
@@ -29,12 +29,13 @@ function Detail({ a, reload }: { a: Agenda; reload: () => void }) {
   const reason = useRef('');
   const files = useAsync(() => (a.invitation_id ? api.ppk.invitations.files(a.invitation_id) : Promise.resolve([])), [a.invitation_id]);
   const history = useAsync(() => api.ppk.agendas.history(a.id), [a.id, a.version]);
-  const clash = useAsync(() => (a.start_time && a.status === 'terjadwal' ? api.ppk.agendas.conflicts({ agenda_date: a.agenda_date, start_time: a.start_time, end_time: a.end_time, exclude_id: a.id,
+  const clash = useAsync(() => (a.start_time && a.status === 'terjadwal' && !a.deleted_at ? api.ppk.agendas.conflicts({ agenda_date: a.agenda_date, start_time: a.start_time, end_time: a.end_time, exclude_id: a.id,
     user_ids: [...(a.pic ? [a.pic.id] : []), ...a.support.map((x) => x.id)] }) : Promise.resolve([])), [a.id, a.version]);
   const programs = useAsync(() => (a.program_id ? api.ppk.masterList('programs') : Promise.resolve([])), [a.program_id]);
   const program = programs.data?.find((p) => p.id === a.program_id);
   const st = agendaDisplay(a);
-  const open = a.status === 'terjadwal' && !a.archived_at;
+  const open = a.status === 'terjadwal' && !a.archived_at && !a.deleted_at;
+  const remove = useDeleteAgenda(() => reload());
   const run = async (fn: () => Promise<unknown>, ok: string) => { try { await fn(); toast(ok, 'success'); reload(); } catch (e) { toast(errMsg(e), 'error'); } };
   const cancel = async () => {
     reason.current = '';
@@ -61,16 +62,20 @@ function Detail({ a, reload }: { a: Agenda; reload: () => void }) {
           <div className="mt-1 flex items-center gap-2 text-sm text-slate-600"><Badge tone={st.tone}>{st.label}</Badge>{dayName(a.agenda_date)}, {formatDateID(a.agenda_date)} · {timeText(a)}</div></div>
         <div className="flex flex-wrap gap-2">
           {a.meeting_url && open && <a href={a.meeting_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800"><Video size={16} /> {joinLabel(a.meeting_url)}</a>}
+          {a.deleted_at && can('master') && <Button onClick={() => run(() => api.ppk.agendas.restore(a.id), 'Agenda dikembalikan.')}><RotateCcw size={14} /> Kembalikan agenda</Button>}
+          {can('write') && a.status !== 'dibatalkan' && !a.deleted_at && <Button onClick={() => setEdit(true)}><Pencil size={14} /> Ubah agenda</Button>}
           {can('write') && open && <>
-            <Button variant="outline" onClick={() => setEdit(true)}><Pencil size={14} /> Ubah</Button>
             <Button variant="outline" onClick={() => run(() => api.ppk.agendas.setStatus(a.id, 'selesai'), 'Agenda ditandai selesai.')}><CheckCircle2 size={14} /> Selesai</Button>
             <Button variant="outline" onClick={cancel}><XCircle size={14} /> Batalkan</Button>
           </>}
-          {can('write') && <Button variant="ghost" onClick={() => run(() => api.ppk.agendas.archive(a.id, !a.archived_at), a.archived_at ? 'Agenda dikembalikan dari arsip.' : 'Agenda diarsipkan.')}>
+          {can('master') && !a.deleted_at && <Button variant="ghost" className="text-red-700 hover:bg-red-50" onClick={() => remove(a)}><Trash2 size={14} /> Hapus</Button>}
+          {can('write') && !a.deleted_at && <Button variant="ghost" onClick={() => run(() => api.ppk.agendas.archive(a.id, !a.archived_at), a.archived_at ? 'Agenda dikembalikan dari arsip.' : 'Agenda diarsipkan.')}>
             {a.archived_at ? <><ArchiveRestore size={14} /> Kembalikan</> : <><Archive size={14} /> Arsipkan</>}</Button>}
         </div>
       </div>
 
+      {a.deleted_at && <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="status">
+        <b>Agenda ini dihapus</b> oleh {a.deleted_by} pada {formatDateTime(a.deleted_at)}. Alasan: {a.delete_reason}. Agenda tidak tampil di jadwal sampai dikembalikan.</div>}
       {!!clash.data?.length && <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">
         <b>Jadwal bentrok:</b> {clash.data.map((c) => <span key={c.id}> <Link className="underline" to={`/ppk/agenda/${c.id}`}>{c.title}</Link> ({c.start_time}{c.end_time && `–${c.end_time}`}){c.shared_staff.length > 0 && `, staf sama: ${c.shared_staff.join(', ')}`};</span>)}
       </div>}

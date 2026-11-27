@@ -5,7 +5,8 @@ import { seedDefaults } from '../electron/main/seed';
 import { createUser, setPin } from '../electron/main/numbering/users';
 import { sqliteStore, type PpkStore } from '../electron/main/ppk/store';
 import { setPpkRole } from '../electron/main/ppk/access';
-import { agendaConflicts, agendaHistory, createAgenda, getAgenda, listAgendas, setAgendaArchived, setAgendaStatus, updateAgenda } from '../electron/main/ppk/agenda';
+import { agendaConflicts, agendaHistory, createAgenda, deleteAgenda, getAgenda, listAgendas, restoreAgenda, setAgendaArchived, setAgendaStatus, updateAgenda } from '../electron/main/ppk/agenda';
+import { agendaHome } from '../electron/main/ppk/agendaHome';
 import { fileContent, fileKind, invitationFiles, uploadInvitation } from '../electron/main/ppk/inbox';
 import { listInvitations } from '../electron/main/ppk/agendaHome';
 import { overlaps, type AgendaInput } from '@shared/ppk/agenda';
@@ -102,5 +103,29 @@ describe('unggah undangan manual', () => {
     expect((await listInvitations(s, admin, { status: 'dikonversi' })).map((i) => i.id)).toEqual([u.id]);
     await expect(createAgenda(s, budi, { ...base, invitation_id: 'tidak-ada' })).rejects.toThrow(/tidak ditemukan/);
     expect(await listAgendas(s, admin, {})).toHaveLength(1); // gagal = tidak ada agenda setengah jadi
+  });
+});
+
+describe('hapus agenda (bisa dikembalikan)', () => {
+  it('hilang dari daftar, beranda, dan cek bentrok; wajib alasan; hanya Admin/Pejabat PPK; bisa dikembalikan', async () => {
+    const a = await createAgenda(s, admin, { ...base, title: 'Salah input', start_time: '09:00', end_time: '10:00' });
+    await createAgenda(s, admin, { ...base, title: 'Rapat benar' });
+    await expect(deleteAgenda(s, admin, a.id, '  ')).rejects.toThrow(/Alasan/);
+    await expect(deleteAgenda(s, budi, a.id, 'dobel')).rejects.toThrow(/tidak mengizinkan/);
+    const d = await deleteAgenda(s, admin, a.id, 'Dobel dengan undangan WA');
+    expect([d.deleted_by, d.delete_reason]).toEqual([admin.name, 'Dobel dengan undangan WA']);
+    const titles = async (f: Parameters<typeof listAgendas>[2]) => (await listAgendas(s, admin, f)).map((x) => x.title);
+    expect(await titles({})).toEqual(['Rapat benar']);
+    expect(await titles({ status: 'semua' })).toEqual(['Rapat benar']);
+    expect(await titles({ status: 'terhapus' })).toEqual(['Salah input']);
+    expect(await agendaConflicts(s, admin, { agenda_date: D, start_time: '09:30', end_time: '' })).toEqual([]);
+    expect((await agendaHome(s, admin, D)).counts.today_total).toBe(1);
+    await expect(updateAgenda(s, admin, a.id, d.version, { ...base, title: 'x' })).rejects.toThrow(/dihapus/);
+    await expect(setAgendaStatus(s, admin, a.id, 'selesai', '')).rejects.toThrow(/dihapus/);
+    expect(() => db.prepare('DELETE FROM ppk_agendas WHERE id = ?').run(a.id)).toThrow(); // baris tetap ada
+    const r = await restoreAgenda(s, admin, a.id);
+    expect(r.deleted_at).toBeNull();
+    expect(await titles({})).toEqual(['Rapat benar', 'Salah input']);
+    expect((await agendaHistory(s, admin, a.id)).map((h) => h.action)).toEqual(['agenda.create', 'agenda.delete', 'agenda.restore']);
   });
 });

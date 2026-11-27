@@ -18,6 +18,7 @@ export interface Agenda extends Omit<AgendaInput, 'pic_user_id' | 'support_user_
   created_by: string; created_at: string; updated_by: string; updated_at: string;
   invitation_id: string | null; letter_date: string | null; program_id: string | null; participants: string;
   verified_by: string | null; verified_at: string | null; archived_at: string | null;
+  deleted_at?: string | null; deleted_by?: string | null; delete_reason?: string;
   pic: { id: string; name: string } | null;
   support: Array<{ id: string; name: string }>;
 }
@@ -72,7 +73,8 @@ export interface AgendaHome {
 }
 
 /** Label status di layar: Ditugaskan/Belum ditugaskan dihitung dari penanggung jawab, tidak disimpan. */
-export function agendaDisplay(a: Pick<Agenda, 'status' | 'archived_at' | 'pic'>): { label: string; tone: 'navy' | 'amber' | 'green' | 'red' | 'slate' } {
+export function agendaDisplay(a: Pick<Agenda, 'status' | 'archived_at' | 'pic' | 'deleted_at'>): { label: string; tone: 'navy' | 'amber' | 'green' | 'red' | 'slate' } {
+  if (a.deleted_at) return { label: 'Terhapus', tone: 'red' };
   if (a.archived_at) return { label: 'Diarsipkan', tone: 'slate' };
   if (a.status === 'selesai') return { label: 'Selesai', tone: 'green' };
   if (a.status === 'dibatalkan') return { label: 'Dibatalkan', tone: 'red' };
@@ -124,7 +126,7 @@ export function liveState(a: Pick<Agenda, 'agenda_date' | 'start_time' | 'end_ti
 }
 
 /** Filter daftar agenda. status = label layar (Belum ditugaskan/Ditugaskan dihitung dari penanggung jawab). */
-export type AgendaFilterStatus = 'aktif' | 'belum_ditugaskan' | 'ditugaskan' | 'selesai' | 'dibatalkan' | 'diarsipkan' | 'semua';
+export type AgendaFilterStatus = 'aktif' | 'belum_ditugaskan' | 'ditugaskan' | 'selesai' | 'dibatalkan' | 'diarsipkan' | 'terhapus' | 'semua';
 export interface AgendaFilter { from?: string; to?: string; q?: string; program_id?: string; user_id?: string; organizer?: string; status?: AgendaFilterStatus }
 
 /** Dua kegiatan di hari yang sama bentrok bila jamnya beririsan. Tanpa jam selesai = 1 jam; tanpa jam mulai = tidak dinilai. */
