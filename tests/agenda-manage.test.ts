@@ -7,8 +7,8 @@ import { sqliteStore, type PpkStore } from '../electron/main/ppk/store';
 import { setPpkRole } from '../electron/main/ppk/access';
 import { agendaConflicts, agendaHistory, createAgenda, deleteAgenda, getAgenda, listAgendas, restoreAgenda, setAgendaArchived, setAgendaStatus, updateAgenda } from '../electron/main/ppk/agenda';
 import { agendaHome } from '../electron/main/ppk/agendaHome';
-import { fileContent, fileKind, invitationFiles, uploadInvitation } from '../electron/main/ppk/inbox';
-import { listInvitations } from '../electron/main/ppk/agendaHome';
+import { fileContent, fileKind, getInvitation, invitationFiles, markInvitation, uploadInvitation } from '../electron/main/ppk/inbox';
+import { invitationCounts, listInvitations } from '../electron/main/ppk/agendaHome';
 import { overlaps, type AgendaInput } from '@shared/ppk/agenda';
 import type { Actor } from '@shared/numbering';
 
@@ -103,6 +103,33 @@ describe('unggah undangan manual', () => {
     expect((await listInvitations(s, admin, { status: 'dikonversi' })).map((i) => i.id)).toEqual([u.id]);
     await expect(createAgenda(s, budi, { ...base, invitation_id: 'tidak-ada' })).rejects.toThrow(/tidak ditemukan/);
     expect(await listAgendas(s, admin, {})).toHaveLength(1); // gagal = tidak ada agenda setengah jadi
+  });
+});
+
+describe('detail pesan Kotak Masuk', () => {
+  it('kategori, detail lengkap, tandai diproses wajib alasan, arsip, riwayat', async () => {
+    const u1 = await uploadInvitation(s, budi, { filename: 'a.pdf', content: PDF, note: 'Undangan A' });
+    const u2 = await uploadInvitation(s, budi, { filename: 'b.pdf', content: Buffer.concat([PDF, Buffer.from('b')]) });
+    const u3 = await uploadInvitation(s, budi, { filename: 'c.pdf', content: Buffer.concat([PDF, Buffer.from('c')]) });
+    const ids = async (category: 'belum' | 'sudah' | 'arsip') => (await listInvitations(s, citra, { category })).map((i) => i.id).sort();
+    expect(await ids('belum')).toEqual([u1.id, u2.id, u3.id].sort());
+
+    await expect(markInvitation(s, citra, u1.id, 'diproses', 'bukan undangan')).rejects.toThrow(/tidak mengizinkan/);
+    await expect(markInvitation(s, budi, u1.id, 'diproses', ' ')).rejects.toThrow(/Alasan wajib/);
+    await markInvitation(s, budi, u1.id, 'diproses', 'bukan undangan');
+    await expect(markInvitation(s, budi, u1.id, 'diproses', 'lagi')).rejects.toThrow(/sudah diproses/);
+    await expect(createAgenda(s, budi, { ...base, invitation_id: u1.id })).rejects.toThrow(/ditolak atau diarsipkan/);
+    await createAgenda(s, budi, { ...base, title: 'Dari B', invitation_id: u2.id });
+    await markInvitation(s, budi, u3.id, 'arsip', '');
+    await expect(markInvitation(s, budi, u3.id, 'arsip', '')).rejects.toThrow(/sudah diarsipkan/);
+    expect([await ids('belum'), await ids('sudah'), await ids('arsip')]).toEqual([[], [u1.id, u2.id].sort(), [u3.id]]);
+    expect(await invitationCounts(s, citra)).toEqual({ ditolak: 1, dikonversi: 1, diarsipkan: 1 });
+
+    const d1 = await getInvitation(s, citra, u1.id);
+    expect([d1.status, d1.reject_reason, d1.message_text, d1.files.map((f) => f.filename), d1.agenda]).toEqual(['ditolak', 'bukan undangan', 'Undangan A', ['a.pdf'], null]);
+    expect(d1.history.map((h) => h.action)).toEqual(['invitation.upload', 'invitation.processed']);
+    expect((await getInvitation(s, citra, u2.id)).agenda?.title).toBe('Dari B');
+    await expect(getInvitation(s, citra, 'tidak-ada')).rejects.toThrow(/tidak ditemukan/);
   });
 });
 

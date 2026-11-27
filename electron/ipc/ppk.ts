@@ -14,11 +14,11 @@ import { runPpkImport } from '../main/ppk/import';
 import { ppkReport, reportSheets } from '../main/ppk/reports';
 import { addSp2d, sp2dReport, voidSp2d } from '../main/ppk/sp2d';
 import { agendaConflicts, agendaHistory, agendaPeople, createAgenda, deleteAgenda, getAgenda, restoreAgenda, listAgendas, setAgendaArchived, setAgendaStatus, updateAgenda } from '../main/ppk/agenda';
-import { MAX_FILE, fileContent, invitationFiles, uploadInvitation } from '../main/ppk/inbox';
+import { MAX_FILE, fileContent, getInvitation, invitationFiles, markInvitation, uploadInvitation } from '../main/ppk/inbox';
 import { relatedDocuments } from '../main/ppk/documents';
 import { archiveTask, listTasks, saveTask, setTaskDone } from '../main/ppk/tasks';
 import { TASK_PRIORITIES } from '@shared/ppk/tasks';
-import { agendaHome, listInvitations } from '../main/ppk/agendaHome';
+import { agendaHome, invitationCounts, listInvitations } from '../main/ppk/agendaHome';
 import { sqliteStore } from '../main/ppk/store';
 import { peekPpkActor, ppkActor, ppkStore } from '../main/ppk/server';
 import { registerPpkServerHandlers } from './ppkServer';
@@ -224,7 +224,17 @@ export function registerPpkHandlers() {
   handle('ppk:tasks:setDone', z.object({ id: S.id, done: z.boolean() }), ({ id, done }) => setTaskDone(st(), actor(), id, done));
   handle('ppk:tasks:archive', z.object({ id: S.id }), async ({ id }) => { await archiveTask(st(), actor(), id); return true; });
   handle('ppk:agendas:home', S.empty, () => agendaHome(st(), actor()));
-  handle('ppk:invitations:list', z.object({ status: z.enum(['baru', 'diproses', 'menunggu_verifikasi', 'dikonversi', 'gagal', 'ditolak', 'diarsipkan']).optional() }), (f) => listInvitations(st(), actor(), f));
+  handle('ppk:invitations:list', z.object({ status: z.enum(['baru', 'diproses', 'menunggu_verifikasi', 'dikonversi', 'gagal', 'ditolak', 'diarsipkan']).optional(),
+    category: z.enum(['baru', 'belum', 'sudah', 'arsip', 'gagal']).optional() }), (f) => listInvitations(st(), actor(), f));
+  handle('ppk:invitations:counts', S.empty, () => invitationCounts(st(), actor()));
+  handle('ppk:invitations:get', z.object({ id: S.id }), ({ id }) => getInvitation(st(), actor(), id));
+  handle('ppk:invitations:mark', z.object({ id: S.id, action: z.enum(['diproses', 'arsip']), reason: text(500) }), async ({ id, action, reason }) => { await markInvitation(st(), actor(), id, action, reason); return true; });
+  handle('ppk:files:preview', z.object({ id: S.id }), async ({ id }) => {
+    const f = await fileContent(st(), actor(), id);
+    // Pratinjau hanya PDF dan foto; isi dikirim ke renderer sebagai base64 (tanpa URL file).
+    if (!['application/pdf', 'image/jpeg', 'image/png'].includes(f.mime_type)) throw new Error('Pratinjau hanya untuk PDF dan foto. Buka file ini dengan aplikasinya.');
+    return { mime_type: f.mime_type, data: Buffer.from(f.content).toString('base64') };
+  });
   handle('ppk:sp2d:void', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidSp2d(st(), actor(), id, reason));
 }
 

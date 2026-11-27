@@ -18,7 +18,7 @@ import { addPayment, getBill, listBills, saveBill, setBillStatus, voidPayment } 
 import { addSp2d, sp2dReport } from '../electron/main/ppk/sp2d';
 import { listPpkUsers } from '../electron/main/ppk/access';
 import { agendaConflicts, agendaHistory, createAgenda, listAgendas, setAgendaArchived } from '../electron/main/ppk/agenda';
-import { fileContent, invitationFiles, uploadInvitation } from '../electron/main/ppk/inbox';
+import { fileContent, getInvitation, invitationFiles, markInvitation, uploadInvitation } from '../electron/main/ppk/inbox';
 import { agendaHome, listInvitations } from '../electron/main/ppk/agendaHome';
 import {
   copyIntoServer, createPool, createServerUser, dumpServer, initFreshServer, installPgSchema, listServerUsers, pgStatus, pgStore, PG_TABLES,
@@ -210,6 +210,10 @@ describe.skipIf(!URL_)('PostgreSQL', () => {
     expect((await listAgendas(s, a, { q: 'undangan pg', user_id: undefined })).map((x) => x.id)).toEqual([fromInv.id]);
     expect((await listAgendas(s, a, { status: 'ditugaskan' })).map((x) => x.id)).toEqual([made_.id]);
     expect((await fileContent(s, a, (await invitationFiles(s, a, up.id))[0].id)).content.equals(pdf)).toBe(true);
+    const up3 = await uploadInvitation(s, a, { filename: 'u3.pdf', content: Buffer.from('%PDF-1.4 tiga') });
+    await markInvitation(s, a, up3.id, 'diproses', 'bukan undangan');
+    expect([(await getInvitation(s, a, up3.id)).reject_reason, (await getInvitation(s, a, up.id)).agenda?.id]).toEqual(['bukan undangan', fromInv.id]);
+    expect((await listInvitations(s, a, { category: 'sudah' })).map((i) => i.id).sort()).toEqual([up.id, up3.id].sort());
     await setAgendaArchived(s, a, fromInv.id, true);
     expect((await agendaHistory(s, a, fromInv.id)).map((h) => h.action)).toEqual(['agenda.create', 'agenda.archive']);
     expect((await agendaConflicts(s, a, { agenda_date: agenda.agenda_date, start_time: '10:00', end_time: '11:00', user_ids: ['adm'] }))[0].shared_staff).toEqual(['Admin']);

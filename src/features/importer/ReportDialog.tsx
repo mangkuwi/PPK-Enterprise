@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ShieldCheck, X, XCircle } from 'lucide-react';
-import * as pdfjs from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'; // legacy: Chromium Electron 33 belum punya Uint8Array.toHex
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/card';
 import { errMsg, useFeedback } from '@/components/ui/feedback';

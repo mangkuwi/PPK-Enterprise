@@ -17,7 +17,7 @@ import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, Pla
 import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow, YearValueRow } from '@shared/ppk/contracts';
 import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
 import type { Task, TaskInput } from '@shared/ppk/tasks';
-import type { Agenda, AgendaConflict, AgendaFilter, AgendaHistoryRow, AgendaHome, AgendaInput, InvitationFile, InvitationRow, InvitationStatus } from '@shared/ppk/agenda';
+import type { Agenda, AgendaConflict, AgendaFilter, AgendaHistoryRow, AgendaHome, AgendaInput, InboxCategory, InvitationDetail, InvitationFile, InvitationRow, InvitationStatus } from '@shared/ppk/agenda';
 import type { DeliveryLog, Recipient } from '@shared/whatsapp';
 
 export interface PpkServerConf { host: string; port: number; database: string; user: string; password: string }
@@ -234,6 +234,11 @@ export const api = {
     relatedDocuments: (numbers: string[]) => call<RelatedDocument[]>('ppk:documents:related', { numbers }),
     invitations: {
       list: (status?: InvitationStatus) => call<InvitationRow[]>('ppk:invitations:list', status ? { status } : {}),
+      byCategory: (category?: InboxCategory) => call<InvitationRow[]>('ppk:invitations:list', category ? { category } : {}),
+      counts: () => call<Partial<Record<InvitationStatus, number>>>('ppk:invitations:counts', {}),
+      get: (id: string) => call<InvitationDetail>('ppk:invitations:get', { id }),
+      mark: (id: string, action: 'diproses' | 'arsip', reason: string) => call<boolean>('ppk:invitations:mark', { id, action, reason }),
+      preview: (id: string) => call<{ mime_type: string; data: string }>('ppk:files:preview', { id }),
       upload: (note = '') => call<{ id: string; duplicate_of: string | null } | null>('ppk:invitations:upload', { note }),
       files: (id: string) => call<InvitationFile[]>('ppk:invitations:files', { id }),
       openFile: (id: string) => call<boolean>('ppk:files:open', { id })

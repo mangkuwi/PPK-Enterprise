@@ -8,7 +8,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { api } from '@/services/api';
 import { formatDateID } from '@shared/date';
 import { dayName, type Agenda, type AgendaConflict, type AgendaInput } from '@shared/ppk/agenda';
-import { AGENDA_MESSAGE_LABEL, matchProgram, type AgendaMessage } from '@shared/ppk/agendaMessage';
+import { AGENDA_MESSAGE_LABEL, matchProgram, parseAgendaMessage, type AgendaMessage } from '@shared/ppk/agendaMessage';
 
 /** ' (6 jam)' / ' (1 jam 30 menit)'; kosong bila jam selesai tidak setelah jam mulai. */
 const duration = (a: string, b: string) => {
@@ -117,3 +117,10 @@ export const agendaToInput = (a: Agenda): AgendaInput => ({
 
 export const EMPTY_AGENDA: AgendaInput = { title: '', letter_number: '', source_document_id: null, agenda_date: '', start_time: '', end_time: '', location: '',
   meeting_url: '', organizer: '', agenda_text: '', notes: '', pic_user_id: null, support_user_ids: [], letter_date: null, program_id: null, participants: '' };
+
+/** Isian formulir dari pesan masuk: format AGENDA PPK mengisi kolom; selain itu teks asli masuk ke kolom agenda rapat dan staf mengisi sendiri. */
+export function agendaFromMessage(invitationId: string, text: string): { input: AgendaInput; parsed: AgendaMessage | null } {
+  const m = parseAgendaMessage(text);
+  const base = { ...EMPTY_AGENDA, invitation_id: invitationId, agenda_text: text };
+  return { parsed: m, input: m ? { ...base, title: m.title, agenda_date: m.agenda_date, start_time: m.start_time, end_time: m.end_time, location: m.location, organizer: m.organizer, meeting_url: m.meeting_url } : base };
+}
