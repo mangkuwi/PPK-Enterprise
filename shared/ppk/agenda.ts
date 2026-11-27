@@ -102,3 +102,21 @@ export function shiftCursor(view: CalendarView, cursor: string, dir: 1 | -1): st
   const d = day(`${cursor.slice(0, 7)}-01`); d.setUTCMonth(d.getUTCMonth() + dir);
   return iso(d);
 }
+
+/** Label tombol gabung rapat daring dari tautannya. */
+export function joinLabel(url: string): string {
+  if (/zoom\.us/i.test(url)) return 'Gabung Zoom';
+  if (/teams\.(microsoft|live)\.com/i.test(url)) return 'Gabung Teams';
+  if (/meet\.google\.com/i.test(url)) return 'Gabung Google Meet';
+  return 'Buka tautan rapat';
+}
+
+const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+/** 'berlangsung' (jam mulai ≤ sekarang < jam selesai), 'segera' (mulai ≤ 15 menit lagi), atau null. Jam = WIB 'HH:MM'. */
+export function liveState(a: Pick<Agenda, 'agenda_date' | 'start_time' | 'end_time' | 'status'>, today: string, now: string): 'berlangsung' | 'segera' | null {
+  if (a.status !== 'terjadwal' || a.agenda_date !== today || !a.start_time) return null;
+  const n = mins(now), s = mins(a.start_time), e = a.end_time ? mins(a.end_time) : s + 60;
+  if (n >= s && n < e) return 'berlangsung';
+  if (s - n > 0 && s - n <= 15) return 'segera';
+  return null;
+}

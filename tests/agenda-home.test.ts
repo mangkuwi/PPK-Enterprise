@@ -117,3 +117,22 @@ describe('kalender', () => {
     expect(agendaDisplay({ status: 'terjadwal', archived_at: null, pic: { id: 'x', name: 'B' } }).label).toBe('Ditugaskan');
   });
 });
+
+describe('rapat daring di beranda', () => {
+  it('label tombol gabung dan status berlangsung/segera', async () => {
+    const { joinLabel, liveState } = await import('@shared/ppk/agenda');
+    expect(joinLabel('https://us02web.zoom.us/j/123')).toBe('Gabung Zoom');
+    expect(joinLabel('https://teams.microsoft.com/l/meetup-join/x')).toBe('Gabung Teams');
+    expect(joinLabel('https://meet.google.com/abc-defg-hij')).toBe('Gabung Google Meet');
+    expect(joinLabel('https://webex.com/x')).toBe('Buka tautan rapat');
+    const a = { agenda_date: TODAY, start_time: '09:00', end_time: '11:00', status: 'terjadwal' as const };
+    expect(liveState(a, TODAY, '08:44')).toBe(null);
+    expect(liveState(a, TODAY, '08:45')).toBe('segera');
+    expect(liveState(a, TODAY, '09:00')).toBe('berlangsung');
+    expect(liveState(a, TODAY, '10:59')).toBe('berlangsung');
+    expect(liveState(a, TODAY, '11:00')).toBe(null);
+    expect(liveState({ ...a, end_time: '' }, TODAY, '09:59')).toBe('berlangsung'); // tanpa jam selesai: dianggap 1 jam
+    expect(liveState({ ...a, status: 'dibatalkan' }, TODAY, '09:30')).toBe(null);
+    expect(liveState(a, addDays(TODAY, 1), '09:30')).toBe(null);
+  });
+});
