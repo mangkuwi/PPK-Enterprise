@@ -201,27 +201,28 @@ export function TimeGrid({ days, agendas, today, now, onOpen }: { days: string[]
   );
 }
 
-/** Kalender kecil: minggu yang tampil di grid disorot; klik tanggal = lompat ke minggu itu. */
-export function MiniMonth({ cursor, setCursor, today, marked, week }: { cursor: string; setCursor: (d: string) => void; today: string; marked: Set<string>; week: string[] }) {
-  const days = calendarDays('bulan', cursor); const month = cursor.slice(0, 7);
+/** Ringkasan minggu: 7 kolom yang selalu muat lebar layar; tiap hari berisi kartu kecil urut jam. */
+export function WeekColumns({ days, agendas, today, now, onOpen }: { days: string[]; agendas: Agenda[]; today: string; now: string; onOpen: (a: Agenda) => void }) {
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between">
-        <span className="font-semibold text-navy-900">{BULAN[Number(month.slice(5)) - 1]} {month.slice(0, 4)}</span>
-        <span className="flex gap-1">
-          <Button size="icon" variant="ghost" aria-label="Bulan sebelumnya" onClick={() => setCursor(shiftCursor('bulan', cursor, -1))}><ChevronLeft size={15} /></Button>
-          <Button size="icon" variant="ghost" aria-label="Bulan berikutnya" onClick={() => setCursor(shiftCursor('bulan', cursor, 1))}><ChevronRight size={15} /></Button>
-        </span>
-      </div>
-      <div className="grid grid-cols-7 gap-y-1 text-center text-xs">
-        {['S', 'S', 'R', 'K', 'J', 'S', 'M'].map((h, i) => <div key={i} className="text-slate-400">{h}</div>)}
-        {days.map((d) => (
-          <button key={d} onClick={() => setCursor(d)} aria-label={`${dayName(d)}, ${formatDateID(d)}`}
-            className={cn('relative mx-auto grid h-7 w-7 place-items-center rounded-full', d.slice(0, 7) !== month && 'text-slate-300', week.includes(d) && 'bg-navy-100',
-              d === today && 'bg-navy-800 font-bold text-white', d !== today && 'hover:bg-slate-100')}>
-            {Number(d.slice(8))}{marked.has(d) && d !== today && <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-violet-600" />}
-          </button>))}
-      </div>
+    <div className="grid grid-cols-7 gap-2">
+      {days.map((d) => {
+        const list = agendas.filter((a) => a.agenda_date === d).sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+        return (
+          <div key={d} className={cn('min-h-40 min-w-0 rounded-lg p-2', d === today ? 'bg-navy-50 ring-2 ring-navy-400' : 'bg-slate-50')}>
+            <div className={cn('mb-2 text-xs font-semibold', d === today ? 'text-navy-800' : 'text-slate-500')}>{dayName(d).slice(0, 3)} {Number(d.slice(8))}{d === today && ' · hari ini'}</div>
+            <ul className="space-y-1.5">{list.map((a) => {
+              const live = liveState(a, today, now); const online = !!a.meeting_url && a.status === 'terjadwal';
+              return (
+                <li key={a.id} className={cn('rounded-md border-l-4 bg-white px-2 py-1.5 text-xs shadow-sm', live === 'berlangsung' ? 'border-green-600' : online ? 'border-violet-600' : 'border-navy-700', a.status !== 'terjadwal' && 'opacity-60')}>
+                  <button onClick={() => onOpen(a)} className="block w-full text-left">
+                    <span className="line-clamp-2 font-semibold text-navy-900 hover:underline">{a.title}</span>
+                    <span className="block truncate text-slate-500">{a.start_time || 'Tanpa jam'}{online ? ' · daring' : a.location && ` · ${a.location}`}</span>
+                  </button>
+                  {!a.pic && a.status === 'terjadwal' && <span className="text-[11px] text-amber-700">Belum ada PJ</span>}
+                </li>);
+            })}</ul>
+          </div>);
+      })}
     </div>
   );
 }

@@ -157,3 +157,24 @@ export function layoutDay<T extends Pick<Agenda, 'agenda_date' | 'start_time' | 
   if (group.length) close();
   return out;
 }
+
+/**
+ * Agenda sorotan beranda: yang sedang berlangsung, lalu yang berikutnya hari ini, lalu yang terdekat sesudahnya.
+ * Agenda hari ini tanpa jam ikut bila belum ada yang berjam. rest = sisanya, urut waktu.
+ */
+export function focusAgenda(todayList: Agenda[], upcoming: Agenda[], today: string, now: string): { focus: Agenda | null; rest: Agenda[] } {
+  const open = (a: Agenda) => a.status === 'terjadwal' && !a.archived_at;
+  const todayLeft = todayList.filter((a) => open(a) && a.agenda_date === today && (!a.start_time || (a.end_time ? mins(a.end_time) : mins(a.start_time) + 60) > mins(now)));
+  const all = [...todayLeft, ...upcoming.filter((a) => open(a) && a.agenda_date > today)]
+    .sort((a, b) => a.agenda_date.localeCompare(b.agenda_date) || (a.start_time || '99').localeCompare(b.start_time || '99'));
+  const focus = all.find((a) => liveState(a, today, now) === 'berlangsung') ?? all[0] ?? null;
+  return { focus, rest: all.filter((a) => a !== focus) };
+}
+
+/** "dimulai 2 jam 5 menit lagi" / "dimulai 10 menit lalu" untuk agenda hari ini; null bila bukan hari ini atau tanpa jam. */
+export function startsInText(a: Pick<Agenda, 'agenda_date' | 'start_time'>, today: string, now: string): string | null {
+  if (a.agenda_date !== today || !a.start_time) return null;
+  const d = mins(a.start_time) - mins(now);
+  const t = (m: number) => [Math.floor(m / 60) && `${Math.floor(m / 60)} jam`, m % 60 && `${m % 60} menit`].filter(Boolean).join(' ') || 'kurang dari 1 menit';
+  return d > 0 ? `dimulai ${t(d)} lagi` : d === 0 ? 'dimulai sekarang' : `dimulai ${t(-d)} lalu`;
+}

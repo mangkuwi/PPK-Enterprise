@@ -146,3 +146,24 @@ describe('grid jam', () => {
       ['09:00', 120, 120, 0, 2], ['09:30', 150, 30, 1, 2], ['10:00', 180, 45, 1, 2], ['13:00', 360, 60, 0, 1]]);
   });
 });
+
+describe('sorotan beranda', () => {
+  const T = '2026-11-27';
+  const ag = (id: string, d: string, s: string, e = '', x: Partial<import('@shared/ppk/agenda').Agenda> = {}) =>
+    ({ id, title: id, agenda_date: d, start_time: s, end_time: e, status: 'terjadwal', archived_at: null, ...x }) as import('@shared/ppk/agenda').Agenda;
+  it('berlangsung didahulukan, yang sudah lewat dan dibatalkan dibuang, lalu urut waktu', async () => {
+    const { focusAgenda, startsInText } = await import('@shared/ppk/agenda');
+    const today = [ag('pagi', T, '07:00', '08:00'), ag('rapat', T, '09:30', '11:00'), ag('siang', T, '13:00'), ag('batal', T, '10:00', '', { status: 'dibatalkan' }), ag('tanpa-jam', T, '')];
+    const up = [ag('senin', '2026-11-30', '10:00'), ag('besok', '2026-11-28', '08:00')];
+    const r = focusAgenda(today, up, T, '09:40');
+    expect(r.focus?.id).toBe('rapat');
+    expect(r.rest.map((a) => a.id)).toEqual(['siang', 'tanpa-jam', 'besok', 'senin']);
+    expect(focusAgenda(today, up, T, '11:30').focus?.id).toBe('siang');
+    expect(focusAgenda([ag('pagi', T, '07:00')], up, T, '08:30').focus?.id).toBe('besok'); // tanpa jam selesai = 1 jam
+    expect(focusAgenda([], [], T, '08:00').focus).toBeNull();
+    expect(startsInText(ag('x', T, '13:00'), T, '09:40')).toBe('dimulai 3 jam 20 menit lagi');
+    expect(startsInText(ag('x', T, '09:30'), T, '09:40')).toBe('dimulai 10 menit lalu');
+    expect(startsInText(ag('x', T, '10:00'), T, '09:00')).toBe('dimulai 1 jam lagi');
+    expect(startsInText(ag('x', '2026-11-30', '10:00'), T, '09:00')).toBeNull();
+  });
+});
