@@ -11,7 +11,7 @@ import { addBudgetRevision, createBudgetLine, listBudgetLines, listBudgetVersion
 import {
   addAddendum, createContract, getContract, listContracts, setAllocations, setContractStatus, setSchedule, updateContract, voidAddendum
 } from '../electron/main/ppk/contracts';
-import { monthsBetween, splitEven, daysUntil, type ContractInput } from '@shared/ppk/contracts';
+import { contractProject, monthsBetween, splitEven, daysUntil, type ContractInput } from '@shared/ppk/contracts';
 import type { BudgetLineInput } from '@shared/ppk/budget';
 import type { Actor } from '@shared/numbering';
 
@@ -185,5 +185,13 @@ describe('fungsi murni kontrak', () => {
     expect(splitEven(10, ['a', 'b', 'c']).map((r) => r.planned_amount)).toEqual([3, 3, 4]);
     expect(daysUntil('2026-12-25', '2026-11-25')).toBe(30);
     expect(daysUntil('2026-11-24', '2026-11-25')).toBe(-1);
+  });
+});
+
+describe('project kontrak', () => {
+  it('Paket Layanan dulu, lalu nama sheet dari catatan impor', () => {
+    expect(contractProject({ package_code: 'HUB', package_name: 'IP HUB Timur', notes: 'Impor a.xlsx · SATRIA 1 baris 8' })).toBe('IP HUB Timur');
+    expect(contractProject({ package_code: null, package_name: null, notes: 'Impor Rekap PPK 2026.xlsx · OM IP HUB baris 7' })).toBe('OM IP HUB');
+    expect(contractProject({ package_code: null, package_name: null, notes: 'catatan bebas' })).toBe('');
   });
 });

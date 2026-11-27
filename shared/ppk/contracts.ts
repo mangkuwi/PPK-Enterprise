@@ -14,7 +14,7 @@ export interface ContractInput {
 }
 export interface Contract extends Omit<ContractInput, 'is_multi_year'> {
   id: string; status: ContractStatus; version: number; is_multi_year: number;
-  year: number; vendor_name: string; program_code: string; activity_name: string; package_code: string | null;
+  year: number; vendor_name: string; program_code: string; activity_name: string; package_code: string | null; package_name: string | null;
   addendum_total: number; addendum_count: number;
   /** Nilai awal + perubahan nilai addendum yang tidak dibatalkan. */
   latest_value: number;
@@ -61,4 +61,12 @@ export function splitEven(total: number, months: string[]): ScheduleRow[] {
 /** Hari tersisa sampai tanggal selesai (negatif = lewat). */
 export function daysUntil(date: string, today = new Date().toISOString().slice(0, 10)): number {
   return Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+}
+
+/**
+ * Project kontrak untuk identifikasi: Paket Layanan bila diisi, selain itu nama sheet asal impor
+ * (catatan impor berbentuk "Impor <berkas> · <sheet> baris <n>"), mis. SATRIA 1, IP HUB, IP Transit.
+ */
+export function contractProject(c: { package_code: string | null; package_name: string | null; notes: string }): string {
+  return c.package_name || c.package_code || /· ([^·]+?) baris \d+/.exec(c.notes)?.[1]?.trim() || '';
 }

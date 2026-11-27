@@ -18,7 +18,7 @@ import { ExportButton, SlashWrap, TBL } from '@/features/ppk/table';
 import type { MasterRow } from '@shared/ppk/master';
 import { budgetLabel } from '@shared/ppk/budget';
 import {
-  CONTRACT_NEXT, CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, daysUntil, monthsBetween, splitEven,
+  CONTRACT_NEXT, CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, contractProject, daysUntil, monthsBetween, splitEven,
   type AddendumInput, type AllocationRow, type Contract, type ContractDetail, type ContractInput, type ContractStatus, type ContractType, type ScheduleRow
 } from '@shared/ppk/contracts';
 
@@ -59,7 +59,7 @@ export default function ContractsPage() {
             <option value="semua">Semua status</option>
             {Object.entries(CONTRACT_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
-          <Input className="max-w-sm" placeholder="Cari nomor, uraian, atau penyedia" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Cari kontrak" />
+          <Input className="max-w-sm" placeholder="Cari nomor, uraian, project, atau penyedia" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Cari kontrak" />
         </div>
         {list.error && <Empty>{list.error}</Empty>}
         {list.data && !list.data.length && <Empty>Belum ada kontrak{search ? ' yang cocok' : ''} untuk tahun ini.</Empty>}
@@ -71,28 +71,30 @@ export default function ContractsPage() {
             <Card className={TBL.card}>
               <table className={TBL.table}>
                 <thead className={TBL.head}><tr>
-                  <th className={cn(TBL.th, TBL.first, 'z-30 bg-slate-50')}>Nomor kontrak</th><th className={TBL.th}>Penyedia</th><th className={TBL.th}>Uraian</th>
+                  <th className={cn(TBL.th, TBL.first, 'z-30 bg-slate-50')}>Project / nomor kontrak</th><th className={TBL.th}>Penyedia</th><th className={TBL.th}>Uraian</th>
                   <th className={TBL.thNum}>Nilai terakhir</th><th className={TBL.thNum}>Tertagih</th><th className={TBL.thNum}>Dibayar</th><th className={cn(TBL.thNum, 'bg-sky-100 text-navy-900')}>Sisa kontrak</th>
-                  <th className={TBL.th}>Selesai</th><th className={TBL.th}>Status</th>
+                  <th className={TBL.th}>Status / selesai</th>
                 </tr></thead>
                 <tbody>{rows.map((c) => (
                   <tr key={c.id} className={cn(TBL.row, 'cursor-pointer', c.status === 'dibatalkan' && 'text-slate-400')} onClick={() => setOpen(c.id)}>
-                    <td className={cn(TBL.td, TBL.first, 'font-medium text-navy-900')}><button className="text-left hover:underline" onClick={() => setOpen(c.id)}><SlashWrap text={c.contract_number} /></button>
+                    <td className={cn(TBL.td, TBL.first, 'font-medium text-navy-900')}>
+                      {contractProject(c) && <div className="mb-0.5 text-sm font-bold text-navy-800">{contractProject(c)}</div>}
+                      <button className="text-left text-xs font-normal text-slate-700 hover:underline" onClick={() => setOpen(c.id)}><SlashWrap text={c.contract_number} /></button>
                       {c.contract_type === 'kpbu' && <Badge className="ml-2">KPBU</Badge>}</td>
-                    <td className={cn(TBL.td, 'min-w-48')}>{c.vendor_name}</td>
-                    <td className={cn(TBL.td, 'max-w-xs')}><div className="line-clamp-2" title={c.description}>{c.description}</div></td>
+                    <td className={cn(TBL.td, 'min-w-40')}>{c.vendor_name}</td>
+                    <td className={cn(TBL.td, 'min-w-72 max-w-md')}>{c.description}</td>
                     <td className={TBL.num}><Num n={c.latest_value} unit={1} />{c.addendum_count > 0 && <div className="text-xs text-slate-500">{c.addendum_count} addendum</div>}</td>
                     <td className={TBL.num}><Num n={c.billed} unit={1} /></td>
                     <td className={TBL.num}><Num n={c.paid} unit={1} /></td>
                     <td className={cn(TBL.num, 'bg-sky-50/60 font-medium', c.sisa_kontrak < 0 && 'text-red-700')}><Num n={c.sisa_kontrak} unit={1} /></td>
-                    <td className={cn(TBL.td, 'whitespace-nowrap')}>{c.effective_end}<EndBadge c={c} /></td>
-                    <td className={TBL.td}><Badge tone={TONE[c.status]}>{CONTRACT_STATUS_LABEL[c.status]}</Badge></td>
+                    <td className={cn(TBL.td, 'whitespace-nowrap')}><Badge tone={TONE[c.status]}>{CONTRACT_STATUS_LABEL[c.status]}</Badge>
+                      <div className="mt-1 text-xs text-slate-500">{c.effective_end}</div><div className="-ml-2"><EndBadge c={c} /></div></td>
                   </tr>))}
                 </tbody>
                 <tfoot><tr>
                   <td className={cn(TBL.foot, TBL.first, 'z-30 bg-slate-100')}>Total {live.length} kontrak tidak dibatalkan</td><td className={TBL.foot} colSpan={2} />
                   {(['latest_value', 'billed', 'paid', 'sisa_kontrak'] as const).map((k) => <td key={k} className={cn(TBL.foot, 'whitespace-nowrap text-right tabular-nums')}><Num n={sum(k)} unit={1} /></td>)}
-                  <td className={TBL.foot} colSpan={2} />
+                  <td className={TBL.foot} />
                 </tr></tfoot>
               </table>
             </Card>
@@ -241,6 +243,7 @@ function Summary({ c }: { c: Contract }) {
         {row('Status', <><Badge tone={TONE[c.status]}>{CONTRACT_STATUS_LABEL[c.status]}</Badge><EndBadge c={c} /></>)}
         {row('Jenis', CONTRACT_TYPE_LABEL[c.contract_type])}
         {row('Program / kegiatan', `${c.program_code} · ${c.activity_name}`)}
+        {row('Project', contractProject(c) || '—')}
         {row('Paket layanan', c.package_code ?? '—')}
         {row('Tanggal kontrak', c.contract_date)}
         {row('Masa pelaksanaan', `${c.start_date} s.d. ${c.effective_end}${c.effective_end !== c.end_date ? ` (awal ${c.end_date})` : ''}`)}

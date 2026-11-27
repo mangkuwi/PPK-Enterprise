@@ -12,7 +12,7 @@ export const TBL = {
   th: 'whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2 text-left font-semibold',
   thNum: 'whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2 text-right font-semibold',
   td: 'border-b border-slate-100 px-3 py-2 align-top',
-  num: 'min-w-[9.5rem] whitespace-nowrap border-b border-slate-100 px-3 py-2 text-right align-top tabular-nums',
+  num: 'min-w-[8.5rem] whitespace-nowrap border-b border-slate-100 px-3 py-2 text-right align-top tabular-nums',
   /** Kolom identitas yang tetap terlihat saat tabel digeser ke kanan. */
   first: 'sticky left-0 z-10 w-64 min-w-64 max-w-64 [overflow-wrap:anywhere] border-r border-slate-200 bg-white group-hover:bg-slate-50',
   foot: 'sticky bottom-0 z-20 border-t-2 border-slate-300 bg-slate-100 px-3 py-2 font-semibold',
