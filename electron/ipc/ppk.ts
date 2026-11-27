@@ -13,7 +13,7 @@ import { getMainWindow } from '../main/window';
 import { runPpkImport } from '../main/ppk/import';
 import { ppkReport, reportSheets } from '../main/ppk/reports';
 import { addSp2d, sp2dReport, voidSp2d } from '../main/ppk/sp2d';
-import { agendaConflicts, agendaHistory, agendaPeople, createAgenda, getAgenda, listAgendas, setAgendaArchived, setAgendaStatus, updateAgenda } from '../main/ppk/agenda';
+import { agendaConflicts, agendaHistory, agendaPeople, createAgenda, deleteAgenda, getAgenda, restoreAgenda, listAgendas, setAgendaArchived, setAgendaStatus, updateAgenda } from '../main/ppk/agenda';
 import { MAX_FILE, fileContent, invitationFiles, uploadInvitation } from '../main/ppk/inbox';
 import { relatedDocuments } from '../main/ppk/documents';
 import { agendaHome, listInvitations } from '../main/ppk/agendaHome';
@@ -182,7 +182,9 @@ export function registerPpkHandlers() {
     letter_date: day.or(z.literal('')).nullish(), program_id: S.id.nullish(), participants: text(2000).optional(), invitation_id: S.id.nullish()
   });
   handle('ppk:agendas:list', z.object({ from: day.optional(), to: day.optional(), include_cancelled: z.boolean().optional(), q: text(200).optional(), program_id: S.id.optional(),
-    user_id: S.id.optional(), organizer: text(300).optional(), status: z.enum(['aktif', 'belum_ditugaskan', 'ditugaskan', 'selesai', 'dibatalkan', 'diarsipkan', 'semua']).optional() }), (f) => listAgendas(st(), actor(), f));
+    user_id: S.id.optional(), organizer: text(300).optional(), status: z.enum(['aktif', 'belum_ditugaskan', 'ditugaskan', 'selesai', 'dibatalkan', 'diarsipkan', 'terhapus', 'semua']).optional() }), (f) => listAgendas(st(), actor(), f));
+  handle('ppk:agendas:delete', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => deleteAgenda(st(), actor(), id, reason));
+  handle('ppk:agendas:restore', z.object({ id: S.id }), ({ id }) => restoreAgenda(st(), actor(), id));
   handle('ppk:agendas:archive', z.object({ id: S.id, archived: z.boolean() }), ({ id, archived }) => setAgendaArchived(st(), actor(), id, archived));
   handle('ppk:agendas:conflicts', z.object({ agenda_date: day, start_time: z.string().max(5), end_time: z.string().max(5), exclude_id: S.id.optional(), user_ids: z.array(S.id).max(31).optional() }),
     (q) => agendaConflicts(st(), actor(), q));

@@ -106,7 +106,7 @@ export const PG_TABLES = ['app_users', 'audit_log', 'ppk_user_roles', 'ppk_fisca
   'ppk_user_phones', 'ppk_notifications'] as const;
 
 /** Migrasi SQLite yang berisi tabel PPK (v12 = tabel undangan modul dokumen, tetap lokal). */
-const PG_MIGRATIONS = [8, 9, 10, 11, 13, 14];
+const PG_MIGRATIONS = [8, 9, 10, 11, 13, 14, 15];
 export const PG_SCHEMA_VERSION = PG_MIGRATIONS[PG_MIGRATIONS.length - 1];
 
 /** Satu migrasi SQLite → PostgreSQL: INTEGER → BIGINT, trigger dan data awal SQLite dibuang (trigger ditulis ulang di PG_TRIGGERS). */

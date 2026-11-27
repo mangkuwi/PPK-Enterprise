@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase, type DB } from '../electron/main/db';
-import { MIGRATIONS, runMigrations } from '../electron/main/migrations';
+import { LATEST_SCHEMA, MIGRATIONS, runMigrations } from '../electron/main/migrations';
 import { seedDefaults } from '../electron/main/seed';
 import { createUser, setPin } from '../electron/main/numbering/users';
 import { sqliteStore, type PpkStore } from '../electron/main/ppk/store';
@@ -31,7 +31,7 @@ describe('migrasi v14', () => {
     for (const m of MIGRATIONS.filter((x) => x.version <= 13)) old.exec(m.sql);
     old.pragma('user_version = 13');
     old.prepare("INSERT INTO ppk_agendas (id, title, agenda_date, created_by, created_at, updated_by, updated_at) VALUES ('a1','Lama','2026-11-01','x','t','x','t')").run();
-    expect(runMigrations(old)).toBe(14);
+    expect(runMigrations(old)).toBe(LATEST_SCHEMA);
     expect(old.prepare('SELECT title, participants, archived_at, invitation_id FROM ppk_agendas').get()).toEqual({ title: 'Lama', participants: '', archived_at: null, invitation_id: null });
     for (const t of ['ppk_invitations', 'ppk_files', 'ppk_invitation_extractions', 'ppk_user_phones', 'ppk_notifications'])
       expect(old.prepare(`SELECT COUNT(*) n FROM ${t}`).get(), t).toEqual({ n: 0 });

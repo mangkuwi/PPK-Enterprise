@@ -5,7 +5,7 @@ import type { PpkStore } from './store';
 import { requirePpk } from './access';
 import { listAgendas } from './agenda';
 
-const OPEN = "a.status = 'terjadwal' AND a.archived_at IS NULL";
+const OPEN = "a.status = 'terjadwal' AND a.archived_at IS NULL AND a.deleted_at IS NULL";
 const NO_PIC = "NOT EXISTS (SELECT 1 FROM ppk_agenda_assignees x WHERE x.agenda_id = a.id AND x.role = 'utama')";
 const n = async (s: PpkStore, sql: string, p: Array<string | number> = []) => Number((await s.get<{ n: number }>(sql, p))?.n ?? 0);
 
@@ -25,8 +25,8 @@ export async function agendaHome(s: PpkStore, actor: Actor, today = jakartaToday
   const pick = async (sql: string, p: string[]) => listAgendas(s, actor, { ids: (await s.all<{ id: string }>(sql, p)).map((r) => r.id) });
   const [counts, inbox] = await Promise.all([
     Promise.all([
-      n(s, `SELECT COUNT(*) AS n FROM ppk_agendas a WHERE a.agenda_date >= ? AND a.agenda_date <= ? AND a.status <> 'dibatalkan' AND a.archived_at IS NULL`, [`${month}-01`, `${month}-31`]),
-      n(s, `SELECT COUNT(*) AS n FROM ppk_agendas a WHERE a.agenda_date = ? AND a.status <> 'dibatalkan' AND a.archived_at IS NULL`, [today]),
+      n(s, `SELECT COUNT(*) AS n FROM ppk_agendas a WHERE a.agenda_date >= ? AND a.agenda_date <= ? AND a.status <> 'dibatalkan' AND a.archived_at IS NULL AND a.deleted_at IS NULL`, [`${month}-01`, `${month}-31`]),
+      n(s, `SELECT COUNT(*) AS n FROM ppk_agendas a WHERE a.agenda_date = ? AND a.status <> 'dibatalkan' AND a.archived_at IS NULL AND a.deleted_at IS NULL`, [today]),
       n(s, "SELECT COUNT(*) AS n FROM ppk_invitations WHERE source = 'whatsapp' AND status IN ('baru','diproses')"),
       n(s, "SELECT COUNT(*) AS n FROM ppk_invitations WHERE status = 'menunggu_verifikasi'"),
       n(s, `SELECT COUNT(*) AS n FROM ppk_agendas a WHERE ${OPEN} AND a.agenda_date >= ? AND ${NO_PIC}`, [today])
