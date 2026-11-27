@@ -883,6 +883,15 @@ CREATE INDEX idx_ppk_agendas_inv ON ppk_agendas(invitation_id);
 CREATE INDEX idx_ppk_agendas_prog ON ppk_agendas(program_id);
 ALTER TABLE ppk_agenda_assignees ADD COLUMN duty TEXT NOT NULL DEFAULT '';
 ALTER TABLE ppk_agenda_assignees ADD COLUMN status TEXT NOT NULL DEFAULT 'ditugaskan' CHECK (status IN ('ditugaskan','diterima','selesai'));`
+  },
+  {
+    version: 15,
+    name: 'ppk_agenda_delete',
+    sql: `
+-- Hapus agenda yang bisa dikembalikan (disetujui pemilik 2026-11-27). Baris tidak pernah dihapus; trigger anti-hapus tetap berlaku.
+ALTER TABLE ppk_agendas ADD COLUMN deleted_at TEXT;
+ALTER TABLE ppk_agendas ADD COLUMN deleted_by TEXT;
+ALTER TABLE ppk_agendas ADD COLUMN delete_reason TEXT NOT NULL DEFAULT '';`
   }
 ];
 

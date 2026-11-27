@@ -251,6 +251,8 @@ export const api = {
       people: () => call<Array<{ id: string; name: string }>>('ppk:agendas:people'),
       home: () => call<AgendaHome>('ppk:agendas:home'),
       archive: (id: string, archived: boolean) => call<Agenda>('ppk:agendas:archive', { id, archived }),
+      remove: (id: string, reason: string) => call<Agenda>('ppk:agendas:delete', { id, reason }),
+      restore: (id: string) => call<Agenda>('ppk:agendas:restore', { id }),
       conflicts: (q: { agenda_date: string; start_time: string; end_time: string; exclude_id?: string; user_ids?: string[] }) => call<AgendaConflict[]>('ppk:agendas:conflicts', q),
       history: (id: string) => call<AgendaHistoryRow[]>('ppk:agendas:history', { id })
     },

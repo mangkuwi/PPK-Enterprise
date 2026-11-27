@@ -50,12 +50,14 @@ async function attach(s: PpkStore, rows: Array<Omit<Agenda, 'pic' | 'support'>>)
 
 const PIC = "EXISTS (SELECT 1 FROM ppk_agenda_assignees x WHERE x.agenda_id = ppk_agendas.id AND x.role = 'utama')";
 const STATUS_SQL: Record<string, string> = {
-  aktif: "status <> 'dibatalkan' AND archived_at IS NULL",
-  belum_ditugaskan: `status = 'terjadwal' AND archived_at IS NULL AND NOT ${PIC}`,
-  ditugaskan: `status = 'terjadwal' AND archived_at IS NULL AND ${PIC}`,
-  selesai: "status = 'selesai' AND archived_at IS NULL",
-  dibatalkan: "status = 'dibatalkan' AND archived_at IS NULL",
-  diarsipkan: 'archived_at IS NOT NULL'
+  aktif: "status <> 'dibatalkan' AND archived_at IS NULL AND deleted_at IS NULL",
+  belum_ditugaskan: `status = 'terjadwal' AND archived_at IS NULL AND deleted_at IS NULL AND NOT ${PIC}`,
+  ditugaskan: `status = 'terjadwal' AND archived_at IS NULL AND deleted_at IS NULL AND ${PIC}`,
+  selesai: "status = 'selesai' AND archived_at IS NULL AND deleted_at IS NULL",
+  dibatalkan: "status = 'dibatalkan' AND archived_at IS NULL AND deleted_at IS NULL",
+  diarsipkan: 'archived_at IS NOT NULL AND deleted_at IS NULL',
+  terhapus: 'deleted_at IS NOT NULL',
+  semua: 'deleted_at IS NULL' // "semua" = semua kecuali yang dihapus
 };
 
 /** Daftar agenda. Bawaan: tanpa yang dibatalkan dan diarsipkan (include_cancelled = semua). */
@@ -66,7 +68,7 @@ export async function listAgendas(s: PpkStore, actor: Actor, f: AgendaFilter & {
   if (f.to) { w.push('agenda_date <= ?'); p.push(f.to); }
   if (f.ids) { if (!f.ids.length) return []; w.push(`id IN (${f.ids.map(() => '?').join(',')})`); p.push(...f.ids); }
   const status = f.status ?? (f.include_cancelled ? 'semua' : 'aktif');
-  if (status !== 'semua') w.push(STATUS_SQL[status]);
+  w.push(STATUS_SQL[status]);
   if (f.q?.trim()) {
     const like = `%${f.q.trim().toLowerCase()}%`;
     w.push('(lower(title) LIKE ? OR lower(organizer) LIKE ? OR lower(letter_number) LIKE ? OR lower(location) LIKE ? OR lower(agenda_text) LIKE ?)'); p.push(like, like, like, like, like);
@@ -104,6 +106,7 @@ export async function updateAgenda(s: PpkStore, actor: Actor, id: string, versio
     await requirePpk(t, actor, 'write');
     const before = await t.get<Record<string, unknown>>('SELECT * FROM ppk_agendas WHERE id = ?', [id]);
     if (!before) throw new PpkError('NOT_FOUND', 'Agenda tidak ditemukan.');
+    if (before.deleted_at) throw new PpkError('INVALID', 'Agenda ini sudah dihapus. Kembalikan dulu sebelum diubah.');
     if (before.status === 'dibatalkan') throw new PpkError('INVALID', 'Agenda yang dibatalkan tidak dapat diubah.');
     const was = await t.all<{ user_id: string; role: string }>('SELECT user_id, role FROM ppk_agenda_assignees WHERE agenda_id = ?', [id]);
     const r = await t.run(`UPDATE ppk_agendas SET ${COLS.map((k) => `${k} = ?`).join(', ')}, version = version + 1, updated_by = ?, updated_at = ? WHERE id = ? AND version = ?`,
@@ -119,8 +122,9 @@ export async function setAgendaStatus(s: PpkStore, actor: Actor, id: string, sta
   const why = text(reason, 'Alasan pembatalan', { required: status === 'dibatalkan', max: 500 });
   await s.tx(async (t) => {
     await requirePpk(t, actor, 'write');
-    const b = await t.get<{ status: AgendaStatus }>('SELECT status FROM ppk_agendas WHERE id = ?', [id]);
+    const b = await t.get<{ status: AgendaStatus; deleted_at: string | null }>('SELECT status, deleted_at FROM ppk_agendas WHERE id = ?', [id]);
     if (!b) throw new PpkError('NOT_FOUND', 'Agenda tidak ditemukan.');
+    if (b.deleted_at) throw new PpkError('INVALID', 'Agenda ini sudah dihapus.');
     if (b.status !== 'terjadwal') throw new PpkError('INVALID', 'Hanya agenda terjadwal yang dapat diselesaikan atau dibatalkan.');
     await t.run('UPDATE ppk_agendas SET status = ?, cancel_reason = ?, version = version + 1, updated_by = ?, updated_at = ? WHERE id = ?', [status, why, actor.name, now(), id]);
     await ppkAudit(t, actor, `agenda.${status}`, 'ppk_agendas', id, { before: b.status, after: status, reason: why });
@@ -154,6 +158,35 @@ export async function setAgendaArchived(s: PpkStore, actor: Actor, id: string, a
     if (!!b.archived_at === archived) return;
     await t.run('UPDATE ppk_agendas SET archived_at = ?, version = version + 1, updated_by = ?, updated_at = ? WHERE id = ?', [archived ? now() : null, actor.name, now(), id]);
     await ppkAudit(t, actor, archived ? 'agenda.archive' : 'agenda.unarchive', 'ppk_agendas', id, { before: b.archived_at, after: archived });
+  });
+  return getAgenda(s, actor, id);
+}
+
+/**
+ * Hapus agenda (Admin PPK / Pejabat PPK, wajib alasan). Baris tetap ada dan bisa dikembalikan; semua daftar, beranda,
+ * dan cek bentrok tidak lagi menampilkannya. Tercatat di audit_log.
+ */
+export async function deleteAgenda(s: PpkStore, actor: Actor, id: string, reason: string): Promise<Agenda> {
+  const why = text(reason, 'Alasan hapus', { required: true, max: 500 });
+  await s.tx(async (t) => {
+    await requirePpk(t, actor, 'master');
+    const b = await t.get<{ title: string; agenda_date: string; deleted_at: string | null }>('SELECT title, agenda_date, deleted_at FROM ppk_agendas WHERE id = ?', [id]);
+    if (!b) throw new PpkError('NOT_FOUND', 'Agenda tidak ditemukan.');
+    if (b.deleted_at) return;
+    await t.run('UPDATE ppk_agendas SET deleted_at = ?, deleted_by = ?, delete_reason = ?, version = version + 1, updated_by = ?, updated_at = ? WHERE id = ?', [now(), actor.name, why, actor.name, now(), id]);
+    await ppkAudit(t, actor, 'agenda.delete', 'ppk_agendas', id, { title: b.title, agenda_date: b.agenda_date, reason: why });
+  });
+  return getAgenda(s, actor, id);
+}
+
+export async function restoreAgenda(s: PpkStore, actor: Actor, id: string): Promise<Agenda> {
+  await s.tx(async (t) => {
+    await requirePpk(t, actor, 'master');
+    const b = await t.get<{ deleted_at: string | null; delete_reason: string }>('SELECT deleted_at, delete_reason FROM ppk_agendas WHERE id = ?', [id]);
+    if (!b) throw new PpkError('NOT_FOUND', 'Agenda tidak ditemukan.');
+    if (!b.deleted_at) return;
+    await t.run("UPDATE ppk_agendas SET deleted_at = NULL, deleted_by = NULL, delete_reason = '', version = version + 1, updated_by = ?, updated_at = ? WHERE id = ?", [actor.name, now(), id]);
+    await ppkAudit(t, actor, 'agenda.restore', 'ppk_agendas', id, { before: { deleted_at: b.deleted_at, reason: b.delete_reason } });
   });
   return getAgenda(s, actor, id);
 }

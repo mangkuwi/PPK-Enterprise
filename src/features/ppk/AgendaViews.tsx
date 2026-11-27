@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { ArrowRight, ChevronLeft, ChevronRight, Clock, ExternalLink, MapPin, Pencil, Video } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Clock, ExternalLink, MapPin, Pencil, Trash2, Video } from 'lucide-react';
+import { Input } from '@/components/ui/form';
+import { errMsg, useFeedback } from '@/components/ui/feedback';
+import { api } from '@/services/api';
 import { Badge } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DialogContent } from '@/components/ui/dialog';
@@ -82,7 +85,21 @@ export function AgendaCalendar({ view, setView, cursor, setCursor, today, agenda
 }
 
 /** Satu agenda: jam, judul, penyelenggara, lokasi, staf, status, dan tombol gabung bila rapat daring. */
-export function AgendaRow({ a, onOpen, showDate, today, now }: { a: Agenda; onOpen: (a: Agenda) => void; showDate?: boolean; today?: string; now?: string }) {
+/** Hapus agenda dengan konfirmasi dan alasan wajib. Agenda bisa dikembalikan dari filter "Terhapus". */
+export function useDeleteAgenda(onDone: (a: Agenda) => void) {
+  const { toast, confirm } = useFeedback();
+  const reason = useRef('');
+  return async (a: Agenda) => {
+    reason.current = '';
+    const ok = await confirm({ title: `Hapus "${a.title}"?`, destructive: true, confirmLabel: 'Hapus agenda',
+      message: <div><p className="mb-2">Agenda hilang dari jadwal, beranda, dan daftar. Admin PPK atau Pejabat PPK bisa mengembalikannya lewat filter "Terhapus".</p>
+        <Input autoFocus placeholder="Alasan hapus (wajib), mis. dobel dengan agenda lain" onChange={(e) => { reason.current = e.target.value; }} /></div> });
+    if (!ok) return;
+    try { const r = await api.ppk.agendas.remove(a.id, reason.current); toast('Agenda dihapus.', 'success'); onDone(r); } catch (e) { toast(errMsg(e), 'error'); }
+  };
+}
+
+export function AgendaRow({ a, onOpen, onEdit, onDelete, showDate, today, now }: { a: Agenda; onOpen: (a: Agenda) => void; onEdit?: (a: Agenda) => void; onDelete?: (a: Agenda) => void; showDate?: boolean; today?: string; now?: string }) {
   const st = agendaDisplay(a);
   const live = today && now ? liveState(a, today, now) : null;
   const online = !!a.meeting_url && a.status === 'terjadwal' && !a.archived_at;
@@ -101,6 +118,10 @@ export function AgendaRow({ a, onOpen, showDate, today, now }: { a: Agenda; onOp
         {online && <a href={a.meeting_url} target="_blank" rel="noreferrer" aria-label={`${joinLabel(a.meeting_url)}: ${a.title}`}
           className={cn('inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold', live ? 'bg-green-700 text-white hover:bg-green-800' : 'border border-navy-300 text-navy-800 hover:bg-navy-50')}>
           <Video size={15} /> {joinLabel(a.meeting_url)}</a>}
+        {(onEdit || onDelete) && !a.deleted_at && <div className="flex gap-1">
+          {onEdit && a.status !== 'dibatalkan' && <Button size="sm" variant="ghost" aria-label={`Ubah ${a.title}`} onClick={() => onEdit(a)}><Pencil size={14} /> Ubah</Button>}
+          {onDelete && <Button size="sm" variant="ghost" className="text-red-700 hover:bg-red-50" aria-label={`Hapus ${a.title}`} onClick={() => onDelete(a)}><Trash2 size={14} /> Hapus</Button>}
+        </div>}
       </div>
     </li>
   );
