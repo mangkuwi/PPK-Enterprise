@@ -1,0 +1,119 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { openDatabase, type DB } from '../electron/main/db';
+import { runMigrations } from '../electron/main/migrations';
+import { seedDefaults } from '../electron/main/seed';
+import { setPin } from '../electron/main/numbering/users';
+import { sqliteStore, type PpkStore } from '../electron/main/ppk/store';
+import { saveMaster } from '../electron/main/ppk/master';
+import { runPpkImport } from '../electron/main/ppk/import';
+import { ppkReport } from '../electron/main/ppk/reports';
+import { parseIdDate, parsePpkWorkbook, splitNumberDate } from '@shared/ppk/import';
+import type { Actor } from '@shared/numbering';
+import { DETAIL, H, MAK, detail, row, summary } from './fixtures/ppkSheets';
+
+describe('parser spreadsheet PPK', () => {
+  it('membaca tanggal Indonesia dan menjepit tanggal mustahil', () => {
+    const clamped: string[] = [];
+    expect(parseIdDate('5 Februari 2026')).toBe('2026-02-05');
+    expect(parseIdDate('2026-03-07')).toBe('2026-03-07');
+    expect(parseIdDate('31 September 2026', (_, f) => clamped.push(f))).toBe('2026-09-30');
+    expect(clamped).toEqual(['2026-09-30']);
+    expect(splitNumberDate('000403867 tanggal 06 Maret 2026')).toEqual({ number: '000403867', date: '2026-03-06' });
+  });
+
+  it('memecah kelompok baris menjadi kontrak, addendum, dan tagihan', () => {
+    const p = parsePpkWorkbook([summary, detail()], 2026);
+    expect(p.sheets.map((s) => s.kind)).toEqual(['ringkasan', 'rincian']);
+    expect(p.budgetLines.map((b) => [b.source, b.kind, b.amount])).toEqual([['RM', 'dipa', 2_000_000_000], ['BLU', 'dipa', 500_000_000], ['BLU', 'saldo_kas', 300_000_000]]);
+    const [a, b] = p.chains;
+    expect(a.contract).toEqual({ number: 'KTR-001', date: '2026-01-02', value: 1_200_000_000, start: '2026-01-01', end: '2026-03-31' });
+    expect(a.addendums).toEqual([{ row: 6, number: 'KTR-001/PKS-2', value: 600_000_000, start: '2026-04-01', end: '2026-06-30' }]);
+    expect(a.output_detail).toBe(DETAIL);
+    expect(a.bills.map((x) => [x.service_month, x.amount, x.pass_through, x.complete])).toEqual([
+      ['2026-01', 400_000_000, 0, true], ['2026-02', 800_000_000, 0, false], ['2026-04', 300_000_000, 0, true], ['2026-04', 0, 50_000_000, true]]);
+    expect(a.bills[1]).toMatchObject({ period_start: '2026-02-01', period_end: '2026-03-31', bill_date: '2026-04-30' });
+    expect(a.bills[3]).toMatchObject({ pass_row: true, faktur: null });
+    expect(b.contract.start).toBe('2026-01-01');
+    expect(p.issues.some((i) => i.level === 'peringatan' && /31 April/.test(i.message))).toBe(true);
+  });
+
+  it('kolom DENDA ganda memakai yang terakhir', () => {
+    const sh = detail(); const hdr = [...H, 'DENDA', 'NILAI DITERIMA', 'DENDA'];
+    sh.rows[2] = hdr;
+    for (const r of sh.rows.slice(3)) r.push(1_200_000_000, 1, null);
+    sh.rows[3][hdr.length - 1] = 5_000;
+    const [a] = parsePpkWorkbook([summary, sh], 2026).chains;
+    expect(a.bills.map((b) => b.deduction)).toEqual([5_000, 0, 0, 0]);
+  });
+});
+
+describe('impor ke database', () => {
+  let db: DB; let s: PpkStore; let admin: Actor; let fy: string; let prog: string;
+  const n = (t: string) => (db.prepare(`SELECT COUNT(*) n FROM ${t}`).get() as { n: number }).n;
+  beforeEach(async () => {
+    db = openDatabase(':memory:'); runMigrations(db); seedDefaults(db); s = sqliteStore(db);
+    admin = db.prepare("SELECT id, name, role FROM app_users WHERE role='admin'").get() as Actor;
+    setPin(db, admin, admin.id, '123456');
+    fy = (db.prepare('SELECT id FROM ppk_fiscal_years WHERE year = 2026').get() as { id: string }).id;
+    prog = String((await saveMaster(s, admin, 'programs', { code: 'SATRIA', name: 'SATRIA-1', is_active: true })).id);
+  });
+  const run = (commit: boolean, sheets = [summary, detail()]) => runPpkImport(s, admin, sheets, { fiscal_year_id: fy, program_id: prog, file_name: 'rekap.xlsx' }, commit);
+
+  it('pratinjau menghitung hasil tanpa menulis apa pun', async () => {
+    const before = n('audit_log');
+    const r = await run(false);
+    expect(r.committed).toBe(false);
+    expect(r.counts).toMatchObject({ budget_lines: 3, vendors: 2, contracts: 2, addendums: 1, bills_verified: 4, bills_draft: 1, bills_failed: 0, billed: 1_650_000_000 });
+    expect([n('ppk_contracts'), n('ppk_bills'), n('ppk_budget_lines'), n('ppk_vendors'), n('audit_log')]).toEqual([0, 0, 0, 0, before]);
+  });
+
+  it('simpan mencatat kontrak, addendum, tagihan terverifikasi, dan pembagian dana', async () => {
+    const r = await run(true);
+    expect(r.counts).toMatchObject({ contracts: 2, bills_verified: 4, bills_draft: 1 });
+    expect(db.prepare("SELECT status, COUNT(*) n FROM ppk_bills GROUP BY status ORDER BY status").all()).toEqual([{ status: 'diverifikasi', n: 4 }, { status: 'draft', n: 1 }]);
+    expect(n('ppk_contract_addendums')).toBe(1);
+    // Tagihan BLU masuk ke baris DIPA dulu, bukan saldo kas.
+    expect(db.prepare(`SELECT bl.kind, f.amount FROM ppk_bill_funding f JOIN ppk_bills b ON b.id = f.bill_id JOIN ppk_budget_lines bl ON bl.id = f.budget_line_id
+      JOIN ppk_contracts c ON c.id = b.contract_id WHERE c.contract_number = 'KTR-002'`).all()).toEqual([{ kind: 'dipa', amount: 100_000_000 }]);
+    expect(n("audit_log WHERE action = 'ppk.import.excel'")).toBe(1);
+  });
+
+  it('impor ulang tidak menimpa atau menggandakan data', async () => {
+    await run(true);
+    const bills = n('ppk_bills');
+    const r = await run(true);
+    expect(r.counts).toMatchObject({ contracts: 0, contracts_existing: 2, budget_lines: 0, budget_lines_existing: 3, bills_verified: 0 });
+    expect([n('ppk_bills'), n('ppk_vendors'), n('ppk_budget_lines')]).toEqual([bills, 2, 3]);
+  });
+
+  it('laporan prognosis dari data impor: aktual + sisa kontrak dibagi ke bulan tersisa', async () => {
+    await run(true);
+    const r = await ppkReport(s, admin, fy, '2026-03', false);
+    expect(r.total).toMatchObject({ pagu: 2_800_000_000, billed: 1_650_000_000, estimate: 250_000_000, prognosis: 1_900_000_000, kebutuhan: -900_000_000 });
+    const rmLine = r.lines.find((l) => l.source_code === 'RM')!;
+    expect(rmLine.months.slice(0, 6).map((m) => m.actual + m.estimate)).toEqual([400_000_000, 800_000_000, 0, 433_333_333, 83_333_333, 83_333_334]);
+    expect(r.bills).toMatchObject({ draft: 1, unpaid: 4 });
+    await expect(ppkReport(s, admin, fy, '2025-12', false)).rejects.toThrow(/tahun 2026/);
+  });
+
+  it('tagihan yang gagal tidak membatalkan sisa impor', async () => {
+    const bad = row({ 'PERIODE TAGIHAN': 'JUNI', 'NILAI TAGIHAN': 10_000_000, 'NOMOR & TANGGAL INVOICE': 'INV-X tanggal 1 Juli 2026', 'SUMBER DANA': 'PNBP', MAK });
+    const r = await run(true, [summary, detail([bad])]);
+    expect(r.counts).toMatchObject({ bills_failed: 1, bills_verified: 4, bills_draft: 1 });
+    expect(r.issues.some((i) => i.level === 'galat' && /PNBP/.test(i.message))).toBe(true);
+    expect(n('ppk_bills')).toBe(5);
+  });
+});
+
+describe('savepoint PpkStore', () => {
+  it('kegagalan transaksi dalam hanya membatalkan bagiannya', async () => {
+    const db = openDatabase(':memory:'); const s = sqliteStore(db);
+    db.exec('CREATE TABLE t (v INTEGER)');
+    await s.tx(async (o) => {
+      await o.run('INSERT INTO t VALUES (1)');
+      await o.tx(async (i) => { await i.run('INSERT INTO t VALUES (2)'); throw new Error('x'); }).catch(() => {});
+      await o.run('INSERT INTO t VALUES (3)');
+    });
+    expect(db.prepare('SELECT v FROM t ORDER BY v').all()).toEqual([{ v: 1 }, { v: 3 }]);
+  });
+});

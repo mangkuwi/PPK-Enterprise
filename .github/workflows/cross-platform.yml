@@ -1,0 +1,183 @@
+# Uji jalan dan paket lintas platform. Jalan bila: tag v* (rilis), tombol "Run workflow", atau PR berlabel "uji-lintas-os".
+# Menit macOS di repo privat dihitung 10x, jadi tidak dijalankan pada setiap push.
+name: Lintas platform
+on:
+  push: { tags: ['v*'] }
+  workflow_dispatch:
+  pull_request: { types: [labeled, synchronize] }
+permissions: { contents: read }
+concurrency: { group: 'lintas-${{ github.ref }}', cancel-in-progress: true }
+env: { PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' }
+jobs:
+  test:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'uji-lintas-os')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: windows-x64 }
+          - { os: windows-11-arm, name: windows-arm64, optional: true }
+          - { os: macos-15, name: macos-arm64 }
+          - { os: macos-15-intel, name: macos-intel }
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.optional == true }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      # Test DB berjalan di Node: pasang modul untuk Node dulu, lalu kembalikan ke ABI Electron.
+      - run: npm rebuild better-sqlite3 && npx vitest run
+      - run: node scripts/rebuild-electron-abi.mjs
+      - run: npx vite build && node scripts/build-electron.mjs
+      - name: Uji jalan aplikasi
+        run: node scripts/smoke-e2e.cjs smoke-${{ matrix.name }}.json
+        env: { SMOKE_KEEP_BACKUP: 'backup-${{ matrix.name }}.zip' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-${{ matrix.name }}
+          path: |
+            smoke-*.json
+            backup-*.zip
+          if-no-files-found: ignore
+
+  cross-restore:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, name: macos-arm64, from: windows-x64 }
+          - { os: windows-latest, name: windows-x64, from: macos-arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npx vite build && node scripts/build-electron.mjs
+      - uses: actions/download-artifact@v4
+        with: { name: 'smoke-${{ matrix.from }}' }
+      - name: Pulihkan backup buatan OS lain
+        run: node scripts/smoke-e2e.cjs cross-${{ matrix.name }}.json
+        env: { SMOKE_FOREIGN_BACKUP: 'backup-${{ matrix.from }}.zip' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: 'cross-${{ matrix.name }}', path: 'cross-*.json', if-no-files-found: ignore }
+
+  package-windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run build
+      # Tanpa secret WIN_CSC_LINK: installer tidak ditandatangani (SmartScreen memperingatkan).
+      - shell: bash
+        run: |
+          if [ -n "$WIN_CSC_LINK" ]; then export CSC_LINK="$WIN_CSC_LINK" CSC_KEY_PASSWORD="$WIN_CSC_KEY_PASSWORD"; fi
+          npx electron-builder --win --publish never
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      - name: Pasang installer diam-diam, lalu uji jalan aplikasi terpasang
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem release -Filter 'PPK-Management-Setup-*-x64.exe' | Select-Object -First 1
+          Start-Process $setup.FullName -ArgumentList '/S' -Wait
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\NASKAHDINAS AI\NASKAHDINAS AI.exe'
+          if (-not (Test-Path $exe)) { throw "Aplikasi tidak terpasang di $exe" }
+          $lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'NASKAHDINAS AI.lnk'
+          if (-not (Test-Path $lnk)) { throw 'Shortcut desktop tidak dibuat' }
+          $env:SMOKE_EXE = $exe
+          node scripts/smoke-e2e.cjs smoke-installed-windows-x64.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pkg-windows
+          path: |
+            release/*.exe
+            smoke-installed-*.json
+          if-no-files-found: ignore
+
+  package-mac:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, arch: arm64, label: AppleSilicon }
+          - { os: macos-15-intel, arch: x64, label: Intel }
+    runs-on: ${{ matrix.os }}
+    env:
+      MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+      MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+      APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY_B64 }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run build
+      - name: Build DMG (Developer ID + notarisasi bila kredensial ada, selain itu ad-hoc)
+        run: |
+          # CSC_LINK hanya diisi bila secret ada: nilai kosong dibaca electron-builder sebagai path folder kerja.
+          if [ -n "$MAC_CSC_LINK" ] && [ -n "$APPLE_API_KEY_B64" ]; then
+            export CSC_LINK="$MAC_CSC_LINK" CSC_KEY_PASSWORD="$MAC_CSC_KEY_PASSWORD"
+            echo "$APPLE_API_KEY_B64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+            export APPLE_API_KEY="$RUNNER_TEMP/AuthKey.p8"
+            npx electron-builder --mac dmg zip --${{ matrix.arch }} -c.mac.notarize=true --publish never
+            echo "SIGNED=1" >> "$GITHUB_ENV"
+          else
+            # Tanpa sertifikat: tanda tangan ad-hoc dari scripts/after-pack.cjs.
+            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg zip --${{ matrix.arch }} -c.mac.hardenedRuntime=false --publish never
+          fi
+          for f in release/PPK-Management-macOS-${{ matrix.arch }}-*; do mv "$f" "${f/macOS-${{ matrix.arch }}/macOS-${{ matrix.label }}}"; done
+          ls -la release
+      - name: Periksa tanda tangan, pasang dari DMG, uji jalan
+        run: |
+          dmg=$(ls release/PPK-Management-macOS-${{ matrix.label }}-*.dmg)
+          mnt=$(hdiutil attach "$dmg" -nobrowse | awk -F'\t' '/\/Volumes\//{print $NF}')
+          cp -R "$mnt/NASKAHDINAS AI.app" /Applications/
+          hdiutil detach "$mnt"
+          codesign --verify --deep --strict --verbose=2 "/Applications/NASKAHDINAS AI.app"
+          if [ "$SIGNED" = "1" ]; then
+            xcrun stapler validate "/Applications/NASKAHDINAS AI.app"
+            spctl -a -vvv "/Applications/NASKAHDINAS AI.app"
+          fi
+          SMOKE_EXE="/Applications/NASKAHDINAS AI.app/Contents/MacOS/NASKAHDINAS AI" node scripts/smoke-e2e.cjs smoke-installed-macos-${{ matrix.label }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pkg-macos-${{ matrix.label }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            smoke-installed-*.json
+          if-no-files-found: ignore
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [package-windows, package-mac, cross-restore]
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: dl, merge-multiple: true }
+      - name: Checksum dan catatan rilis
+        run: |
+          mkdir out
+          find dl -type f \( -name 'PPK-Management-*.exe' -o -name 'PPK-Management-*.dmg' -o -name 'PPK-Management-*.zip' \) -exec cp {} out/ \;
+          (cd out && sha256sum PPK-Management-* > SHA256SUMS.txt)
+          node scripts/release-notes.mjs "$GITHUB_REF_NAME" dl > out/RELEASE-NOTES.md
+      - uses: softprops/action-gh-release@v2.0.8
+        with: { draft: true, body_path: out/RELEASE-NOTES.md, files: out/* }

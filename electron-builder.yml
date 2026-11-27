@@ -1,0 +1,51 @@
+appId: id.naskahdinas.ai
+# productName menentukan folder data OS (userData); jangan diganti tanpa migrasi folder data.
+productName: NASKAHDINAS AI
+copyright: NASKAHDINAS AI
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+asar: true
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+  - "**/node_modules/pdfjs-dist/**"
+npmRebuild: true
+afterPack: scripts/after-pack.cjs
+# Ikon dari build/icon.png (1024x1024); electron-builder membuat .ico dan .icns darinya.
+icon: build/icon.png
+win:
+  target:
+    - { target: nsis, arch: [x64, arm64] }
+    - { target: portable, arch: [x64] }
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: NASKAHDINAS AI
+  deleteAppDataOnUninstall: false
+  language: "1057"
+  artifactName: "PPK-Management-Setup-${version}-${arch}.${ext}"
+portable:
+  artifactName: "PPK-Management-Portable-${version}-${arch}.${ext}"
+mac:
+  # Satu build per arsitektur (Apple Silicon dan Intel) karena better-sqlite3 modul native.
+  target:
+    - { target: dmg, arch: [arm64, x64] }
+    - { target: zip, arch: [arm64, x64] }
+  category: public.app-category.productivity
+  minimumSystemVersion: "13.0"
+  # Rilis produksi: Developer ID + Hardened Runtime + notarisasi (lihat docs/RELEASE.md).
+  # Build tanpa kredensial: CSC_IDENTITY_AUTO_DISCOVERY=false + -c.mac.hardenedRuntime=false; scripts/after-pack.cjs memberi tanda tangan ad-hoc.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  artifactName: "PPK-Management-macOS-${arch}-${version}.${ext}"
+dmg:
+  artifactName: "PPK-Management-macOS-${arch}-${version}.${ext}"
