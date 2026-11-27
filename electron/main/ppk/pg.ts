@@ -100,17 +100,19 @@ export function pgStore(pool: pg.Pool): PpkStore {
 export const PG_TABLES = ['app_users', 'audit_log', 'ppk_user_roles', 'ppk_fiscal_years', 'ppk_units', 'ppk_officials', 'ppk_programs', 'ppk_activities',
   'ppk_funding_sources', 'ppk_budget_accounts', 'ppk_service_categories', 'ppk_service_packages', 'ppk_tax_rates', 'ppk_vendors',
   'ppk_budget_lines', 'ppk_budget_versions', 'ppk_contracts', 'ppk_contract_addendums', 'ppk_contract_schedules', 'ppk_contract_funding_allocations',
-  'ppk_bills', 'ppk_bill_funding', 'ppk_payments', 'ppk_budget_plans', 'ppk_sp2d_records', 'ppk_contract_year_values', 'ppk_agendas', 'ppk_agenda_assignees'] as const;
+  'ppk_bills', 'ppk_bill_funding', 'ppk_payments', 'ppk_budget_plans', 'ppk_sp2d_records', 'ppk_contract_year_values', 'ppk_invitations', 'ppk_files', 'ppk_invitation_extractions', 'ppk_agendas', 'ppk_agenda_assignees',
+  'ppk_user_phones', 'ppk_notifications'] as const;
 
 /** Migrasi SQLite yang berisi tabel PPK (v12 = tabel undangan modul dokumen, tetap lokal). */
-const PG_MIGRATIONS = [8, 9, 10, 11, 13];
+const PG_MIGRATIONS = [8, 9, 10, 11, 13, 14];
 export const PG_SCHEMA_VERSION = PG_MIGRATIONS[PG_MIGRATIONS.length - 1];
 
 /** Satu migrasi SQLite → PostgreSQL: INTEGER → BIGINT, trigger dan data awal SQLite dibuang (trigger ditulis ulang di PG_TRIGGERS). */
 const convert = (v: number) => MIGRATIONS.find((m) => m.version === v)!.sql
   .replace(/CREATE TRIGGER[\s\S]*?\bEND;/g, '')
   .replace(/INSERT INTO[\s\S]*?\);\s*(?=\n|$)/g, '')
-  .replace(/\bINTEGER\b/g, 'BIGINT');
+  .replace(/\bINTEGER\b/g, 'BIGINT')
+  .replace(/\bBLOB\b/g, 'BYTEA');
 
 /**
  * Skema server = migrasi SQLite PPK (satu sumber kolom dan constraint) + trigger PostgreSQL dengan aturan yang sama.
@@ -189,7 +191,11 @@ CREATE TRIGGER trg_ppk_sp2d_upd BEFORE UPDATE ON ppk_sp2d_records FOR EACH ROW E
 /** Trigger PostgreSQL per migrasi, aturan sama dengan trigger SQLite. */
 const PG_TRIGGERS: Record<number, string> = {
   11: TRIGGERS_V8_11,
-  13: `CREATE TRIGGER trg_ppk_agendas_nodel BEFORE DELETE ON ppk_agendas FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Agenda tidak boleh dihapus; batalkan dengan alasan.');`
+  13: `CREATE TRIGGER trg_ppk_agendas_nodel BEFORE DELETE ON ppk_agendas FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Agenda tidak boleh dihapus; batalkan dengan alasan.');`,
+  14: `
+CREATE TRIGGER trg_ppk_inv_nodel BEFORE DELETE ON ppk_invitations FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Undangan tidak boleh dihapus; arsipkan saja.');
+CREATE TRIGGER trg_ppk_files_noupd BEFORE UPDATE OR DELETE ON ppk_files FOR EACH ROW EXECUTE FUNCTION ppk_forbid('File asli tidak boleh diubah atau dihapus.');
+CREATE TRIGGER trg_ppk_ext_noupd BEFORE UPDATE OR DELETE ON ppk_invitation_extractions FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Hasil ekstraksi bersifat append-only.');`
 };
 
 /** Data awal untuk server baru yang tidak diisi dari data lama (sama dengan migrasi v8 SQLite). */

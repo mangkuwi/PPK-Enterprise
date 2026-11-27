@@ -14,6 +14,7 @@ import { ppkReport, reportSheets } from '../main/ppk/reports';
 import { addSp2d, sp2dReport, voidSp2d } from '../main/ppk/sp2d';
 import { agendaPeople, createAgenda, getAgenda, listAgendas, setAgendaStatus, updateAgenda } from '../main/ppk/agenda';
 import { relatedDocuments } from '../main/ppk/documents';
+import { agendaHome, listInvitations } from '../main/ppk/agendaHome';
 import { sqliteStore } from '../main/ppk/store';
 import { peekPpkActor, ppkActor, ppkStore } from '../main/ppk/server';
 import { registerPpkServerHandlers } from './ppkServer';
@@ -163,6 +164,8 @@ export function registerPpkHandlers() {
   handle('ppk:agendas:update', z.object({ id: S.id, version: z.number().int().min(1), values: agendaInput }), ({ id, version, values }) => updateAgenda(st(), actor(), id, version, values));
   handle('ppk:agendas:setStatus', z.object({ id: S.id, status: z.enum(['selesai', 'dibatalkan']), reason: text(500) }), ({ id, status, reason }) => setAgendaStatus(st(), actor(), id, status, reason));
   handle('ppk:agendas:people', S.empty, () => agendaPeople(st(), actor()));
+  handle('ppk:agendas:home', S.empty, () => agendaHome(st(), actor()));
+  handle('ppk:invitations:list', z.object({ status: z.enum(['baru', 'diproses', 'menunggu_verifikasi', 'dikonversi', 'gagal', 'ditolak', 'diarsipkan']).optional() }), (f) => listInvitations(st(), actor(), f));
   handle('ppk:sp2d:void', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidSp2d(st(), actor(), id, reason));
 }
 

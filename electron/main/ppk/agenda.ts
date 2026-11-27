@@ -47,12 +47,13 @@ async function attach(s: PpkStore, rows: Array<Omit<Agenda, 'pic' | 'support'>>)
   });
 }
 
-export async function listAgendas(s: PpkStore, actor: Actor, f: { from?: string; to?: string; include_cancelled?: boolean } = {}): Promise<Agenda[]> {
+export async function listAgendas(s: PpkStore, actor: Actor, f: { from?: string; to?: string; include_cancelled?: boolean; ids?: string[] } = {}): Promise<Agenda[]> {
   await requirePpk(s, actor, 'read');
   const w: string[] = []; const p: string[] = [];
   if (f.from) { w.push('agenda_date >= ?'); p.push(f.from); }
   if (f.to) { w.push('agenda_date <= ?'); p.push(f.to); }
-  if (!f.include_cancelled) w.push("status <> 'dibatalkan'");
+  if (f.ids) { if (!f.ids.length) return []; w.push(`id IN (${f.ids.map(() => '?').join(',')})`); p.push(...f.ids); }
+  if (!f.include_cancelled) w.push("status <> 'dibatalkan'", 'archived_at IS NULL');
   return attach(s, await s.all(`SELECT * FROM ppk_agendas ${w.length ? `WHERE ${w.join(' AND ')}` : ''} ORDER BY agenda_date, start_time, title`, p));
 }
 

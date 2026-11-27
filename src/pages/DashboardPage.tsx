@@ -1,14 +1,20 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CalendarDays, FileClock, FilePlus2, FileText, Files, Hash, Mail, Pencil, Send, Star } from 'lucide-react';
+import { CalendarCheck, CalendarDays, CalendarRange, ClipboardCheck, Clock, FileClock, FilePlus2, FileText, Files, Hash, ListTodo, Mail, MessageCircle, Pencil, Plus, Send, Star, UserX } from 'lucide-react';
 import { Page } from '@/components/layout/Page';
 import { Button } from '@/components/ui/button';
-import { Badge, Card, Empty, PageHeader, STATUS_LABEL, STATUS_TONE } from '@/components/ui/card';
+import { Badge, Card, Empty, STATUS_LABEL, STATUS_TONE } from '@/components/ui/card';
+import { Dialog } from '@/components/ui/dialog';
+import { PpkGate } from '@/features/ppk/PpkGate';
+import { usePpkAccess } from '@/features/ppk/usePpkAccess';
+import { AgendaForm, agendaToInput } from '@/features/ppk/AgendaForm';
+import { AgendaCalendar, AgendaDetail, AgendaRow } from '@/features/ppk/AgendaViews';
 import { useAsync } from '@/hooks/useAsync';
 import { api } from '@/services/api';
 import { formatDateTime } from '@/lib/utils';
 import { REGISTER_PATH } from '@shared/numbering';
-import { dayName } from '@shared/ppk/agenda';
-import { formatDateID } from '@shared/date';
+import { calendarDays, dayName, type Agenda, type AgendaInput, type CalendarView } from '@shared/ppk/agenda';
+import { formatDateID, jakartaToday } from '@shared/date';
 
 function Stat({ icon: Icon, label, value, hint, to }: { icon: typeof Files; label: string; value: string | number; hint?: string; to?: string }) {
   const body = (
@@ -21,37 +27,134 @@ function Stat({ icon: Icon, label, value, hint, to }: { icon: typeof Files; labe
   return to ? <Link to={to}>{body}</Link> : body;
 }
 
+const EMPTY_AGENDA: AgendaInput = { title: '', letter_number: '', source_document_id: null, agenda_date: '', start_time: '', end_time: '', location: '',
+  meeting_url: '', organizer: '', agenda_text: '', notes: '', pic_user_id: null, support_user_ids: [] };
+
+function Count({ icon: Icon, label, value, to, tone = 'navy' }: { icon: typeof Files; label: string; value: number | undefined; to: string; tone?: 'navy' | 'amber' }) {
+  return (
+    <Link to={to} className="block min-w-0">
+      <Card className="flex h-full items-center gap-3 p-3 transition-shadow hover:shadow-md">
+        <div className={tone === 'amber' ? 'grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-800' : 'grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-navy-100 text-navy-800'}><Icon size={20} /></div>
+        <div className="min-w-0"><div className="text-2xl font-bold leading-tight text-navy-900">{value ?? '–'}</div><div className="text-xs leading-tight text-slate-600">{label}</div></div>
+      </Card>
+    </Link>
+  );
+}
+
+const Box = ({ title, link, children, id }: { title: React.ReactNode; link?: React.ReactNode; children: React.ReactNode; id?: string }) => (
+  <Card className="min-w-0 p-4" id={id}>
+    <div className="mb-2 flex items-center justify-between gap-2 font-semibold text-navy-900"><span className="flex items-center gap-2">{title}</span>{link}</div>
+    {children}
+  </Card>
+);
+
+/** Beranda: Agenda PPK sebagai isi utama. Semua angka dari query database (ppk:agendas:home). */
+function AgendaHomeSection() {
+  const navigate = useNavigate();
+  const { can } = usePpkAccess();
+  const home = useAsync(() => api.ppk.agendas.home(), []);
+  const today = home.data?.today ?? jakartaToday();
+  const [view, setView] = useState<CalendarView>('bulan');
+  const [cursor, setCursor] = useState(today);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [open, setOpen] = useState<Agenda | null>(null);
+  const [form, setForm] = useState<{ initial: AgendaInput; existing?: Agenda } | null>(null);
+  const days = calendarDays(view, cursor);
+  const cal = useAsync(() => api.ppk.agendas.list({ from: days[0], to: days[days.length - 1] }), [days[0], days[days.length - 1]]);
+  const h = home.data;
+  const listed = (cal.data ?? []).filter((a) => (selected ? a.agenda_date === selected : true));
+  const reload = () => { home.reload(); cal.reload(); };
+  const pendingTotal = h ? h.counts.pending_verification + h.counts.pending_assignment + h.needs_report.length : undefined;
+
+  return (
+    <>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold uppercase tracking-wider text-navy-600">PPK Management</div>
+          <h1 className="text-2xl font-bold text-navy-900">Agenda PPK</h1>
+          <div className="text-sm text-slate-600">{dayName(today)}, {formatDateID(today)} · WIB</div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {can('write') && <Button onClick={() => setForm({ initial: { ...EMPTY_AGENDA, agenda_date: selected ?? today } })}><Plus size={16} /> Tambah Agenda</Button>}
+          <Button variant="outline" onClick={() => navigate('/ppk/kotak-masuk')}><MessageCircle size={16} /> Kotak Masuk WhatsApp{h && h.counts.wa_incoming > 0 && <Badge tone="amber">{h.counts.wa_incoming}</Badge>}</Button>
+          <Button variant="outline" onClick={() => document.getElementById('kalender')?.scrollIntoView({ behavior: 'smooth' })}><CalendarDays size={16} /> Kalender</Button>
+        </div>
+      </div>
+      {home.error && <div className="mb-3 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800" role="alert">{home.error}</div>}
+
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <Count icon={CalendarRange} label="Agenda bulan ini" value={h?.counts.month_total} to="/ppk/agenda" />
+        <Count icon={CalendarCheck} label="Agenda hari ini" value={h?.counts.today_total} to="/ppk/agenda" />
+        <Count icon={MessageCircle} label="Undangan WhatsApp masuk" value={h?.counts.wa_incoming} to="/ppk/kotak-masuk?status=baru" />
+        <Count icon={ClipboardCheck} label="Menunggu verifikasi" value={h?.counts.pending_verification} to="/ppk/kotak-masuk?status=menunggu_verifikasi" tone="amber" />
+        <Count icon={UserX} label="Belum ditugaskan" value={h?.counts.pending_assignment} to="/ppk/agenda" tone="amber" />
+      </div>
+
+      <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <Box id="kalender" title={<><CalendarDays size={18} /> Kalender</>}>
+          <AgendaCalendar view={view} setView={setView} cursor={cursor} setCursor={setCursor} today={today} agendas={cal.data ?? []}
+            selected={selected} onSelect={(d) => { setSelected(d); if (d && view === 'hari') setCursor(d); }} onOpen={setOpen} />
+          {cal.error && <p className="mt-2 text-sm text-red-700">{cal.error}</p>}
+        </Box>
+        <Box title={selected ? `Agenda ${dayName(selected)}, ${formatDateID(selected)}` : 'Agenda di kalender ini'}
+          link={selected && <button className="text-sm font-normal text-navy-600 hover:underline" onClick={() => setSelected(null)}>Tampilkan semua</button>}>
+          {listed.length ? <ul className="max-h-[520px] divide-y divide-slate-100 overflow-y-auto">{listed.map((a) => <AgendaRow key={a.id} a={a} onOpen={setOpen} showDate={!selected} />)}</ul>
+            : <Empty>{selected ? 'Tidak ada agenda pada tanggal ini.' : 'Belum ada agenda pada rentang ini.'}</Empty>}
+        </Box>
+      </div>
+
+      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-4">
+        <Box title={<><Clock size={16} /> Agenda hari ini</>}>
+          {h?.today_agendas.length ? <ul className="divide-y divide-slate-100">{h.today_agendas.map((a) => <AgendaRow key={a.id} a={a} onOpen={setOpen} />)}</ul> : <Empty>Tidak ada agenda hari ini.</Empty>}
+        </Box>
+        <Box title={<><CalendarRange size={16} /> 7 hari ke depan</>} link={<Link to="/ppk/agenda" className="text-sm font-normal text-navy-600 hover:underline">Semua</Link>}>
+          {h?.upcoming.length ? <ul className="divide-y divide-slate-100">{h.upcoming.map((a) => <AgendaRow key={a.id} a={a} onOpen={setOpen} showDate />)}</ul> : <Empty>Tidak ada agenda 7 hari ke depan.</Empty>}
+        </Box>
+        <Box title={<><MessageCircle size={16} /> Kotak Masuk WhatsApp</>} link={<Link to="/ppk/kotak-masuk" className="text-sm font-normal text-navy-600 hover:underline">Buka</Link>}>
+          <div className="grid grid-cols-2 gap-2 text-center">
+            {([['Undangan baru', h?.inbox.baru, 'baru'], ['Menunggu verifikasi', h?.inbox.menunggu_verifikasi, 'menunggu_verifikasi'],
+              ['Gagal diproses', h?.inbox.gagal, 'gagal'], ['Dikonversi bulan ini', h?.inbox.dikonversi_bulan_ini, 'dikonversi']] as const).map(([l, v, st]) => (
+              <Link key={st} to={`/ppk/kotak-masuk?status=${st}`} className="rounded-lg border border-slate-200 p-2 hover:border-navy-300 hover:bg-slate-50">
+                <div className="text-xl font-bold text-navy-900">{v ?? '–'}</div><div className="text-xs text-slate-600">{l}</div>
+              </Link>))}
+          </div>
+        </Box>
+        <Box title={<><ListTodo size={16} /> Tindakan tertunda{pendingTotal ? <Badge tone="amber">{pendingTotal}</Badge> : null}</>}>
+          {h && !pendingTotal ? <Empty>Tidak ada tindakan tertunda.</Empty> : (
+            <ul className="space-y-3 text-sm">
+              {!!h?.awaiting_verification.length && <li><div className="mb-1 text-xs font-semibold uppercase text-slate-500">Undangan menunggu verifikasi</div>
+                {h.awaiting_verification.map((i) => <Link key={i.id} to="/ppk/kotak-masuk?status=menunggu_verifikasi" className="block truncate text-navy-800 hover:underline">{i.sender_name || i.sender_phone || 'Unggah manual'} · {formatDateTime(i.received_at)}</Link>)}</li>}
+              {!!h?.unassigned.length && <li><div className="mb-1 text-xs font-semibold uppercase text-slate-500">Agenda tanpa penanggung jawab</div>
+                {h.unassigned.map((a) => <button key={a.id} onClick={() => setOpen(a)} className="block w-full truncate text-left text-navy-800 hover:underline">{formatDateID(a.agenda_date)} · {a.title}</button>)}</li>}
+              {!!h?.needs_report.length && <li><div className="mb-1 text-xs font-semibold uppercase text-slate-500">Kegiatan lewat, belum ditutup / dilaporkan</div>
+                {h.needs_report.map((a) => <button key={a.id} onClick={() => setOpen(a)} className="block w-full truncate text-left text-navy-800 hover:underline">{formatDateID(a.agenda_date)} · {a.title}</button>)}</li>}
+              {!!h?.upcoming.length && <li className="text-slate-600">{h.upcoming.length} kegiatan dalam 7 hari ke depan.</li>}
+            </ul>)}
+        </Box>
+      </div>
+
+      <Dialog open={!!open} onOpenChange={(o) => { if (!o) setOpen(null); }}>
+        {open && <AgendaDetail a={open} canEdit={can('write')} onEdit={() => { setForm({ initial: agendaToInput(open), existing: open }); setOpen(null); }} />}
+      </Dialog>
+      <Dialog open={!!form} onOpenChange={(o) => { if (!o) setForm(null); }}>
+        {form && <AgendaForm initial={form.initial} existing={form.existing} onSaved={() => { setForm(null); reload(); }} />}
+      </Dialog>
+    </>
+  );
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const stats = useAsync(() => api.stats(), []);
   const reg = useAsync(() => api.numbering.summary(new Date().getFullYear()), []);
-  const today = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD waktu lokal
-  // Agenda PPK selalu di atas; tanpa akses PPK kartu menampilkan alasannya.
-  const agendas = useAsync(() => api.ppk.agendas.list({ from: today }), []);
   const s = stats.data;
   const totals = (reg.data ?? []).reduce((a, x) => ({ available: a.available + x.available - x.review, assigned: a.assigned + x.assigned, issued: a.issued + x.issued }), { available: 0, assigned: 0, issued: 0 });
   return (
     <Page>
-      <PageHeader title="Dashboard" subtitle="Ringkasan aktivitas pembuatan naskah dinas. Semua angka dibaca dari data lokal aplikasi." />
+      <PpkGate><AgendaHomeSection /></PpkGate>
+
+      <h2 className="mb-3 mt-8 border-t border-slate-200 pt-6 text-lg font-semibold text-navy-900">Naskah Dinas</h2>
       {(stats.error || reg.error) && <div className="mb-3 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800">{stats.error ?? reg.error}</div>}
-
-      <Card className="mb-6 border-navy-200 p-4">
-        <div className="mb-3 flex items-center justify-between font-semibold text-navy-900">
-          <span className="flex items-center gap-2"><CalendarDays size={18} /> Agenda mendatang</span>
-          <Link to="/ppk/agenda" className="text-sm font-normal text-navy-600 hover:underline">Lihat semua agenda</Link>
-        </div>
-        {agendas.error ? <p className="text-sm text-slate-600">{agendas.error} Buka <Link to="/ppk/agenda" className="text-navy-600 hover:underline">Agenda PPK</Link>.</p>
-          : agendas.data && !agendas.data.length ? <Empty>Belum ada agenda. Buka surat undangan lalu klik <b>Buat Agenda</b> di editor.</Empty>
-          : <ul className="divide-y divide-slate-100 text-sm">{agendas.data?.slice(0, 5).map((a) => (
-            <li key={a.id} className="flex flex-wrap items-start justify-between gap-2 py-2">
-              <div className="min-w-0">
-                <div className="font-medium text-navy-900">{a.agenda_date === today && <Badge tone="amber">Hari ini</Badge>} {a.title}</div>
-                <div className="text-slate-600">{[a.location, a.pic && `PJ: ${a.pic.name}`, a.support.length > 0 && `Pendukung: ${a.support.map((x) => x.name).join(', ')}`].filter(Boolean).join(' · ')}</div>
-              </div>
-              <span className="whitespace-nowrap text-slate-700">{dayName(a.agenda_date)}, {formatDateID(a.agenda_date)}{a.start_time && ` · ${a.start_time}${a.end_time ? `–${a.end_time}` : ''}`}</span>
-            </li>))}</ul>}
-      </Card>
-
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Stat icon={Files} label="Total dokumen" value={s?.totalDocuments ?? '–'} hint={s ? `${s.documentsThisMonth} dibuat bulan ini` : undefined} to="/archive" />
         <Stat icon={FileClock} label="Draft aktif" value={s?.activeDrafts ?? '–'} to="/archive?status=draft" />

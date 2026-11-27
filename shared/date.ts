@@ -13,3 +13,9 @@ export function todayISO(d = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
+
+/** Tanggal hari ini (YYYY-MM-DD) di Asia/Jakarta, apa pun zona waktu komputer. */
+export const jakartaToday = (d = new Date()) => d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+
+/** Tambah n hari ke tanggal YYYY-MM-DD (kalender, tanpa zona waktu). */
+export const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);

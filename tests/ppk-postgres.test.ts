@@ -18,6 +18,7 @@ import { addPayment, getBill, listBills, saveBill, setBillStatus, voidPayment } 
 import { addSp2d, sp2dReport } from '../electron/main/ppk/sp2d';
 import { listPpkUsers } from '../electron/main/ppk/access';
 import { createAgenda, listAgendas } from '../electron/main/ppk/agenda';
+import { agendaHome, listInvitations } from '../electron/main/ppk/agendaHome';
 import {
   copyIntoServer, createPool, createServerUser, dumpServer, initFreshServer, installPgSchema, listServerUsers, pgStatus, pgStore, PG_TABLES,
   serverLogin, sqliteSource, toPg, pgSchemaSql, PG_SCHEMA_VERSION, type PgConfig
@@ -72,6 +73,8 @@ describe.skipIf(!URL_)('PostgreSQL', () => {
     const line = (await listBudgetLines(lite, admin, { fiscal_year_id: fy }))[0];
     await setBudgetPlan(lite, admin, line.id, [{ month: '2026-01', amount: 100_000_000 }, { month: '2026-02', amount: 200_000_000 }]);
     await createAgenda(lite, admin, agenda);
+    db.prepare("INSERT INTO ppk_invitations (id, source, wa_message_id, received_at, status, created_by, created_at, updated_by, updated_at) VALUES ('inv1','whatsapp','wamid.1','2026-12-01T01:00:00Z','menunggu_verifikasi','x','t','x','t')").run();
+    db.prepare("INSERT INTO ppk_files (id, owner_type, owner_id, filename, mime_type, size_bytes, sha256, content, created_by, created_at) VALUES ('f1','undangan','inv1','u.pdf','application/pdf',4,?,?,'x','t')").run('b'.repeat(64), Buffer.from([0, 1, 2, 255]));
 
     pool = await freshPool(); srv = pgStore(pool);
   }, 60_000);
@@ -111,6 +114,9 @@ describe.skipIf(!URL_)('PostgreSQL', () => {
     for (const cutoff of ['2026-01', '2026-03', '2026-12']) for (const ext of [false, true]) await same((s) => ppkReport(s, admin, fy, cutoff, ext));
     await same((s) => sp2dReport(s, admin, fy));
     await same((s) => listAgendas(s, admin, { include_cancelled: true }));
+    await same((s) => agendaHome(s, admin, '2026-12-07'));
+    await same((s) => listInvitations(s, admin));
+    expect((await pool.query("SELECT content FROM ppk_files WHERE id = 'f1'")).rows[0].content).toEqual(Buffer.from([0, 1, 2, 255]));
     // Server yang sudah berisi tidak bisa ditimpa.
     await expect(copyIntoServer(pool, sqliteSource(db))).rejects.toThrow(/sudah berisi data/);
   });

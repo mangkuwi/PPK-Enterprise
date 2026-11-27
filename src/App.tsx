@@ -26,6 +26,7 @@ import ReportsPage from './pages/ppk/ReportsPage';
 import Sp2dPage from './pages/ppk/Sp2dPage';
 import ServerPage from './pages/ppk/ServerPage';
 import AgendaPage from './pages/ppk/AgendaPage';
+import InboxPage from './pages/ppk/InboxPage';
 
 export default function App() {
   return (
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="/ppk/pengaturan" element={<PpkSettingsPage />} />
           <Route path="/ppk/server" element={<ServerPage />} />
           <Route path="/ppk/agenda" element={<AgendaPage />} />
+          <Route path="/ppk/kotak-masuk" element={<InboxPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<DashboardPage />} />
         </Routes>

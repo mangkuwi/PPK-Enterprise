@@ -16,7 +16,7 @@ import type { Bill, BillDetail, BillFilter, BillInput, PaymentInput } from '@sha
 import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, PlanRow, Warned } from '@shared/ppk/budget';
 import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow, YearValueRow } from '@shared/ppk/contracts';
 import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
-import type { Agenda, AgendaInput } from '@shared/ppk/agenda';
+import type { Agenda, AgendaHome, AgendaInput, InvitationRow, InvitationStatus } from '@shared/ppk/agenda';
 import type { DeliveryLog, Recipient } from '@shared/whatsapp';
 
 export interface PpkServerConf { host: string; port: number; database: string; user: string; password: string }
@@ -218,13 +218,17 @@ export const api = {
       void: (id: string, reason: string) => call<void>('ppk:sp2d:void', { id, reason })
     },
     relatedDocuments: (numbers: string[]) => call<RelatedDocument[]>('ppk:documents:related', { numbers }),
+    invitations: {
+      list: (status?: InvitationStatus) => call<InvitationRow[]>('ppk:invitations:list', status ? { status } : {})
+    },
     agendas: {
       list: (f: { from?: string; to?: string; include_cancelled?: boolean } = {}) => call<Agenda[]>('ppk:agendas:list', f),
       get: (id: string) => call<Agenda>('ppk:agendas:get', { id }),
       create: (v: AgendaInput) => call<Agenda>('ppk:agendas:create', v),
       update: (id: string, version: number, values: AgendaInput) => call<Agenda>('ppk:agendas:update', { id, version, values }),
       setStatus: (id: string, status: 'selesai' | 'dibatalkan', reason = '') => call<Agenda>('ppk:agendas:setStatus', { id, status, reason }),
-      people: () => call<Array<{ id: string; name: string }>>('ppk:agendas:people')
+      people: () => call<Array<{ id: string; name: string }>>('ppk:agendas:people'),
+      home: () => call<AgendaHome>('ppk:agendas:home')
     },
     server: {
       status: () => call<PpkServerStatus>('ppk:server:status'),

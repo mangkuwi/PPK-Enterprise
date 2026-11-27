@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Archive, BarChart3, Scale, BookOpen, Building2, FileSpreadsheet, FileSignature, Receipt, Server, Wallet, CalendarDays, SlidersHorizontal, ChevronsLeft, ChevronsRight, FileClock, FilePlus2, FileSearch, FileText, FileUp, Files, Hash, History, LayoutDashboard, Library, Mail, Settings, UserCircle2, Wand2, type LucideIcon } from 'lucide-react';
+import { Archive, BarChart3, Scale, BookOpen, Building2, FileSpreadsheet, FileSignature, Receipt, Server, Wallet, CalendarDays, MessageCircle, SlidersHorizontal, ChevronsLeft, ChevronsRight, FileClock, FilePlus2, FileSearch, FileText, FileUp, Files, Hash, History, LayoutDashboard, Library, Mail, Settings, UserCircle2, Wand2, type LucideIcon } from 'lucide-react';
 import { useActor } from '@/features/numbering/NumberingContext';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +28,7 @@ const groups: Array<{ title: string; items: Item[] }> = [
   ] },
   { title: 'PPK Management', items: [
     { to: '/ppk/agenda', label: 'Agenda PPK', icon: CalendarDays },
+    { to: '/ppk/kotak-masuk', label: 'Kotak Masuk WhatsApp', icon: MessageCircle },
     { to: '/ppk/laporan', label: 'Laporan & Prognosis', icon: BarChart3 },
     { to: '/ppk/anggaran', label: 'Database Anggaran', icon: Wallet },
     { to: '/ppk/kontrak', label: 'Database Kontrak', icon: FileSignature },
