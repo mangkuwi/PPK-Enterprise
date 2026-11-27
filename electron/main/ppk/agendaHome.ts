@@ -7,6 +7,7 @@ import { listAgendas } from './agenda';
 
 const OPEN = "a.status = 'terjadwal' AND a.archived_at IS NULL AND a.deleted_at IS NULL";
 const NO_PIC = "NOT EXISTS (SELECT 1 FROM ppk_agenda_assignees x WHERE x.agenda_id = a.id AND x.role = 'utama')";
+const HAS_PDF = "EXISTS (SELECT 1 FROM ppk_files f WHERE f.owner_type = 'undangan' AND f.owner_id = i.id AND f.mime_type = 'application/pdf')";
 const n = async (s: PpkStore, sql: string, p: Array<string | number> = []) => Number((await s.get<{ n: number }>(sql, p))?.n ?? 0);
 
 /** Undangan masuk, terbaru dulu. Saring per status atau per kategori Kotak Masuk. */
@@ -43,18 +44,20 @@ export async function agendaHome(s: PpkStore, actor: Actor, today = jakartaToday
       n(s, "SELECT COUNT(*) AS n FROM ppk_invitations WHERE status = 'baru'"),
       n(s, "SELECT COUNT(*) AS n FROM ppk_invitations WHERE status = 'menunggu_verifikasi'"),
       n(s, "SELECT COUNT(*) AS n FROM ppk_invitations WHERE status = 'gagal'"),
-      n(s, "SELECT COUNT(*) AS n FROM ppk_invitations WHERE status = 'dikonversi' AND verified_at >= ?", [monthStartUtc])
+      n(s, "SELECT COUNT(*) AS n FROM ppk_invitations WHERE status = 'dikonversi' AND verified_at >= ?", [monthStartUtc]),
+      n(s, `SELECT COUNT(*) AS n FROM ppk_invitations i WHERE i.status IN ('baru','diproses','menunggu_verifikasi') AND ${HAS_PDF}`),
+      n(s, `SELECT COUNT(*) AS n FROM ppk_invitations i WHERE i.status IN ('baru','diproses','menunggu_verifikasi') AND NOT EXISTS (SELECT 1 FROM ppk_files f WHERE f.owner_type = 'undangan' AND f.owner_id = i.id)`),
+      n(s, "SELECT COUNT(*) AS n FROM ppk_invitations WHERE status IN ('dikonversi','ditolak') AND updated_at >= ?", [monthStartUtc])
     ])
   ]);
   return {
     today,
     counts: { month_total: counts[0], today_total: counts[1], wa_incoming: counts[2], pending_verification: counts[3], pending_assignment: counts[4] },
-    inbox: { baru: inbox[0], menunggu_verifikasi: inbox[1], gagal: inbox[2], dikonversi_bulan_ini: inbox[3] },
+    inbox: { baru: inbox[0], menunggu_verifikasi: inbox[1], gagal: inbox[2], dikonversi_bulan_ini: inbox[3], belum_pdf: inbox[4], belum_teks: inbox[5], diproses_bulan_ini: inbox[6] },
     today_agendas: await listAgendas(s, actor, { from: today, to: today }),
     upcoming: await listAgendas(s, actor, { from: addDays(today, 1), to: addDays(today, 7) }),
     awaiting_verification: await listInvitations(s, actor, { status: 'menunggu_verifikasi', limit: 5 }),
     unassigned: await pick(`SELECT a.id FROM ppk_agendas a WHERE ${OPEN} AND a.agenda_date >= ? AND ${NO_PIC} ORDER BY a.agenda_date, a.start_time LIMIT 5`, [today]),
-    // Kegiatan lewat yang belum ditutup: perlu ditandai selesai (laporan rapat menyusul di Fase 6).
     // Agenda yang sudah lewat (belum ditutup atau sudah selesai) tanpa file laporan rapat.
     needs_report: await pick(`SELECT a.id FROM ppk_agendas a WHERE a.status <> 'dibatalkan' AND a.archived_at IS NULL AND a.deleted_at IS NULL AND a.agenda_date < ?
       AND NOT EXISTS (SELECT 1 FROM ppk_files f WHERE f.owner_type = 'laporan' AND f.owner_id = a.id) ORDER BY a.agenda_date DESC LIMIT 5`, [today])

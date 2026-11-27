@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, BarChart3, CalendarDays, FilePlus2, FileSignature, Hash, ListTodo, MapPin, Receipt, Star, TrendingUp, Video, Zap } from 'lucide-react';
+import { ArrowRight, BarChart3, CalendarDays, FilePlus2, FileSignature, Hash, ListTodo, MapPin, MessageCircle, Receipt, Star, TrendingUp, Video, Zap } from 'lucide-react';
 import { Page } from '@/components/layout/Page';
 import { Button } from '@/components/ui/button';
 import { Badge, Card, Empty, STATUS_LABEL, STATUS_TONE } from '@/components/ui/card';
@@ -15,7 +15,7 @@ import { api } from '@/services/api';
 import { cn, formatDateTime } from '@/lib/utils';
 import { addDays, formatDateID, jakartaToday } from '@shared/date';
 import { dashboardYear, programProgress } from '@shared/dashboard';
-import { calendarDays, dayName, focusAgenda, joinLabel, liveState, startsInText, type Agenda } from '@shared/ppk/agenda';
+import { calendarDays, dayName, focusAgenda, joinLabel, liveState, startsInText, type Agenda, type AgendaHome } from '@shared/ppk/agenda';
 import { formatRupiah } from '@shared/ppk/money';
 
 /** Jam WIB 'HH:MM', diperbarui tiap 30 detik. */
@@ -64,6 +64,34 @@ function AgendaCalendarPanel({ today, upcoming }: { today: string; upcoming: Age
         <ul className="divide-y divide-slate-100">{shown.map((a) => (
           <li key={a.id}><Link to={`/ppk/agenda/${a.id}`} className="flex gap-3 py-1.5 text-sm hover:bg-slate-50">
             <span className="w-24 shrink-0 font-medium text-navy-900">{sel ? timeText(a) : shortDate(a.agenda_date)}</span><span className="min-w-0 flex-1 truncate">{!sel && a.start_time && `${a.start_time} · `}{a.title}</span></Link></li>))}</ul>
+      </div>
+    </Panel>
+  );
+}
+
+/** Kotak Masuk WhatsApp dan tindakan tertunda. Semua angka dari agendaHome (query), tidak ada yang disimpan. */
+function InboxActionsPanel({ h }: { h: AgendaHome }) {
+  const tiles: Array<[string, number, string, string]> = [
+    ['Pesan baru', h.inbox.baru, '/ppk/kotak-masuk?kategori=baru', 'bg-blue-50 text-blue-800'],
+    ['PDF belum diproses', h.inbox.belum_pdf, '/ppk/kotak-masuk?kategori=belum', 'bg-amber-50 text-amber-800'],
+    ['Teks belum diproses', h.inbox.belum_teks, '/ppk/kotak-masuk?kategori=belum', 'bg-amber-50 text-amber-800'],
+    ['Diproses bulan ini', h.inbox.diproses_bulan_ini, '/ppk/kotak-masuk?kategori=sudah', 'bg-emerald-50 text-emerald-800']
+  ];
+  const todo: Array<[string, string, string]> = [
+    ...h.awaiting_verification.map((i): [string, string, string] => [`/ppk/kotak-masuk/${i.id}`, 'Verifikasi undangan', i.sender_name || i.sender_phone || 'Unggah manual']),
+    ...h.unassigned.map((a): [string, string, string] => [`/ppk/agenda/${a.id}`, 'Belum ada penanggung jawab', `${shortDate(a.agenda_date)} · ${a.title}`]),
+    ...h.needs_report.map((a): [string, string, string] => [`/ppk/agenda/${a.id}`, 'Laporan rapat belum ada', `${shortDate(a.agenda_date)} · ${a.title}`])
+  ];
+  return (
+    <Panel icon={MessageCircle} title="Kotak Masuk WhatsApp" to="/ppk/kotak-masuk">
+      <div className="grid grid-cols-2 gap-2">{tiles.map(([l, n, to, c]) => (
+        <Link key={l} to={to} className={cn('rounded-lg p-3 transition hover:brightness-95', c)}><div className="text-2xl font-bold leading-tight">{n}</div><div className="text-xs font-medium">{l}</div></Link>))}</div>
+      {h.inbox.gagal > 0 && <Link to="/ppk/kotak-masuk?kategori=gagal" className="mt-2 block text-sm text-red-700 hover:underline">{h.inbox.gagal} pesan gagal diproses, minta pengirim mengirim ulang.</Link>}
+      <div className="mt-3 border-t border-slate-100 pt-2">
+        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Tindakan tertunda</div>
+        {!todo.length && <p className="text-sm text-slate-500">Tidak ada tindakan tertunda.</p>}
+        <ul className="divide-y divide-slate-100">{todo.map(([to, kind, what]) => (
+          <li key={`${kind}${to}`}><Link to={to} className="flex gap-2 py-1.5 text-sm hover:bg-slate-50"><span className="w-44 shrink-0 font-medium text-amber-800">{kind}</span><span className="min-w-0 flex-1 truncate">{what}</span></Link></li>))}</ul>
       </div>
     </Panel>
   );
@@ -172,6 +200,8 @@ export default function DashboardPage() {
 
         <div className="space-y-5">
           {ppk && <AgendaCalendarPanel today={today} upcoming={h?.upcoming ?? []} />}
+
+          {ppk && h && <InboxActionsPanel h={h} />}
 
           {ppk && <Panel icon={ListTodo} title="To Do List"><TodoList today={today} /></Panel>}
 
