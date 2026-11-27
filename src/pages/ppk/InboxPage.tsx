@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CalendarPlus, FileUp, MessageCircle, Paperclip, Upload } from 'lucide-react';
+import { CalendarPlus, FileUp, MessageCircle, Paperclip, RefreshCw, Settings2, Upload } from 'lucide-react';
+import { Input } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { errMsg, useFeedback } from '@/components/ui/feedback';
@@ -20,6 +21,40 @@ const FILTERS: Array<[InvitationStatus | '', string]> = [['', 'Semua pesan'], ['
 const TONE: Record<InvitationStatus, 'navy' | 'amber' | 'green' | 'red' | 'slate'> = {
   baru: 'navy', diproses: 'slate', menunggu_verifikasi: 'amber', dikonversi: 'green', gagal: 'red', ditolak: 'slate', diarsipkan: 'slate'
 };
+
+/** Status Gateway WhatsApp di VPS. Admin PPK mengatur alamat dan kunci API; pesan ditarik otomatis tiap 60 detik. */
+function GatewayPanel({ admin, onSynced }: { admin: boolean; onSynced: () => void }) {
+  const st = useAsync(() => api.ppk.gateway.status(), []);
+  const { toast } = useFeedback();
+  const [edit, setEdit] = useState(false);
+  const [url, setUrl] = useState(''); const [key, setKey] = useState(''); const [busy, setBusy] = useState(false);
+  const run = async (fn: () => Promise<string>) => {
+    setBusy(true);
+    try { toast(await fn(), 'success'); st.reload(); onSynced(); } catch (e) { toast(errMsg(e), 'error'); } finally { setBusy(false); }
+  };
+  const save = () => run(async () => { const r = await api.ppk.gateway.configure(url, key); setEdit(false); setKey('');
+    return `Gateway tersambung. ${r.messages} pesan tersimpan di Gateway${r.last_webhook ? '' : '; belum pernah menerima webhook dari Meta'}.`; });
+  const sync = () => run(async () => { const r = await api.ppk.gateway.sync(); if (!r.ok) throw new Error(r.error); return r.added ? `${r.added} undangan baru dari WhatsApp.` : 'Tidak ada pesan baru.'; });
+  const g = st.data; const ready = !!g?.url && g.has_key;
+  return (
+    <div className={cn('mb-3 rounded-md border p-3 text-sm', ready && g?.last?.ok !== false ? 'border-slate-200 bg-white' : 'border-amber-300 bg-amber-50 text-amber-900')} role="status">
+      {!edit && <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-0 flex-1">
+          {!ready ? 'Gateway WhatsApp belum diatur, jadi belum ada pesan yang masuk otomatis. Setelah Gateway terpasang di VPS dan nomor WhatsApp Business dihubungkan, isi alamat dan kunci API-nya di sini.'
+            : <>Gateway: <b>{g.url}</b> · ditarik otomatis tiap 60 detik{g.last && <> · terakhir {formatDateTime(g.last.at)}{g.last.ok ? '' : <span className="text-red-700"> · gagal: {g.last.error}</span>}</>}</>}
+        </div>
+        {ready && <Button size="sm" variant="outline" disabled={busy} onClick={sync}><RefreshCw size={14} /> Tarik sekarang</Button>}
+        {admin && <Button size="sm" variant="ghost" onClick={() => { setUrl(g?.url ?? ''); setEdit(true); }}><Settings2 size={14} /> {ready ? 'Ubah' : 'Atur Gateway'}</Button>}
+      </div>}
+      {edit && <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+        <Input aria-label="Alamat Gateway" placeholder="https://gateway.kantor.go.id" value={url} onChange={(e) => setUrl(e.target.value)} />
+        <Input aria-label="Kunci API" type="password" autoComplete="off" placeholder={g?.has_key ? 'Kunci tersimpan (kosongkan bila tetap)' : 'Kunci API (GATEWAY_API_KEY)'} value={key} onChange={(e) => setKey(e.target.value)} />
+        <Button disabled={busy || !url} onClick={save}>Uji dan simpan</Button>
+        <Button variant="ghost" onClick={() => setEdit(false)}>Batal</Button>
+      </div>}
+    </div>
+  );
+}
 
 /** Kotak masuk undangan (WhatsApp dan unggah manual). Verifikasi dan penerimaan webhook dibangun di fase berikutnya. */
 export default function InboxPage() {
@@ -47,9 +82,7 @@ export default function InboxPage() {
       <PpkGate>
         <PageHeader title="Kotak Masuk WhatsApp" subtitle="Undangan yang diteruskan staf ke nomor WhatsApp Business kantor, dan undangan yang diunggah manual."
           actions={can('write') && <Button variant="outline" onClick={upload}><FileUp size={16} /> Unggah surat undangan</Button>} />
-        <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">
-          Penerima WhatsApp (Gateway) belum terpasang, jadi belum ada pesan yang masuk otomatis. Daftar ini akan terisi setelah Gateway dan nomor WhatsApp Business dihubungkan.
-        </div>
+        <GatewayPanel admin={can('roles')} onSynced={list.reload} />
         <div className="mb-4 flex flex-wrap gap-1" role="tablist" aria-label="Saring status">
           {FILTERS.map(([v, l]) => <button key={v || 'semua'} role="tab" aria-selected={status === v} onClick={() => setQ(v ? { status: v } : {})}
             className={cn('rounded-full border px-3 py-1 text-sm', status === v ? 'border-navy-800 bg-navy-800 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-100')}>{l}</button>)}

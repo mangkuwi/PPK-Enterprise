@@ -30,6 +30,9 @@ import type {
   AvailableQuery, BatchPreview, MigrationReview, NumberBatch, NumberEvent, NumberRecord, NumberRef, NumberingContext, RecordPage, RecordQuery, Register, RegisterSummary, Role, TemplateMapRow
 } from '@shared/numbering';
 
+export type GatewaySync = { at: string; ok: boolean; added: number; error: string };
+export type GatewayState = { url: string; has_key: boolean; last: GatewaySync | null };
+
 declare global {
   interface Window {
     api: { invoke(channel: string, payload?: unknown): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> };
@@ -223,6 +226,11 @@ export const api = {
       upload: (note = '') => call<{ id: string; duplicate_of: string | null } | null>('ppk:invitations:upload', { note }),
       files: (id: string) => call<InvitationFile[]>('ppk:invitations:files', { id }),
       openFile: (id: string) => call<boolean>('ppk:files:open', { id })
+    },
+    gateway: {
+      status: () => call<GatewayState>('ppk:gateway:status', {}),
+      configure: (url: string, api_key: string) => call<{ messages: number; last_webhook: string | null }>('ppk:gateway:configure', { url, api_key }),
+      sync: () => call<GatewaySync>('ppk:gateway:sync', {})
     },
     agendas: {
       list: (f: AgendaFilter & { include_cancelled?: boolean } = {}) => call<Agenda[]>('ppk:agendas:list', f),

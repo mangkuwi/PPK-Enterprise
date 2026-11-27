@@ -19,6 +19,7 @@ import { agendaHome, listInvitations } from '../main/ppk/agendaHome';
 import { sqliteStore } from '../main/ppk/store';
 import { peekPpkActor, ppkActor, ppkStore } from '../main/ppk/server';
 import { registerPpkServerHandlers } from './ppkServer';
+import { registerPpkGatewayHandlers } from './ppkGateway';
 import { listPpkUsers, ppkAccess, setPpkRole } from '../main/ppk/access';
 import { listMaster, listTaxRates, saveMaster } from '../main/ppk/master';
 import { VENDOR_EXPORT_HEADER, createVendor, getVendor, listVendors, setVendorStatus, similarVendors, updateVendor, vendorExportRow } from '../main/ppk/vendors';
@@ -68,6 +69,7 @@ export function registerPpkHandlers() {
   const st = () => ppkStore(getDb());
   const actor = () => ppkActor(getDb());
   registerPpkServerHandlers();
+  registerPpkGatewayHandlers();
 
   handle('ppk:access', S.empty, async () => { const a = peekPpkActor(getDb()); return a ? ppkAccess(st(), a) : null; });
   handle('ppk:users', S.empty, () => listPpkUsers(st(), actor()));

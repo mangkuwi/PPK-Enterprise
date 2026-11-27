@@ -11,8 +11,9 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": { "@shared/*": ["shared/*"] }
   },
-  "include": ["electron", "shared", "tests", "vite.config.ts", "vitest.config.ts"]
+  "include": ["electron", "shared", "tests", "gateway/src", "vite.config.ts", "vitest.config.ts"]
 }

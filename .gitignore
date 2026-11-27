@@ -9,3 +9,5 @@ release
 shared/*.js
 electron/**/*.js
 src/**/*.js
+.env
+gateway/certbot-www

@@ -25,5 +25,5 @@ jobs:
         with: { node-version: 20, cache: npm }
       - run: npm ci
       - run: npm rebuild better-sqlite3
-      - run: npx vitest run tests/ppk-postgres.test.ts
+      - run: npx vitest run tests/ppk-postgres.test.ts tests/gateway.test.ts
         env: { PPK_TEST_PG: 'postgres://postgres:uji@127.0.0.1:5432/postgres' }
