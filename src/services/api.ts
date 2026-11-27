@@ -17,7 +17,7 @@ import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, Pla
 import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow, YearValueRow } from '@shared/ppk/contracts';
 import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
 import type { Task, TaskInput } from '@shared/ppk/tasks';
-import type { Agenda, AgendaConflict, AgendaFilter, AgendaHistoryRow, AgendaHome, AgendaInput, InboxCategory, InvitationDetail, InvitationFile, InvitationRow, InvitationStatus } from '@shared/ppk/agenda';
+import type { Agenda, AssignStatus, AgendaConflict, AgendaFilter, AgendaHistoryRow, AgendaHome, AgendaInput, InboxCategory, InvitationDetail, InvitationFile, InvitationRow, InvitationStatus } from '@shared/ppk/agenda';
 import type { DeliveryLog, Recipient } from '@shared/whatsapp';
 
 export interface PpkServerConf { host: string; port: number; database: string; user: string; password: string }
@@ -266,7 +266,10 @@ export const api = {
       remove: (id: string, reason: string) => call<Agenda>('ppk:agendas:delete', { id, reason }),
       restore: (id: string) => call<Agenda>('ppk:agendas:restore', { id }),
       conflicts: (q: { agenda_date: string; start_time: string; end_time: string; exclude_id?: string; user_ids?: string[] }) => call<AgendaConflict[]>('ppk:agendas:conflicts', q),
-      history: (id: string) => call<AgendaHistoryRow[]>('ppk:agendas:history', { id })
+      history: (id: string) => call<AgendaHistoryRow[]>('ppk:agendas:history', { id }),
+      reports: (id: string) => call<InvitationFile[]>('ppk:agendas:reports', { id }),
+      uploadReport: (id: string) => call<InvitationFile | null>('ppk:agendas:uploadReport', { id }),
+      assignment: (id: string, user_id: string, status: AssignStatus, duty?: string) => call<Agenda>('ppk:agendas:assignment', { id, user_id, status, ...(duty === undefined ? {} : { duty }) })
     },
     server: {
       status: () => call<PpkServerStatus>('ppk:server:status'),

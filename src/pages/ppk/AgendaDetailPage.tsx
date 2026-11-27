@@ -1,26 +1,82 @@
 import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Archive, ArchiveRestore, ArrowLeft, CheckCircle2, ExternalLink, FileText, Pencil, RotateCcw, Trash2, Video, XCircle } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowLeft, CheckCircle2, ExternalLink, FileText, FileUp, Pencil, RotateCcw, Trash2, Video, XCircle } from 'lucide-react';
 import { Page } from '@/components/layout/Page';
 import { Badge, Card, Empty } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/form';
+import { Input, Select } from '@/components/ui/form';
+import { useActor } from '@/features/numbering/NumberingContext';
 import { errMsg, useFeedback } from '@/components/ui/feedback';
 import { useAsync } from '@/hooks/useAsync';
-import { formatDateTime } from '@/lib/utils';
+import { formatBytes, formatDateTime } from '@/lib/utils';
 import { PpkGate } from '@/features/ppk/PpkGate';
 import { usePpkAccess } from '@/features/ppk/usePpkAccess';
 import { AgendaForm, agendaToInput } from '@/features/ppk/AgendaForm';
 import { timeText, useDeleteAgenda } from '@/features/ppk/AgendaViews';
 import { api } from '@/services/api';
-import { formatDateID } from '@shared/date';
-import { agendaDisplay, dayName, joinLabel, type Agenda } from '@shared/ppk/agenda';
+import { formatDateID, jakartaToday } from '@shared/date';
+import { agendaDisplay, ASSIGN_STATUS_LABEL, dayName, joinLabel, type Agenda, type AssignStatus } from '@shared/ppk/agenda';
 
 const ACTION: Record<string, string> = {
   'agenda.create': 'Agenda dibuat', 'agenda.update': 'Agenda diubah', 'agenda.selesai': 'Ditandai selesai', 'agenda.dibatalkan': 'Dibatalkan',
-  'agenda.archive': 'Diarsipkan', 'agenda.unarchive': 'Dikembalikan dari arsip', 'agenda.delete': 'Dihapus', 'agenda.restore': 'Dikembalikan dari hapus'
+  'agenda.archive': 'Diarsipkan', 'agenda.unarchive': 'Dikembalikan dari arsip', 'agenda.delete': 'Dihapus', 'agenda.restore': 'Dikembalikan dari hapus',
+  'agenda.assignment': 'Penugasan diubah', 'agenda.report': 'Laporan rapat diunggah'
 };
+
+/** Penugasan per orang: tugas (staf PPK) dan status Ditugaskan/Diterima/Selesai (orang itu sendiri atau staf PPK). */
+function Assignments({ a, reload }: { a: Agenda; reload: () => void }) {
+  const { can } = usePpkAccess();
+  const { actor } = useActor();
+  const { toast } = useFeedback();
+  const people = [...(a.pic ? [{ ...a.pic, utama: true }] : []), ...a.support.map((x) => ({ ...x, utama: false }))];
+  const editable = !a.deleted_at && a.status !== 'dibatalkan';
+  const save = async (userId: string, status: AssignStatus, duty?: string) => {
+    try { await api.ppk.agendas.assignment(a.id, userId, status, duty); toast('Penugasan disimpan.', 'success'); reload(); } catch (e) { toast(errMsg(e), 'error'); }
+  };
+  return (
+    <Card className="p-4">
+      <div className="mb-2 font-semibold text-navy-900">Penugasan</div>
+      {!people.length ? <p className="text-sm text-slate-500">Belum ada yang ditugaskan. Pilih penanggung jawab dan staf pendukung lewat Ubah agenda.</p>
+        : <ul className="divide-y divide-slate-100 text-sm">{people.map((p) => {
+          const st = p.status ?? 'ditugaskan';
+          return (
+            <li key={p.id} className="grid items-center gap-2 py-2 sm:grid-cols-[180px_1fr_150px]">
+              <div><div className="font-medium text-navy-900">{p.name}</div><div className="text-xs text-slate-500">{p.utama ? 'Penanggung jawab utama' : 'Staf pendukung'}</div></div>
+              {can('write') && editable
+                ? <Input aria-label={`Tugas ${p.name}`} defaultValue={p.duty ?? ''} placeholder="Tugas, mis. menyiapkan bahan paparan" maxLength={300}
+                  onBlur={(e) => { if (e.target.value.trim() !== (p.duty ?? '')) void save(p.id, st, e.target.value); }} />
+                : <div className="text-slate-700">{p.duty || <span className="text-slate-400">Tugas belum diisi</span>}</div>}
+              {editable && (can('write') || actor?.id === p.id)
+                ? <Select aria-label={`Status ${p.name}`} value={st} onChange={(e) => void save(p.id, e.target.value as AssignStatus)}>
+                  {Object.entries(ASSIGN_STATUS_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select>
+                : <Badge tone={st === 'selesai' ? 'green' : st === 'diterima' ? 'navy' : 'amber'}>{ASSIGN_STATUS_LABEL[st]}</Badge>}
+            </li>);
+        })}</ul>}
+    </Card>
+  );
+}
+
+/** Laporan rapat: file asli (notulen, daftar hadir, foto) yang tidak bisa diubah atau dihapus. */
+function Reports({ a }: { a: Agenda }) {
+  const { can } = usePpkAccess();
+  const { toast } = useFeedback();
+  const files = useAsync(() => api.ppk.agendas.reports(a.id), [a.id]);
+  const upload = async () => {
+    try { const f = await api.ppk.agendas.uploadReport(a.id); if (f) { toast('Laporan rapat disimpan.', 'success'); files.reload(); } } catch (e) { toast(errMsg(e), 'error'); }
+  };
+  const past = a.agenda_date < jakartaToday();
+  return (
+    <Card className="p-4">
+      <div className="mb-2 flex items-center justify-between gap-2"><div className="font-semibold text-navy-900">Laporan rapat</div>
+        {can('write') && !a.deleted_at && <Button size="sm" variant="outline" onClick={upload}><FileUp size={14} /> Unggah</Button>}</div>
+      {files.data?.length ? <ul className="space-y-1 text-sm">{files.data.map((f) => (
+        <li key={f.id}><button className="inline-flex items-center gap-1 text-left text-navy-700 hover:underline" onClick={() => api.ppk.invitations.openFile(f.id).catch((e) => toast(errMsg(e), 'error'))}>
+          <FileText size={14} /> {f.filename}</button> <span className="text-xs text-slate-500">({formatBytes(f.size_bytes)} · {formatDateTime(f.created_at)})</span></li>))}</ul>
+        : <p className={past && a.status !== 'dibatalkan' ? 'text-sm text-amber-800' : 'text-sm text-slate-500'}>{past && a.status !== 'dibatalkan' ? 'Belum ada laporan, padahal kegiatan sudah lewat.' : 'Belum ada laporan. Unggah notulen, daftar hadir, atau foto setelah kegiatan.'}</p>}
+    </Card>
+  );
+}
 
 function Detail({ a, reload }: { a: Agenda; reload: () => void }) {
   const { toast, confirm } = useFeedback();
@@ -81,11 +137,14 @@ function Detail({ a, reload }: { a: Agenda; reload: () => void }) {
       </div>}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-4">
         <Card className="p-4">
           <dl className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-[160px_1fr]">
             {rows.filter(([, v]) => v).map(([k, v]) => <div key={k} className="contents"><dt className="text-slate-500">{k}</dt><dd className="min-w-0 break-words text-slate-900">{v}</dd></div>)}
           </dl>
         </Card>
+        <Assignments a={a} reload={reload} />
+        </div>
         <div className="space-y-4">
           <Card className="p-4">
             <div className="mb-2 font-semibold text-navy-900">Undangan asli</div>
@@ -95,6 +154,7 @@ function Detail({ a, reload }: { a: Agenda; reload: () => void }) {
                   <FileText size={14} /> {f.filename}</button> <span className="text-xs text-slate-500">({Math.ceil(f.size_bytes / 1024)} KB)</span></li>))}</ul>
               : <p className="text-sm text-slate-500">Undangan tanpa lampiran.</p>}
           </Card>
+          <Reports a={a} />
           <Card className="p-4">
             <div className="mb-2 font-semibold text-navy-900">Riwayat</div>
             <ol className="space-y-2 text-sm">{history.data?.map((h, i) => (

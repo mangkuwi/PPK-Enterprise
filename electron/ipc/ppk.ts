@@ -13,8 +13,8 @@ import { getMainWindow } from '../main/window';
 import { runPpkImport } from '../main/ppk/import';
 import { ppkReport, reportSheets } from '../main/ppk/reports';
 import { addSp2d, sp2dReport, voidSp2d } from '../main/ppk/sp2d';
-import { agendaConflicts, agendaHistory, agendaPeople, createAgenda, deleteAgenda, getAgenda, restoreAgenda, listAgendas, setAgendaArchived, setAgendaStatus, updateAgenda } from '../main/ppk/agenda';
-import { MAX_FILE, fileContent, getInvitation, invitationFiles, markInvitation, uploadInvitation } from '../main/ppk/inbox';
+import { agendaConflicts, agendaHistory, agendaPeople, createAgenda, deleteAgenda, getAgenda, restoreAgenda, listAgendas, setAgendaArchived, setAgendaStatus, setAssignment, updateAgenda } from '../main/ppk/agenda';
+import { MAX_FILE, agendaReports, fileContent, getInvitation, invitationFiles, markInvitation, uploadInvitation, uploadReport } from '../main/ppk/inbox';
 import { relatedDocuments } from '../main/ppk/documents';
 import { archiveTask, listTasks, saveTask, setTaskDone } from '../main/ppk/tasks';
 import { TASK_PRIORITIES } from '@shared/ppk/tasks';
@@ -201,6 +201,16 @@ export function registerPpkHandlers() {
     return uploadInvitation(st(), actor(), { filename: path.basename(f), content: fs.readFileSync(f), note });
   });
   handle('ppk:invitations:files', z.object({ id: S.id }), ({ id }) => invitationFiles(st(), actor(), id));
+  handle('ppk:agendas:reports', z.object({ id: S.id }), ({ id }) => agendaReports(st(), actor(), id));
+  handle('ppk:agendas:uploadReport', z.object({ id: S.id }), async ({ id }) => {
+    const res = await dialog.showOpenDialog(getMainWindow()!, { properties: ['openFile'], filters: [{ name: 'Laporan rapat', extensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'] }] });
+    if (res.canceled || !res.filePaths[0]) return null;
+    const f = res.filePaths[0];
+    if (fs.statSync(f).size > MAX_FILE) throw new Error('Ukuran file maksimal 20 MB.');
+    return uploadReport(st(), actor(), id, { filename: path.basename(f), content: fs.readFileSync(f) });
+  });
+  handle('ppk:agendas:assignment', z.object({ id: S.id, user_id: S.id, duty: text(300).optional(), status: z.enum(['ditugaskan', 'diterima', 'selesai']) }),
+    ({ id, user_id, duty, status }) => setAssignment(st(), actor(), id, user_id, { duty, status }));
   handle('ppk:files:open', z.object({ id: S.id }), async ({ id }) => {
     const f = await fileContent(st(), actor(), id);
     // Salinan sementara di folder data aplikasi (bukan URL), dibuka dengan aplikasi bawaan OS.

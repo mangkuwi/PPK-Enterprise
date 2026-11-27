@@ -19,9 +19,13 @@ export interface Agenda extends Omit<AgendaInput, 'pic_user_id' | 'support_user_
   invitation_id: string | null; letter_date: string | null; program_id: string | null; participants: string;
   verified_by: string | null; verified_at: string | null; archived_at: string | null;
   deleted_at?: string | null; deleted_by?: string | null; delete_reason?: string;
-  pic: { id: string; name: string } | null;
-  support: Array<{ id: string; name: string }>;
+  pic: Assignee | null;
+  support: Assignee[];
 }
+/** Status tugas per orang di satu agenda. Diubah oleh orang yang ditugaskan sendiri atau staf PPK. */
+export type AssignStatus = 'ditugaskan' | 'diterima' | 'selesai';
+export const ASSIGN_STATUS_LABEL: Record<AssignStatus, string> = { ditugaskan: 'Ditugaskan', diterima: 'Diterima', selesai: 'Selesai' };
+export interface Assignee { id: string; name: string; duty?: string; status?: AssignStatus }
 
 const HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 /** Nama hari dari tanggal YYYY-MM-DD (kalender, tanpa zona waktu). */

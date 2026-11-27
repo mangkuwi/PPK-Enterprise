@@ -34,7 +34,7 @@ export const CHANNELS = [
   'ppk:server:logout', 'ppk:server:createUser', 'ppk:server:setPin', 'ppk:server:setActive', 'ppk:server:backup', 'ppk:server:restore',
   'wa:preparePdf', 'wa:openPdf', 'wa:open', 'wa:recipients', 'wa:saveRecipients', 'wa:delivered', 'wa:cloudStatus', 'wa:cloudConfigure', 'wa:cloudForget', 'wa:cloudSend',
   'ppk:agendas:list', 'ppk:agendas:get', 'ppk:agendas:create', 'ppk:agendas:update', 'ppk:agendas:setStatus', 'ppk:agendas:people', 'ppk:agendas:home', 'ppk:invitations:list', 'ppk:agendas:archive', 'ppk:agendas:delete', 'ppk:agendas:restore', 'ppk:agendas:conflicts', 'ppk:agendas:history',
-  'ppk:invitations:upload', 'ppk:invitations:files', 'ppk:files:open', 'ppk:invitations:counts', 'ppk:invitations:get', 'ppk:invitations:mark', 'ppk:files:preview', 'ppk:gateway:status', 'ppk:gateway:configure', 'ppk:gateway:sync',
+  'ppk:invitations:upload', 'ppk:invitations:files', 'ppk:files:open', 'ppk:invitations:counts', 'ppk:invitations:get', 'ppk:invitations:mark', 'ppk:files:preview', 'ppk:agendas:reports', 'ppk:agendas:uploadReport', 'ppk:agendas:assignment', 'ppk:gateway:status', 'ppk:gateway:configure', 'ppk:gateway:sync',
   'ai:run'
 ] as const;
 export type Channel = (typeof CHANNELS)[number];

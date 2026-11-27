@@ -17,8 +17,8 @@ import { getContract, listContracts } from '../electron/main/ppk/contracts';
 import { addPayment, getBill, listBills, saveBill, setBillStatus, voidPayment } from '../electron/main/ppk/bills';
 import { addSp2d, sp2dReport } from '../electron/main/ppk/sp2d';
 import { listPpkUsers } from '../electron/main/ppk/access';
-import { agendaConflicts, agendaHistory, createAgenda, listAgendas, setAgendaArchived } from '../electron/main/ppk/agenda';
-import { fileContent, getInvitation, invitationFiles, markInvitation, uploadInvitation } from '../electron/main/ppk/inbox';
+import { agendaConflicts, agendaHistory, createAgenda, listAgendas, setAgendaArchived, setAssignment } from '../electron/main/ppk/agenda';
+import { agendaReports, fileContent, getInvitation, invitationFiles, markInvitation, uploadInvitation, uploadReport } from '../electron/main/ppk/inbox';
 import { agendaHome, listInvitations } from '../electron/main/ppk/agendaHome';
 import {
   copyIntoServer, createPool, createServerUser, dumpServer, initFreshServer, installPgSchema, listServerUsers, pgStatus, pgStore, PG_TABLES,
@@ -214,6 +214,10 @@ describe.skipIf(!URL_)('PostgreSQL', () => {
     await markInvitation(s, a, up3.id, 'diproses', 'bukan undangan');
     expect([(await getInvitation(s, a, up3.id)).reject_reason, (await getInvitation(s, a, up.id)).agenda?.id]).toEqual(['bukan undangan', fromInv.id]);
     expect((await listInvitations(s, a, { category: 'sudah' })).map((i) => i.id).sort()).toEqual([up.id, up3.id].sort());
+    await uploadReport(s, a, made_.id, { filename: 'notulen.pdf', content: pdf });
+    expect((await agendaReports(s, a, made_.id)).map((f) => f.filename)).toEqual(['notulen.pdf']);
+    const asg = await setAssignment(s, a, made_.id, 'adm', { duty: 'Pimpin rapat', status: 'diterima' });
+    expect([asg.pic?.duty, asg.pic?.status]).toEqual(['Pimpin rapat', 'diterima']);
     await setAgendaArchived(s, a, fromInv.id, true);
     expect((await agendaHistory(s, a, fromInv.id)).map((h) => h.action)).toEqual(['agenda.create', 'agenda.archive']);
     expect((await agendaConflicts(s, a, { agenda_date: agenda.agenda_date, start_time: '10:00', end_time: '11:00', user_ids: ['adm'] }))[0].shared_staff).toEqual(['Admin']);
