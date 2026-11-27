@@ -25,6 +25,7 @@ export const CHANNELS = [
   'ppk:contracts:list', 'ppk:contracts:get', 'ppk:contracts:create', 'ppk:contracts:update', 'ppk:contracts:setStatus',
   'ppk:contracts:addAddendum', 'ppk:contracts:voidAddendum', 'ppk:contracts:setSchedule', 'ppk:contracts:setAllocations',
   'ppk:bills:list', 'ppk:bills:get', 'ppk:bills:save', 'ppk:bills:setStatus', 'ppk:bills:addPayment', 'ppk:bills:voidPayment',
+  'ppk:bills:payments', 'ppk:budget:export', 'ppk:contracts:export', 'ppk:bills:export',
   'ppk:import:pick', 'ppk:import:run', 'ppk:reports:get', 'ppk:reports:export',
   'ppk:budget:plan', 'ppk:budget:setPlan', 'ppk:contracts:setYearValues', 'ppk:sp2d:report', 'ppk:sp2d:add', 'ppk:sp2d:void', 'ppk:documents:related',
   'ppk:server:status', 'ppk:server:test', 'ppk:server:configure', 'ppk:server:setup', 'ppk:server:useLocal', 'ppk:server:users', 'ppk:server:login',

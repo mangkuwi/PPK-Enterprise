@@ -27,7 +27,8 @@ import { addBudgetRevision, createBudgetLine, getBudgetPlan, listBudgetLines, li
 import { addAddendum, createContract, getContract, listContracts, setAllocations, setContractStatus, setSchedule, setYearValues, updateContract, voidAddendum } from '../main/ppk/contracts';
 import { BUDGET_KIND_LABEL, type BudgetKind } from '@shared/ppk/budget';
 import { CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, type ContractStatus, type ContractType } from '@shared/ppk/contracts';
-import { addPayment, getBill, listBills, saveBill, setBillStatus, voidPayment } from '../main/ppk/bills';
+import { budgetSheets, billSheets, contractSheets } from '../main/ppk/exports';
+import { addPayment, getBill, listBills, listPayments, saveBill, setBillStatus, voidPayment } from '../main/ppk/bills';
 import { BILL_STATUS_LABEL, PAYMENT_CHANNELS, type BillStatus } from '@shared/ppk/bills';
 import { MASTER_KEYS, type MasterKey } from '@shared/ppk/master';
 import { PPK_ROLES } from '@shared/ppk/access';
@@ -120,6 +121,18 @@ export function registerPpkHandlers() {
   handle('ppk:bills:setStatus', z.object({ id: S.id, status: z.enum(['diverifikasi', 'dibatalkan']), reason: text(500) }), ({ id, status, reason }) => setBillStatus(st(), actor(), id, status, reason));
   handle('ppk:bills:addPayment', z.object({ bill_funding_id: S.id, payment: z.object({ channel: z.enum(PAYMENT_CHANNELS), reference_number: text(100), payment_date: day, amount: money, notes: text(1000) }) }),
     ({ bill_funding_id, payment }) => addPayment(st(), actor(), bill_funding_id, payment));
+  handle('ppk:bills:payments', z.object({ fiscal_year_id: S.id }), ({ fiscal_year_id }) => listPayments(st(), actor(), fiscal_year_id));
+
+  // Ekspor Excel memakai filter yang sama dengan halaman, jadi isi berkas = yang tampil di layar.
+  const stamp = () => new Date().toISOString().slice(0, 10);
+  handle('ppk:budget:export', z.object({ fiscal_year_id: S.id, include_inactive: z.boolean().optional() }), async (f) =>
+    saveFile(writeXlsx(budgetSheets(await listBudgetLines(st(), actor(), f))), `Database-Anggaran-${stamp()}.xlsx`, 'xlsx'));
+  handle('ppk:contracts:export', z.object({ fiscal_year_id: S.id, vendor_id: S.id.optional(), status: z.union([contractStatus, z.literal('semua')]).optional(), search: text(200).optional() }), async (f) =>
+    saveFile(writeXlsx(contractSheets(await listContracts(st(), actor(), f))), `Database-Kontrak-${stamp()}.xlsx`, 'xlsx'));
+  handle('ppk:bills:export', z.object({ fiscal_year_id: S.id, status: z.union([billStatus, z.literal('semua')]).optional(), search: text(200).optional() }), async (f) => {
+    const [bills, payments] = await Promise.all([listBills(st(), actor(), f), listPayments(st(), actor(), f.fiscal_year_id)]);
+    return saveFile(writeXlsx(billSheets(bills, payments)), `Tagihan-dan-Pembayaran-${stamp()}.xlsx`, 'xlsx');
+  });
   handle('ppk:bills:voidPayment', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidPayment(st(), actor(), id, reason));
 
   // Impor spreadsheet PPK lama: pilih berkas → pratinjau (commit=false, semua dibatalkan) → simpan.

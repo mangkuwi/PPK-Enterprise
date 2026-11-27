@@ -37,6 +37,11 @@ export interface PaymentView {
   id: string; channel: PaymentChannel; reference_number: string; payment_date: string; amount: number; notes: string;
   created_by: string; created_at: string; voided_at: string | null; voided_by: string | null; void_reason: string | null;
 }
+/** Pembayaran lintas tagihan untuk daftar dan ekspor. */
+export interface PaymentRow extends PaymentView {
+  bill_id: string; bill_number: string; service_month: string; bill_status: BillStatus; contract_number: string; vendor_name: string;
+  mak: string; output_detail: string; source_code: string; kind: string;
+}
 export interface BillFundingView extends BillFundingRow {
   id: string; mak: string; output_detail: string; source_code: string; kind: string; payment_channel: PaymentChannel;
   paid: number; payments: PaymentView[];
