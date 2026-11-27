@@ -1,4 +1,4 @@
-import { dialog } from 'electron';
+import { app, dialog, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -12,7 +12,8 @@ import { getMainWindow } from '../main/window';
 import { runPpkImport } from '../main/ppk/import';
 import { ppkReport, reportSheets } from '../main/ppk/reports';
 import { addSp2d, sp2dReport, voidSp2d } from '../main/ppk/sp2d';
-import { agendaPeople, createAgenda, getAgenda, listAgendas, setAgendaStatus, updateAgenda } from '../main/ppk/agenda';
+import { agendaConflicts, agendaHistory, agendaPeople, createAgenda, getAgenda, listAgendas, setAgendaArchived, setAgendaStatus, updateAgenda } from '../main/ppk/agenda';
+import { MAX_FILE, fileContent, invitationFiles, uploadInvitation } from '../main/ppk/inbox';
 import { relatedDocuments } from '../main/ppk/documents';
 import { agendaHome, listInvitations } from '../main/ppk/agendaHome';
 import { sqliteStore } from '../main/ppk/store';
@@ -156,9 +157,35 @@ export function registerPpkHandlers() {
   handle('ppk:documents:related', z.object({ numbers: z.array(text(300)).max(20) }), ({ numbers }) => relatedDocuments(st(), sqliteStore(getDb()), actor(), numbers));
   const agendaInput = z.object({
     title: text(300), letter_number: text(200), source_document_id: S.id.nullable(), agenda_date: day, start_time: z.string().max(5), end_time: z.string().max(5),
-    location: text(500), meeting_url: text(500), organizer: text(300), agenda_text: text(4000), notes: text(2000), pic_user_id: S.id.nullable(), support_user_ids: z.array(S.id).max(30)
+    location: text(500), meeting_url: text(500), organizer: text(300), agenda_text: text(4000), notes: text(2000), pic_user_id: S.id.nullable(), support_user_ids: z.array(S.id).max(30),
+    letter_date: day.or(z.literal('')).nullish(), program_id: S.id.nullish(), participants: text(2000).optional(), invitation_id: S.id.nullish()
   });
-  handle('ppk:agendas:list', z.object({ from: day.optional(), to: day.optional(), include_cancelled: z.boolean().optional() }), (f) => listAgendas(st(), actor(), f));
+  handle('ppk:agendas:list', z.object({ from: day.optional(), to: day.optional(), include_cancelled: z.boolean().optional(), q: text(200).optional(), program_id: S.id.optional(),
+    user_id: S.id.optional(), organizer: text(300).optional(), status: z.enum(['aktif', 'belum_ditugaskan', 'ditugaskan', 'selesai', 'dibatalkan', 'diarsipkan', 'semua']).optional() }), (f) => listAgendas(st(), actor(), f));
+  handle('ppk:agendas:archive', z.object({ id: S.id, archived: z.boolean() }), ({ id, archived }) => setAgendaArchived(st(), actor(), id, archived));
+  handle('ppk:agendas:conflicts', z.object({ agenda_date: day, start_time: z.string().max(5), end_time: z.string().max(5), exclude_id: S.id.optional(), user_ids: z.array(S.id).max(31).optional() }),
+    (q) => agendaConflicts(st(), actor(), q));
+  handle('ppk:agendas:history', z.object({ id: S.id }), ({ id }) => agendaHistory(st(), actor(), id));
+  handle('ppk:invitations:upload', z.object({ note: text(2000).optional() }), async ({ note }) => {
+    const res = await dialog.showOpenDialog(getMainWindow()!, { properties: ['openFile'], filters: [{ name: 'Surat undangan', extensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'] }] });
+    if (res.canceled || !res.filePaths[0]) return null;
+    const f = res.filePaths[0];
+    if (fs.statSync(f).size > MAX_FILE) throw new Error('Ukuran file maksimal 20 MB.');
+    return uploadInvitation(st(), actor(), { filename: path.basename(f), content: fs.readFileSync(f), note });
+  });
+  handle('ppk:invitations:files', z.object({ id: S.id }), ({ id }) => invitationFiles(st(), actor(), id));
+  handle('ppk:files:open', z.object({ id: S.id }), async ({ id }) => {
+    const f = await fileContent(st(), actor(), id);
+    // Salinan sementara di folder data aplikasi (bukan URL), dibuka dengan aplikasi bawaan OS.
+    const dir = path.join(app.getPath('userData'), 'lihat-undangan');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const old of fs.readdirSync(dir)) { const p = path.join(dir, old); if (Date.now() - fs.statSync(p).mtimeMs > 864e5) fs.rmSync(p, { force: true }); }
+    const out = path.join(dir, `${id.slice(0, 8)}-${path.basename(f.filename).replace(/[^\w.\- ]+/g, '_')}`);
+    fs.writeFileSync(out, f.content);
+    const err = await shell.openPath(out);
+    if (err) throw new Error(`File tidak dapat dibuka: ${err}`);
+    return true;
+  });
   handle('ppk:agendas:get', z.object({ id: S.id }), ({ id }) => getAgenda(st(), actor(), id));
   handle('ppk:agendas:create', agendaInput, (i) => createAgenda(st(), actor(), i));
   handle('ppk:agendas:update', z.object({ id: S.id, version: z.number().int().min(1), values: agendaInput }), ({ id, version, values }) => updateAgenda(st(), actor(), id, version, values));

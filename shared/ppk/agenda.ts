@@ -10,8 +10,10 @@ export interface AgendaInput {
   /** Penanggung jawab utama (pengguna aplikasi), boleh kosong. */
   pic_user_id: string | null;
   support_user_ids: string[];
+  /** Tanggal surat (bukan tanggal acara), program terkait, peserta yang diundang, undangan asal. Boleh kosong. */
+  letter_date?: string | null; program_id?: string | null; participants?: string; invitation_id?: string | null;
 }
-export interface Agenda extends Omit<AgendaInput, 'pic_user_id' | 'support_user_ids'> {
+export interface Agenda extends Omit<AgendaInput, 'pic_user_id' | 'support_user_ids' | 'letter_date' | 'program_id' | 'participants' | 'invitation_id'> {
   id: string; status: AgendaStatus; cancel_reason: string; version: number;
   created_by: string; created_at: string; updated_by: string; updated_at: string;
   invitation_id: string | null; letter_date: string | null; program_id: string | null; participants: string;
@@ -120,3 +122,17 @@ export function liveState(a: Pick<Agenda, 'agenda_date' | 'start_time' | 'end_ti
   if (s - n > 0 && s - n <= 15) return 'segera';
   return null;
 }
+
+/** Filter daftar agenda. status = label layar (Belum ditugaskan/Ditugaskan dihitung dari penanggung jawab). */
+export type AgendaFilterStatus = 'aktif' | 'belum_ditugaskan' | 'ditugaskan' | 'selesai' | 'dibatalkan' | 'diarsipkan' | 'semua';
+export interface AgendaFilter { from?: string; to?: string; q?: string; program_id?: string; user_id?: string; organizer?: string; status?: AgendaFilterStatus }
+
+/** Dua kegiatan di hari yang sama bentrok bila jamnya beririsan. Tanpa jam selesai = 1 jam; tanpa jam mulai = tidak dinilai. */
+export function overlaps(a: Pick<Agenda, 'agenda_date' | 'start_time' | 'end_time'>, b: Pick<Agenda, 'agenda_date' | 'start_time' | 'end_time'>): boolean {
+  if (a.agenda_date !== b.agenda_date || !a.start_time || !b.start_time) return false;
+  const end = (x: typeof a) => (x.end_time ? mins(x.end_time) : mins(x.start_time) + 60);
+  return mins(a.start_time) < end(b) && mins(b.start_time) < end(a);
+}
+export interface AgendaConflict { id: string; title: string; agenda_date: string; start_time: string; end_time: string; shared_staff: string[] }
+export interface AgendaHistoryRow { at: string; actor_name: string; action: string; detail: Record<string, unknown> }
+export interface InvitationFile { id: string; filename: string; mime_type: string; size_bytes: number; created_at: string }

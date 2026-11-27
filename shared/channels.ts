@@ -30,7 +30,8 @@ export const CHANNELS = [
   'ppk:server:status', 'ppk:server:test', 'ppk:server:configure', 'ppk:server:setup', 'ppk:server:useLocal', 'ppk:server:users', 'ppk:server:login',
   'ppk:server:logout', 'ppk:server:createUser', 'ppk:server:setPin', 'ppk:server:setActive', 'ppk:server:backup', 'ppk:server:restore',
   'wa:preparePdf', 'wa:openPdf', 'wa:open', 'wa:recipients', 'wa:saveRecipients', 'wa:delivered', 'wa:cloudStatus', 'wa:cloudConfigure', 'wa:cloudForget', 'wa:cloudSend',
-  'ppk:agendas:list', 'ppk:agendas:get', 'ppk:agendas:create', 'ppk:agendas:update', 'ppk:agendas:setStatus', 'ppk:agendas:people', 'ppk:agendas:home', 'ppk:invitations:list',
+  'ppk:agendas:list', 'ppk:agendas:get', 'ppk:agendas:create', 'ppk:agendas:update', 'ppk:agendas:setStatus', 'ppk:agendas:people', 'ppk:agendas:home', 'ppk:invitations:list', 'ppk:agendas:archive', 'ppk:agendas:conflicts', 'ppk:agendas:history',
+  'ppk:invitations:upload', 'ppk:invitations:files', 'ppk:files:open',
   'ai:run'
 ] as const;
 export type Channel = (typeof CHANNELS)[number];

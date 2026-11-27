@@ -1,0 +1,106 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { openDatabase, type DB } from '../electron/main/db';
+import { runMigrations } from '../electron/main/migrations';
+import { seedDefaults } from '../electron/main/seed';
+import { createUser, setPin } from '../electron/main/numbering/users';
+import { sqliteStore, type PpkStore } from '../electron/main/ppk/store';
+import { setPpkRole } from '../electron/main/ppk/access';
+import { agendaConflicts, agendaHistory, createAgenda, getAgenda, listAgendas, setAgendaArchived, setAgendaStatus, updateAgenda } from '../electron/main/ppk/agenda';
+import { fileContent, fileKind, invitationFiles, uploadInvitation } from '../electron/main/ppk/inbox';
+import { listInvitations } from '../electron/main/ppk/agendaHome';
+import { overlaps, type AgendaInput } from '@shared/ppk/agenda';
+import type { Actor } from '@shared/numbering';
+
+const D = '2026-12-07';
+const base: AgendaInput = { title: 'Rapat', letter_number: '', source_document_id: null, agenda_date: D, start_time: '', end_time: '', location: '',
+  meeting_url: '', organizer: '', agenda_text: '', notes: '', pic_user_id: null, support_user_ids: [] };
+const PDF = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n');
+let db: DB; let s: PpkStore; let admin: Actor; let budi: Actor; let citra: Actor;
+
+beforeEach(async () => {
+  db = openDatabase(':memory:'); runMigrations(db); seedDefaults(db); s = sqliteStore(db);
+  admin = db.prepare("SELECT id, name, role FROM app_users WHERE role='admin'").get() as Actor;
+  setPin(db, admin, admin.id, '123456');
+  budi = createUser(db, admin, { name: 'Budi', role: 'operator', pin: '2222' }) as Actor; await setPpkRole(s, admin, budi.id, 'staf');
+  citra = createUser(db, admin, { name: 'Citra', role: 'operator', pin: '3333' }) as Actor; await setPpkRole(s, admin, citra.id, 'pembaca');
+});
+
+describe('cari dan filter agenda', () => {
+  it('kata kunci, penyelenggara, staf, program, status', async () => {
+    const prog = (db.prepare('SELECT id FROM ppk_programs LIMIT 1').get() as { id: string } | undefined)?.id
+      ?? (db.prepare("INSERT INTO ppk_programs (id, code, name, is_active, created_at, updated_at) VALUES ('p1','01','Program Uji',1,'t','t') RETURNING id").get() as { id: string }).id;
+    const a = await createAgenda(s, admin, { ...base, title: 'Rapat Pengadaan Server', organizer: 'Biro Umum', pic_user_id: budi.id, program_id: prog, letter_date: '2026-12-01', participants: 'Kepala Bagian' });
+    await createAgenda(s, admin, { ...base, title: 'Sosialisasi E-Katalog', organizer: 'LKPP', letter_number: 'UND-77' });
+    const c = await createAgenda(s, admin, { ...base, title: 'Rapat Batal' }); await setAgendaStatus(s, admin, c.id, 'dibatalkan', 'Ditunda');
+    const t = (f: Parameters<typeof listAgendas>[2]) => listAgendas(s, admin, f).then((r) => r.map((x) => x.title));
+    expect(await t({ q: 'pengadaan' })).toEqual(['Rapat Pengadaan Server']);
+    expect(await t({ q: 'und-77' })).toEqual(['Sosialisasi E-Katalog']);
+    expect(await t({ organizer: 'lkpp' })).toEqual(['Sosialisasi E-Katalog']);
+    expect(await t({ user_id: budi.id })).toEqual(['Rapat Pengadaan Server']);
+    expect(await t({ program_id: prog })).toEqual(['Rapat Pengadaan Server']);
+    expect(await t({ status: 'belum_ditugaskan' })).toEqual(['Sosialisasi E-Katalog']);
+    expect(await t({ status: 'ditugaskan' })).toEqual(['Rapat Pengadaan Server']);
+    expect(await t({ status: 'dibatalkan' })).toEqual(['Rapat Batal']);
+    expect((await t({ status: 'semua' })).length).toBe(3);
+    const got = await getAgenda(s, admin, a.id);
+    expect([got.letter_date, got.program_id, got.participants]).toEqual(['2026-12-01', prog, 'Kepala Bagian']);
+  });
+});
+
+describe('jadwal bentrok', () => {
+  it('jam beririsan di hari yang sama, dengan staf yang sama disebut', async () => {
+    expect(overlaps({ agenda_date: D, start_time: '09:00', end_time: '10:00' }, { agenda_date: D, start_time: '10:00', end_time: '11:00' })).toBe(false);
+    expect(overlaps({ agenda_date: D, start_time: '09:00', end_time: '' }, { agenda_date: D, start_time: '09:30', end_time: '' })).toBe(true);
+    expect(overlaps({ agenda_date: D, start_time: '', end_time: '' }, { agenda_date: D, start_time: '09:30', end_time: '' })).toBe(false);
+    const x = await createAgenda(s, admin, { ...base, title: 'A', start_time: '09:00', end_time: '11:00', pic_user_id: budi.id });
+    await createAgenda(s, admin, { ...base, title: 'B', start_time: '13:00', end_time: '14:00' });
+    const c = await agendaConflicts(s, admin, { agenda_date: D, start_time: '10:30', end_time: '12:00', user_ids: [budi.id] });
+    expect(c.map((r) => [r.title, r.shared_staff])).toEqual([['A', ['Budi']]]);
+    expect(await agendaConflicts(s, admin, { agenda_date: D, start_time: '09:00', end_time: '10:00', exclude_id: x.id })).toEqual([]);
+  });
+});
+
+describe('arsip dan riwayat', () => {
+  it('arsip menyembunyikan agenda, riwayat mencatat setiap perubahan, pembaca tidak bisa mengarsipkan', async () => {
+    const a = await createAgenda(s, admin, { ...base, title: 'Rapat X' });
+    await updateAgenda(s, admin, a.id, a.version, { ...base, title: 'Rapat X (revisi)' });
+    await expect(setAgendaArchived(s, citra, a.id, true)).rejects.toThrow(/tidak mengizinkan/);
+    await setAgendaArchived(s, admin, a.id, true);
+    expect(await listAgendas(s, admin, {})).toEqual([]);
+    expect((await listAgendas(s, admin, { status: 'diarsipkan' })).map((r) => r.title)).toEqual(['Rapat X (revisi)']);
+    await setAgendaArchived(s, admin, a.id, false);
+    expect((await agendaHistory(s, citra, a.id)).map((h) => h.action)).toEqual(['agenda.create', 'agenda.update', 'agenda.archive', 'agenda.unarchive']);
+  });
+});
+
+describe('unggah undangan manual', () => {
+  it('jenis file dari isinya, bukan nama', () => {
+    expect(fileKind(PDF, 'a.pdf')).toBe('application/pdf');
+    expect(fileKind(Buffer.from('89504e470d0a1a0a00', 'hex'), 'x.png')).toBe('image/png');
+    expect(fileKind(Buffer.from('ffd8ffe000', 'hex'), 'x.jpeg')).toBe('image/jpeg');
+    expect(fileKind(Buffer.from('504b030414', 'hex'), 'u.docx')).toMatch(/wordprocessingml/);
+    expect(fileKind(Buffer.from('d0cf11e0a1b11ae1', 'hex'), 'u.doc')).toBe('application/msword');
+    expect(() => fileKind(Buffer.from('MZ\x90\x00'), 'virus.pdf')).toThrow(/tidak didukung/);
+    expect(() => fileKind(Buffer.from('504b030414', 'hex'), 'arsip.zip')).toThrow(/tidak didukung/);
+  });
+
+  it('file asli tersimpan utuh, duplikat ditandai, agenda dari undangan = verifikasi', async () => {
+    await expect(uploadInvitation(s, citra, { filename: 'u.pdf', content: PDF })).rejects.toThrow(/tidak mengizinkan/);
+    await expect(uploadInvitation(s, budi, { filename: 'u.pdf', content: Buffer.alloc(0) })).rejects.toThrow(/kosong/);
+    const u = await uploadInvitation(s, budi, { filename: 'Undangan Rapat.pdf', content: PDF, note: 'dari grup koordinasi' });
+    expect(u.duplicate_of).toBe(null);
+    expect((await uploadInvitation(s, budi, { filename: 'sama.pdf', content: PDF })).duplicate_of).toBe(u.id);
+    const [f] = await invitationFiles(s, citra, u.id);
+    expect(f).toMatchObject({ filename: 'Undangan Rapat.pdf', mime_type: 'application/pdf', size_bytes: PDF.length });
+    expect((await fileContent(s, citra, f.id)).content.equals(PDF)).toBe(true);
+    const inv = (await listInvitations(s, admin)).find((i) => i.id === u.id)!;
+    expect([inv.status, inv.file_count, inv.source]).toEqual(['menunggu_verifikasi', 1, 'unggah']);
+
+    const a = await createAgenda(s, budi, { ...base, title: 'Dari undangan', invitation_id: u.id });
+    const got = await getAgenda(s, admin, a.id);
+    expect([got.invitation_id, got.verified_by]).toEqual([u.id, 'Budi']);
+    expect((await listInvitations(s, admin, { status: 'dikonversi' })).map((i) => i.id)).toEqual([u.id]);
+    await expect(createAgenda(s, budi, { ...base, invitation_id: 'tidak-ada' })).rejects.toThrow(/tidak ditemukan/);
+    expect(await listAgendas(s, admin, {})).toHaveLength(1); // gagal = tidak ada agenda setengah jadi
+  });
+});

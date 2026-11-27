@@ -1,71 +1,82 @@
-import { useRef, useState } from 'react';
-import { CheckCircle2, Pencil, XCircle } from 'lucide-react';
+import { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { FileUp, Plus } from 'lucide-react';
 import { Page } from '@/components/layout/Page';
-import { Badge, Card, Empty, PageHeader } from '@/components/ui/card';
+import { Card, Empty, PageHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/form';
+import { Input, Select } from '@/components/ui/form';
 import { errMsg, useFeedback } from '@/components/ui/feedback';
 import { useAsync } from '@/hooks/useAsync';
 import { PpkGate } from '@/features/ppk/PpkGate';
 import { usePpkAccess } from '@/features/ppk/usePpkAccess';
-import { AgendaForm, agendaToInput } from '@/features/ppk/AgendaForm';
+import { AgendaForm, EMPTY_AGENDA } from '@/features/ppk/AgendaForm';
+import { AgendaRow } from '@/features/ppk/AgendaViews';
 import { api } from '@/services/api';
-import { AGENDA_STATUS_LABEL, dayName, type Agenda } from '@shared/ppk/agenda';
-import { formatDateID } from '@shared/date';
+import { jakartaToday } from '@shared/date';
+import type { AgendaFilter, AgendaFilterStatus, AgendaInput } from '@shared/ppk/agenda';
 
-const today = () => new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD waktu lokal
+const STATUS: Array<[AgendaFilterStatus, string]> = [['aktif', 'Semua aktif'], ['belum_ditugaskan', 'Belum ditugaskan'], ['ditugaskan', 'Ditugaskan'],
+  ['selesai', 'Selesai'], ['dibatalkan', 'Dibatalkan'], ['diarsipkan', 'Diarsipkan'], ['semua', 'Semua status']];
+const KEYS = ['q', 'from', 'to', 'program_id', 'user_id', 'organizer', 'status'] as const;
 
-/** Agenda kegiatan PPK dari surat undangan, dengan penanggung jawab dan staf pendukung. */
+/** Semua agenda: cari, saring, tambah manual, unggah surat undangan. Klik agenda = halaman detail. */
 export default function AgendaPage() {
-  const { toast, confirm } = useFeedback();
+  const navigate = useNavigate();
+  const { toast } = useFeedback();
   const { can } = usePpkAccess();
-  const [past, setPast] = useState(false);
-  const [edit, setEdit] = useState<Agenda | null>(null);
-  const reason = useRef(''); // diisi dari input di dialog konfirmasi
-  const list = useAsync(() => api.ppk.agendas.list(past ? { include_cancelled: true } : { from: today() }), [past]);
-  const status = async (a: Agenda, s: 'selesai' | 'dibatalkan') => {
-    if (s === 'dibatalkan') {
-      reason.current = '';
-      const ok = await confirm({ title: `Batalkan "${a.title}"?`, destructive: true, confirmLabel: 'Batalkan agenda',
-        message: <div><p className="mb-2">Agenda tetap tersimpan dengan status Dibatalkan.</p><Input autoFocus placeholder="Alasan pembatalan" onChange={(e) => { reason.current = e.target.value; }} /></div> });
-      if (!ok) return;
-    }
-    try { await api.ppk.agendas.setStatus(a.id, s, s === 'dibatalkan' ? reason.current : ''); list.reload(); } catch (e) { toast(errMsg(e), 'error'); }
+  const [sp, setSp] = useSearchParams();
+  const f: AgendaFilter = Object.fromEntries(KEYS.map((k) => [k, sp.get(k) || undefined]).filter(([, v]) => v));
+  if (!sp.get('from') && !sp.get('q') && !sp.get('status')) f.from = jakartaToday(); // bawaan: yang akan datang
+  const set = (k: (typeof KEYS)[number], v: string) => { const n = new URLSearchParams(sp); if (v) n.set(k, v); else n.delete(k); setSp(n, { replace: true }); };
+  const key = JSON.stringify(f);
+  const list = useAsync(() => api.ppk.agendas.list(f), [key]);
+  const people = useAsync(() => api.ppk.agendas.people(), []);
+  const programs = useAsync(() => api.ppk.masterList('programs'), []);
+  const [form, setForm] = useState<AgendaInput | null>(null);
+
+  const upload = async () => {
+    try {
+      const r = await api.ppk.invitations.upload();
+      if (!r) return;
+      if (r.duplicate_of) toast('File yang sama persis pernah diunggah. Periksa agar agenda tidak ganda.', 'error');
+      setForm({ ...EMPTY_AGENDA, invitation_id: r.id });
+    } catch (e) { toast(errMsg(e), 'error'); }
   };
 
   return (
     <Page>
       <PpkGate>
-        <PageHeader title="Agenda PPK" subtitle="Kegiatan dari surat undangan. Buat agenda lewat tombol Buat Agenda di editor surat."
-          actions={<Button variant="outline" onClick={() => setPast(!past)}>{past ? 'Tampilkan yang akan datang' : 'Tampilkan semua (termasuk lampau)'}</Button>} />
+        <PageHeader title="Agenda PPK" subtitle="Semua kegiatan dari WhatsApp, unggahan, dan isian manual tersimpan di satu tempat."
+          actions={can('write') && <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={upload}><FileUp size={16} /> Unggah surat undangan</Button>
+            <Button onClick={() => setForm({ ...EMPTY_AGENDA, agenda_date: jakartaToday() })}><Plus size={16} /> Tambah agenda</Button>
+          </div>} />
+
+        <Card className="mb-4 grid gap-2 p-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <Input aria-label="Cari" placeholder="Cari judul, nomor surat, lokasi…" value={sp.get('q') ?? ''} onChange={(e) => set('q', e.target.value)} className="lg:col-span-2" />
+          <Select aria-label="Status" value={sp.get('status') ?? 'aktif'} onChange={(e) => set('status', e.target.value === 'aktif' ? '' : e.target.value)}>
+            {STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </Select>
+          <Input aria-label="Penyelenggara" placeholder="Penyelenggara" value={sp.get('organizer') ?? ''} onChange={(e) => set('organizer', e.target.value)} />
+          <label className="flex items-center gap-2"><span className="w-12 text-slate-500">Dari</span><Input type="date" value={f.from ?? ''} onChange={(e) => set('from', e.target.value)} /></label>
+          <label className="flex items-center gap-2"><span className="w-12 text-slate-500">Sampai</span><Input type="date" value={sp.get('to') ?? ''} onChange={(e) => set('to', e.target.value)} /></label>
+          <Select aria-label="Staf" value={sp.get('user_id') ?? ''} onChange={(e) => set('user_id', e.target.value)}>
+            <option value="">Semua staf</option>{people.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
+          <Select aria-label="Program" value={sp.get('program_id') ?? ''} onChange={(e) => set('program_id', e.target.value)}>
+            <option value="">Semua program</option>{programs.data?.map((p) => <option key={p.id} value={p.id}>{String(p.code ?? '')} {String(p.name ?? '')}</option>)}
+          </Select>
+          {sp.toString() && <button className="text-left text-navy-600 hover:underline" onClick={() => setSp({}, { replace: true })}>Hapus semua filter</button>}
+        </Card>
+
         {list.error && <Empty>{list.error}</Empty>}
-        {list.data && !list.data.length && <Empty>Belum ada agenda{past ? '' : ' yang akan datang'}.</Empty>}
-        <div className="space-y-3">{list.data?.map((a) => (
-          <Card key={a.id} className="p-4 text-sm">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="font-semibold text-navy-900">{a.title}</div>
-                <div className="text-slate-600">{dayName(a.agenda_date)}, {formatDateID(a.agenda_date)}{a.start_time && ` · ${a.start_time}${a.end_time ? `–${a.end_time}` : ''}`}{a.letter_number && ` · ${a.letter_number}`}</div>
-                <div className="text-slate-600">{[a.location, a.organizer].filter(Boolean).join(' · ')}</div>
-                {a.meeting_url && <div className="truncate text-navy-700">{a.meeting_url}</div>}
-                {a.agenda_text && <div className="mt-1 whitespace-pre-line text-slate-700">{a.agenda_text}</div>}
-                <div className="mt-1">Penanggung jawab: <b>{a.pic?.name ?? '—'}</b>{a.support.length > 0 && <> · Pendukung: {a.support.map((s) => s.name).join(', ')}</>}</div>
-                {a.cancel_reason && <div className="text-red-700">Alasan batal: {a.cancel_reason}</div>}
-              </div>
-              <div className="flex items-center gap-1">
-                <Badge tone={a.status === 'terjadwal' ? 'navy' : a.status === 'selesai' ? 'green' : 'red'}>{AGENDA_STATUS_LABEL[a.status]}</Badge>
-                {can('write') && a.status === 'terjadwal' && <>
-                  <Button size="icon" variant="ghost" aria-label={`Ubah ${a.title}`} onClick={() => setEdit(a)}><Pencil size={14} /></Button>
-                  <Button size="icon" variant="ghost" aria-label={`Selesai ${a.title}`} onClick={() => status(a, 'selesai')}><CheckCircle2 size={14} /></Button>
-                  <Button size="icon" variant="ghost" aria-label={`Batalkan ${a.title}`} onClick={() => status(a, 'dibatalkan')}><XCircle size={14} /></Button>
-                </>}
-              </div>
-            </div>
-          </Card>))}
-        </div>
-        <Dialog open={!!edit} onOpenChange={(o) => { if (!o) setEdit(null); }}>
-          {edit && <AgendaForm initial={agendaToInput(edit)} existing={edit} onSaved={() => { setEdit(null); list.reload(); }} />}
+        {list.data && !list.data.length && <Empty>Tidak ada agenda yang cocok.</Empty>}
+        {!!list.data?.length && <Card className="px-4"><div className="pt-3 text-xs text-slate-500">{list.data.length} agenda</div>
+          <ul className="divide-y divide-slate-100">{list.data.map((a) => <AgendaRow key={a.id} a={a} showDate onOpen={() => navigate(`/ppk/agenda/${a.id}`)} />)}</ul></Card>}
+
+        <Dialog open={!!form} onOpenChange={(o) => { if (!o) setForm(null); }}>
+          {form && <AgendaForm initial={form} onSaved={(a) => { setForm(null); navigate(`/ppk/agenda/${a.id}`); }} />}
         </Dialog>
       </PpkGate>
     </Page>

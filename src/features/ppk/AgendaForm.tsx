@@ -1,17 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { DialogContent } from '@/components/ui/dialog';
 import { Field, Input, Select, Textarea } from '@/components/ui/form';
 import { errMsg, useFeedback } from '@/components/ui/feedback';
 import { useAsync } from '@/hooks/useAsync';
 import { api } from '@/services/api';
-import { dayName, type Agenda, type AgendaInput } from '@shared/ppk/agenda';
+import { dayName, type Agenda, type AgendaConflict, type AgendaInput } from '@shared/ppk/agenda';
 
 /** Formulir agenda (baru dari surat undangan, atau ubah). Penanggung jawab dipilih dari pengguna yang punya peran PPK. */
 export function AgendaForm({ initial, existing, onSaved }: { initial: AgendaInput; existing?: Agenda; onSaved: (a: Agenda) => void }) {
   const { toast } = useFeedback();
   const people = useAsync(() => api.ppk.agendas.people(), []);
+  const programs = useAsync(() => api.ppk.masterList('programs'), []);
   const [v, setV] = useState<AgendaInput>(initial);
+  const [clash, setClash] = useState<AgendaConflict[]>([]);
+  const staff = [...(v.pic_user_id ? [v.pic_user_id] : []), ...v.support_user_ids].join(',');
+  useEffect(() => { // peringatan bentrok, tidak memblokir simpan
+    if (!v.agenda_date || !v.start_time) { setClash([]); return; }
+    const t = setTimeout(() => { api.ppk.agendas.conflicts({ agenda_date: v.agenda_date, start_time: v.start_time, end_time: v.end_time, exclude_id: existing?.id, user_ids: staff ? staff.split(',') : [] })
+      .then(setClash, () => setClash([])); }, 300);
+    return () => clearTimeout(t);
+  }, [v.agenda_date, v.start_time, v.end_time, staff, existing?.id]);
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof AgendaInput>(k: K) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setV({ ...v, [k]: e.target.value });
   const toggle = (id: string) => setV({ ...v, support_user_ids: v.support_user_ids.includes(id) ? v.support_user_ids.filter((x) => x !== id) : [...v.support_user_ids, id] });
@@ -21,12 +30,13 @@ export function AgendaForm({ initial, existing, onSaved }: { initial: AgendaInpu
     catch (e) { toast(errMsg(e), 'error'); } finally { setBusy(false); }
   };
   return (
-    <DialogContent wide title={existing ? 'Ubah agenda' : 'Buat agenda'} description="Diisi dari surat undangan; periksa sebelum menyimpan. Agenda tidak bergantung pada pengiriman WhatsApp."
+    <DialogContent wide title={existing ? 'Ubah agenda' : 'Buat agenda'} description={v.invitation_id && !existing ? 'Dari undangan masuk. Buka file undangan dan cocokkan isinya; menyimpan berarti Anda memverifikasi undangan ini.' : 'Periksa sebelum menyimpan. Agenda tidak bergantung pada pengiriman WhatsApp.'}
       footer={<Button disabled={busy} onClick={save}>{existing ? 'Simpan perubahan' : 'Simpan agenda'}</Button>}>
       {people.error && <p className="mb-2 text-sm text-red-700" role="alert">{people.error}</p>}
       <div className="grid gap-3 text-sm md:grid-cols-2">
         <Field label="Judul kegiatan" required className="md:col-span-2"><Input value={v.title} onChange={set('title')} /></Field>
         <Field label="Nomor surat"><Input value={v.letter_number} onChange={set('letter_number')} /></Field>
+        <Field label="Tanggal surat" hint="Tanggal pada surat, bukan tanggal acara"><Input type="date" value={v.letter_date ?? ''} onChange={(e) => setV({ ...v, letter_date: e.target.value || null })} /></Field>
         <Field label="Tanggal" required hint={v.agenda_date ? `Hari: ${dayName(v.agenda_date)}` : 'Hari terisi otomatis dari tanggal'}><Input type="date" value={v.agenda_date} onChange={set('agenda_date')} /></Field>
         <Field label="Jam mulai"><Input type="time" value={v.start_time} onChange={set('start_time')} /></Field>
         <Field label="Jam selesai"><Input type="time" value={v.end_time} onChange={set('end_time')} /></Field>
@@ -38,6 +48,15 @@ export function AgendaForm({ initial, existing, onSaved }: { initial: AgendaInpu
             <option value="">— Belum ditentukan —</option>{people.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </Select>
         </Field>
+        <Field label="Program terkait">
+          <Select value={v.program_id ?? ''} onChange={(e) => setV({ ...v, program_id: e.target.value || null })}>
+            <option value="">— Tidak ada —</option>{programs.data?.map((p) => <option key={p.id} value={p.id}>{String(p.code ?? '')} {String(p.name ?? '')}</option>)}
+          </Select>
+        </Field>
+        {clash.length > 0 && <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-amber-900 md:col-span-2" role="status">
+          <b>Jadwal bentrok</b> dengan: {clash.map((c) => `${c.title} (${c.start_time}${c.end_time ? `–${c.end_time}` : ''})${c.shared_staff.length ? `, staf sama: ${c.shared_staff.join(', ')}` : ''}`).join('; ')}. Agenda tetap bisa disimpan.
+        </div>}
+        <Field label="Peserta yang diundang" className="md:col-span-2"><Textarea rows={2} value={v.participants ?? ''} onChange={(e) => setV({ ...v, participants: e.target.value })} /></Field>
         <Field label="Agenda rapat" className="md:col-span-2"><Textarea rows={3} value={v.agenda_text} onChange={set('agenda_text')} /></Field>
         <div className="md:col-span-2">
           <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Staf pendukung</div>
@@ -54,5 +73,9 @@ export function AgendaForm({ initial, existing, onSaved }: { initial: AgendaInpu
 
 export const agendaToInput = (a: Agenda): AgendaInput => ({
   title: a.title, letter_number: a.letter_number, source_document_id: a.source_document_id, agenda_date: a.agenda_date, start_time: a.start_time, end_time: a.end_time,
-  location: a.location, meeting_url: a.meeting_url, organizer: a.organizer, agenda_text: a.agenda_text, notes: a.notes, pic_user_id: a.pic?.id ?? null, support_user_ids: a.support.map((s) => s.id)
+  location: a.location, meeting_url: a.meeting_url, organizer: a.organizer, agenda_text: a.agenda_text, notes: a.notes, pic_user_id: a.pic?.id ?? null, support_user_ids: a.support.map((s) => s.id),
+  letter_date: a.letter_date, program_id: a.program_id, participants: a.participants
 });
+
+export const EMPTY_AGENDA: AgendaInput = { title: '', letter_number: '', source_document_id: null, agenda_date: '', start_time: '', end_time: '', location: '',
+  meeting_url: '', organizer: '', agenda_text: '', notes: '', pic_user_id: null, support_user_ids: [], letter_date: null, program_id: null, participants: '' };

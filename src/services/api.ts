@@ -16,7 +16,7 @@ import type { Bill, BillDetail, BillFilter, BillInput, PaymentInput } from '@sha
 import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, PlanRow, Warned } from '@shared/ppk/budget';
 import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow, YearValueRow } from '@shared/ppk/contracts';
 import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
-import type { Agenda, AgendaHome, AgendaInput, InvitationRow, InvitationStatus } from '@shared/ppk/agenda';
+import type { Agenda, AgendaConflict, AgendaFilter, AgendaHistoryRow, AgendaHome, AgendaInput, InvitationFile, InvitationRow, InvitationStatus } from '@shared/ppk/agenda';
 import type { DeliveryLog, Recipient } from '@shared/whatsapp';
 
 export interface PpkServerConf { host: string; port: number; database: string; user: string; password: string }
@@ -219,16 +219,22 @@ export const api = {
     },
     relatedDocuments: (numbers: string[]) => call<RelatedDocument[]>('ppk:documents:related', { numbers }),
     invitations: {
-      list: (status?: InvitationStatus) => call<InvitationRow[]>('ppk:invitations:list', status ? { status } : {})
+      list: (status?: InvitationStatus) => call<InvitationRow[]>('ppk:invitations:list', status ? { status } : {}),
+      upload: (note = '') => call<{ id: string; duplicate_of: string | null } | null>('ppk:invitations:upload', { note }),
+      files: (id: string) => call<InvitationFile[]>('ppk:invitations:files', { id }),
+      openFile: (id: string) => call<boolean>('ppk:files:open', { id })
     },
     agendas: {
-      list: (f: { from?: string; to?: string; include_cancelled?: boolean } = {}) => call<Agenda[]>('ppk:agendas:list', f),
+      list: (f: AgendaFilter & { include_cancelled?: boolean } = {}) => call<Agenda[]>('ppk:agendas:list', f),
       get: (id: string) => call<Agenda>('ppk:agendas:get', { id }),
       create: (v: AgendaInput) => call<Agenda>('ppk:agendas:create', v),
       update: (id: string, version: number, values: AgendaInput) => call<Agenda>('ppk:agendas:update', { id, version, values }),
       setStatus: (id: string, status: 'selesai' | 'dibatalkan', reason = '') => call<Agenda>('ppk:agendas:setStatus', { id, status, reason }),
       people: () => call<Array<{ id: string; name: string }>>('ppk:agendas:people'),
-      home: () => call<AgendaHome>('ppk:agendas:home')
+      home: () => call<AgendaHome>('ppk:agendas:home'),
+      archive: (id: string, archived: boolean) => call<Agenda>('ppk:agendas:archive', { id, archived }),
+      conflicts: (q: { agenda_date: string; start_time: string; end_time: string; exclude_id?: string; user_ids?: string[] }) => call<AgendaConflict[]>('ppk:agendas:conflicts', q),
+      history: (id: string) => call<AgendaHistoryRow[]>('ppk:agendas:history', { id })
     },
     server: {
       status: () => call<PpkServerStatus>('ppk:server:status'),

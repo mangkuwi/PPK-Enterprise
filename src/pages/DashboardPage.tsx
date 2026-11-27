@@ -7,8 +7,8 @@ import { Badge, Card, Empty, STATUS_LABEL, STATUS_TONE } from '@/components/ui/c
 import { Dialog } from '@/components/ui/dialog';
 import { PpkGate } from '@/features/ppk/PpkGate';
 import { usePpkAccess } from '@/features/ppk/usePpkAccess';
-import { AgendaForm, agendaToInput } from '@/features/ppk/AgendaForm';
-import { AgendaCalendar, AgendaDetail, AgendaRow } from '@/features/ppk/AgendaViews';
+import { AgendaForm, EMPTY_AGENDA } from '@/features/ppk/AgendaForm';
+import { AgendaCalendar, AgendaRow } from '@/features/ppk/AgendaViews';
 import { useAsync } from '@/hooks/useAsync';
 import { api } from '@/services/api';
 import { formatDateTime } from '@/lib/utils';
@@ -26,9 +26,6 @@ function Stat({ icon: Icon, label, value, hint, to }: { icon: typeof Files; labe
   );
   return to ? <Link to={to}>{body}</Link> : body;
 }
-
-const EMPTY_AGENDA: AgendaInput = { title: '', letter_number: '', source_document_id: null, agenda_date: '', start_time: '', end_time: '', location: '',
-  meeting_url: '', organizer: '', agenda_text: '', notes: '', pic_user_id: null, support_user_ids: [] };
 
 function Count({ icon: Icon, label, value, to, tone = 'navy' }: { icon: typeof Files; label: string; value: number | undefined; to: string; tone?: 'navy' | 'amber' }) {
   return (
@@ -66,11 +63,11 @@ function AgendaHomeSection() {
   const now = useJakartaClock();
   const [cursor, setCursor] = useState(today);
   const [selected, setSelected] = useState<string | null>(null);
-  const [open, setOpen] = useState<Agenda | null>(null);
   const [form, setForm] = useState<{ initial: AgendaInput; existing?: Agenda } | null>(null);
   const days = calendarDays(view, cursor);
   const cal = useAsync(() => api.ppk.agendas.list({ from: days[0], to: days[days.length - 1] }), [days[0], days[days.length - 1]]);
   const h = home.data;
+  const setOpen = (a: Agenda) => navigate(`/ppk/agenda/${a.id}`);
   const listed = (cal.data ?? []).filter((a) => (selected ? a.agenda_date === selected : true));
   const reload = () => { home.reload(); cal.reload(); };
   const pendingTotal = h ? h.counts.pending_verification + h.counts.pending_assignment + h.needs_report.length : undefined;
@@ -142,9 +139,6 @@ function AgendaHomeSection() {
           </Box>
         </div>
       </div>
-      <Dialog open={!!open} onOpenChange={(o) => { if (!o) setOpen(null); }}>
-        {open && <AgendaDetail a={open} canEdit={can('write')} onEdit={() => { setForm({ initial: agendaToInput(open), existing: open }); setOpen(null); }} />}
-      </Dialog>
       <Dialog open={!!form} onOpenChange={(o) => { if (!o) setForm(null); }}>
         {form && <AgendaForm initial={form.initial} existing={form.existing} onSaved={() => { setForm(null); reload(); }} />}
       </Dialog>
