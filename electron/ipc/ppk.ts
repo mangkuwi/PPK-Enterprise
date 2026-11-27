@@ -1,4 +1,5 @@
 import { app, dialog, shell } from 'electron';
+import { changeOwnPassword, createAccount, resetAccountPassword, setAccountActive } from '../main/ppk/accounts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -74,6 +75,11 @@ export function registerPpkHandlers() {
 
   handle('ppk:access', S.empty, async () => { const a = peekPpkActor(getDb()); return a ? ppkAccess(st(), a) : null; });
   handle('ppk:users', S.empty, () => listPpkUsers(st(), actor()));
+  const password = z.string().max(64);
+  handle('ppk:accounts:create', z.object({ name: z.string().max(80), password, ppk_role: z.enum(PPK_ROLES) }), (i) => createAccount(st(), actor(), i));
+  handle('ppk:accounts:setActive', z.object({ user_id: S.id, active: z.boolean() }), async ({ user_id, active }) => { await setAccountActive(st(), actor(), user_id, active); return true; });
+  handle('ppk:accounts:resetPassword', z.object({ user_id: S.id, password }), async ({ user_id, password: p }) => { await resetAccountPassword(st(), actor(), user_id, p); return true; });
+  handle('ppk:accounts:changeOwn', z.object({ old_password: password, password }), async (i) => { await changeOwnPassword(st(), actor(), i.old_password, i.password); return true; });
   handle('ppk:setRole', z.object({ user_id: S.id, role: z.enum(PPK_ROLES).nullable() }), async ({ user_id, role }) => { await setPpkRole(st(), actor(), user_id, role); return true; });
 
   handle('ppk:master:list', z.object({ key: masterKey }), ({ key }) => listMaster(st(), actor(), key));

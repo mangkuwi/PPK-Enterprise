@@ -92,7 +92,7 @@ export const api = {
     setAiKey: (key: string) => call<Settings>('settings:setAiKey', { key })
   },
   numbering: {
-    whoami: () => call<{ actor: Actor | null; users: AppUser[] }>('numbering:whoami'),
+    whoami: () => call<{ actor: Actor | null; users: AppUser[]; setup: boolean }>('numbering:whoami'),
     login: (user_id: string, pin?: string) => call<Actor>('numbering:login', { user_id, pin }),
     logout: () => call<boolean>('numbering:logout'),
     users: () => call<AppUser[]>('numbering:users'),
@@ -164,6 +164,12 @@ export const api = {
     access: () => call<PpkAccess | null>('ppk:access'),
     users: () => call<PpkUserRow[]>('ppk:users'),
     setRole: (user_id: string, role: PpkRole | null) => call<boolean>('ppk:setRole', { user_id, role }),
+    accounts: {
+      create: (name: string, password: string, ppk_role: PpkRole) => call<{ id: string; name: string }>('ppk:accounts:create', { name, password, ppk_role }),
+      setActive: (user_id: string, active: boolean) => call<boolean>('ppk:accounts:setActive', { user_id, active }),
+      resetPassword: (user_id: string, password: string) => call<boolean>('ppk:accounts:resetPassword', { user_id, password }),
+      changeOwn: (old_password: string, password: string) => call<boolean>('ppk:accounts:changeOwn', { old_password, password })
+    },
     masterList: (key: MasterKey) => call<MasterRow[]>('ppk:master:list', { key }),
     masterSave: (key: MasterKey, values: Record<string, string | number | boolean | null>) => call<MasterRow>('ppk:master:save', { key, values }),
     taxRates: () => call<Array<{ id: string; valid_from: string; ppn_bp: number; pph23_bp: number; note: string }>>('ppk:taxRates'),

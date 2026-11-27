@@ -13,14 +13,15 @@ import { PpkGate } from '@/features/ppk/PpkGate';
 import { api } from '@/services/api';
 import { MASTERS, MASTER_KEYS, type MasterDef, type MasterKey, type MasterRow } from '@shared/ppk/master';
 import { PPK_ROLES, PPK_ROLE_LABEL, type PpkRole } from '@shared/ppk/access';
+import { PASSWORD_RULE, validPassword } from '@shared/numbering';
 
-type Tab = MasterKey | 'roles' | 'tax';
+type Tab = MasterKey | 'accounts' | 'tax';
 const defOf = (k: MasterKey) => MASTERS[k] as MasterDef;
 
 export default function PpkSettingsPage() {
   const [tab, setTab] = useState<Tab>('programs');
   const { can } = usePpkAccess();
-  const tabs: Array<[Tab, string]> = [...MASTER_KEYS.map((k) => [k, defOf(k).label] as [Tab, string]), ['tax', 'Tarif Pajak'], ...(can('roles') ? [['roles', 'Peran Pengguna'] as [Tab, string]] : [])];
+  const tabs: Array<[Tab, string]> = [...MASTER_KEYS.map((k) => [k, defOf(k).label] as [Tab, string]), ['tax', 'Tarif Pajak'], ...(can('accounts') ? [['accounts', 'Akun Staf'] as [Tab, string]] : [])];
   return (
     <Page>
       <PpkGate>
@@ -31,7 +32,7 @@ export default function PpkSettingsPage() {
               className={cn('-mb-px border-b-2 px-3 py-2 text-sm font-medium', tab === k ? 'border-navy-800 text-navy-900' : 'border-transparent text-slate-500 hover:text-slate-800')}>{label}</button>
           ))}
         </div>
-        {tab === 'roles' ? <RolesTab /> : tab === 'tax' ? <TaxTab /> : <MasterTab key={tab} k={tab} canEdit={can('master')} />}
+        {tab === 'accounts' ? <AccountsTab canAdmin={can('roles')} /> : tab === 'tax' ? <TaxTab /> : <MasterTab key={tab} k={tab} canEdit={can('master')} />}
       </PpkGate>
     </Page>
   );
@@ -130,33 +131,65 @@ function TaxTab() {
   );
 }
 
-function RolesTab() {
+/** Akun staf: Admin PPK dan Pejabat PPK membuat akun, mengatur peran, mereset kata sandi, dan menonaktifkan. */
+function AccountsTab({ canAdmin }: { canAdmin: boolean }) {
   const { toast } = useFeedback();
+  const { access } = usePpkAccess();
   const users = useAsync(() => api.ppk.users(), []);
-  const change = async (id: string, role: string) => {
-    try { await api.ppk.setRole(id, (role || null) as PpkRole | null); toast('Peran diperbarui.', 'success'); users.reload(); } catch (e) { toast(errMsg(e), 'error'); }
+  const [name, setName] = useState(''); const [pw, setPw] = useState(''); const [role, setRole] = useState<PpkRole>('staf');
+  const [resetFor, setResetFor] = useState<string | null>(null); const [newPw, setNewPw] = useState('');
+  const roles = PPK_ROLES.filter((r) => canAdmin || r !== 'admin');
+  const act = async (f: () => Promise<unknown>, ok: string) => { try { await f(); toast(ok, 'success'); users.reload(); return true; } catch (e) { toast(errMsg(e), 'error'); return false; } };
+  const create = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validPassword(pw)) return toast(PASSWORD_RULE, 'error');
+    if (await act(() => api.ppk.accounts.create(name, pw, role), `Akun ${name.trim()} dibuat. Sampaikan kata sandinya langsung ke staf.`)) { setName(''); setPw(''); }
+  };
+  const reset = async (id: string) => {
+    if (!validPassword(newPw)) return toast(PASSWORD_RULE, 'error');
+    if (await act(() => api.ppk.accounts.resetPassword(id, newPw), 'Kata sandi direset. Sampaikan langsung ke staf.')) { setResetFor(null); setNewPw(''); }
   };
   return (
-    <div>
+    <div className="space-y-4">
+      <Card className="p-4">
+        <form className="flex flex-wrap items-end gap-2" onSubmit={create}>
+          <Field label="Nama staf" required><Input className="w-56" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label="Kata sandi awal" hint={PASSWORD_RULE} required><Input className="w-48" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} /></Field>
+          <Field label="Peran PPK" required><Select className="w-44" value={role} onChange={(e) => setRole(e.target.value as PpkRole)}>{roles.map((r) => <option key={r} value={r}>{PPK_ROLE_LABEL[r]}</option>)}</Select></Field>
+          <Button type="submit" disabled={!name.trim() || !pw}><Plus size={16} /> Buat akun</Button>
+        </form>
+      </Card>
       {users.error && <Empty>{users.error}</Empty>}
       {!!users.data?.length && (
         <Card className="overflow-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-600"><tr><th className="px-3 py-2 text-left">Pengguna</th><th className="px-3 py-2 text-left">Peran PPK</th><th className="px-3 py-2 text-left">PIN</th><th className="px-3 py-2 text-left">Status</th></tr></thead>
-            <tbody>{users.data.map((u) => (
-              <tr key={u.id} className="border-t border-slate-100">
-                <td className="px-3 py-2">{u.name}</td>
-                <td className="px-3 py-2">{u.app_role === 'admin' ? <span>{PPK_ROLE_LABEL.admin} <span className="text-xs text-slate-500">(administrator aplikasi)</span></span> : (
-                  <Select className="w-48" value={u.ppk_role ?? ''} onChange={(e) => change(u.id, e.target.value)} aria-label={`Peran PPK ${u.name}`}>
-                    <option value="">Tanpa akses</option>{PPK_ROLES.map((r) => <option key={r} value={r}>{PPK_ROLE_LABEL[r]}</option>)}</Select>)}</td>
-                <td className="px-3 py-2">{u.has_pin ? <Badge tone="green">PIN aktif</Badge> : <Badge tone="amber">tanpa PIN, hanya baca</Badge>}</td>
-                <td className="px-3 py-2">{u.is_active ? 'Aktif' : 'Nonaktif'}</td>
-              </tr>))}
+            <thead className="bg-slate-50 text-xs text-slate-600"><tr><th className="px-3 py-2 text-left">Pengguna</th><th className="px-3 py-2 text-left">Peran PPK</th><th className="px-3 py-2 text-left">Kata sandi</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Tindakan</th></tr></thead>
+            <tbody>{users.data.map((u) => {
+              const self = u.id === access?.user_id;
+              const locked = !canAdmin && (u.app_role === 'admin' || u.ppk_role === 'admin');
+              return (
+                <tr key={u.id} className="border-t border-slate-100">
+                  <td className="px-3 py-2">{u.name}{self && <span className="text-xs text-slate-500"> (Anda)</span>}</td>
+                  <td className="px-3 py-2">{u.app_role === 'admin' ? <span>{PPK_ROLE_LABEL.admin} <span className="text-xs text-slate-500">(administrator aplikasi)</span></span> : locked || self ? (u.ppk_role ? PPK_ROLE_LABEL[u.ppk_role] : 'Tanpa akses') : (
+                    <Select className="w-48" value={u.ppk_role ?? ''} onChange={(e) => void act(() => api.ppk.setRole(u.id, (e.target.value || null) as PpkRole | null), 'Peran diperbarui.')} aria-label={`Peran PPK ${u.name}`}>
+                      <option value="">Tanpa akses</option>{roles.map((r) => <option key={r} value={r}>{PPK_ROLE_LABEL[r]}</option>)}</Select>)}</td>
+                  <td className="px-3 py-2">{u.has_pin ? <Badge tone="green">Ada</Badge> : <Badge tone="amber">Belum, tidak bisa masuk</Badge>}</td>
+                  <td className="px-3 py-2">{u.is_active ? 'Aktif' : <Badge>Nonaktif</Badge>}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right">{!locked && !self && <div className="inline-flex items-center gap-2">
+                    {resetFor === u.id ? <>
+                      <Input className="w-40" type="password" autoComplete="new-password" aria-label={`Kata sandi baru ${u.name}`} value={newPw} onChange={(e) => setNewPw(e.target.value)} autoFocus />
+                      <Button size="sm" disabled={!newPw} onClick={() => void reset(u.id)}>Simpan</Button>
+                      <Button size="sm" variant="outline" onClick={() => setResetFor(null)}>Batal</Button>
+                    </> : <Button size="sm" variant="outline" onClick={() => { setResetFor(u.id); setNewPw(''); }}>Reset kata sandi</Button>}
+                    <Button size="sm" variant="outline" onClick={() => void act(() => api.ppk.accounts.setActive(u.id, !u.is_active), u.is_active ? `Akun ${u.name} dinonaktifkan.` : `Akun ${u.name} diaktifkan.`)}>{u.is_active ? 'Nonaktifkan' : 'Aktifkan'}</Button>
+                  </div>}</td>
+                </tr>);
+            })}
             </tbody>
           </table>
         </Card>
       )}
-      <p className="mt-3 text-xs text-slate-500">Admin PPK: semua termasuk peran. Pejabat PPK: data dan master. Staf Input: data. Pembaca: lihat saja. Pengguna baru dan PIN diatur di Administrasi → Register Lainnya & Impor → Pengaturan → Pengguna, atau di halaman Server PPK bila memakai server.</p>
+      <p className="text-xs text-slate-500">Admin PPK: semua termasuk akun administrator. Pejabat PPK: data, master, dan akun staf. Staf Input: data. Pembaca: lihat saja. Akun nonaktif tidak bisa masuk; riwayatnya tetap tersimpan. Semua perubahan akun tercatat di log audit.</p>
     </div>
   );
 }

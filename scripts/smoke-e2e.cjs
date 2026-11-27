@@ -29,12 +29,16 @@ const UNICODE = 'Surat Undangan – Rapat Ñ ä ẞ';
   let here = 'start';
   w.on('pageerror', (e) => errors.push(`${here}: ${e.message}`));
   w.on('console', (m) => { if (m.type() === 'error') errors.push(`${here}: ${m.text().slice(0, 300)}`); });
-  await w.waitForSelector('main', { timeout: 30000 });
   const call = async (ch, arg) => {
     const r = await w.evaluate(([c, a]) => window.api.invoke(c, a), [ch, arg]);
     if (!r.ok) throw new Error(`${ch}: ${r.error}`);
     return r.data;
   };
+  // Data baru: layar pertama meminta kata sandi administrator. Buat lewat API lalu muat ulang.
+  await w.waitForSelector('main, form', { timeout: 30000 });
+  const who = await call('numbering:whoami');
+  if (who.setup) { await call('numbering:setPin', { id: who.actor.id, pin: 'smoke-sandi-1' }); await w.reload(); }
+  await w.waitForSelector('main', { timeout: 30000 });
   const stubSave = (file) => app.evaluate(({ dialog }, f) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: f }); }, file);
   const stubOpen = (file) => app.evaluate(({ dialog }, f) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] }); }, file);
 

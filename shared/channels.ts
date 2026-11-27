@@ -28,6 +28,7 @@ export const CHANNELS = [
   'ppk:bills:payments', 'ppk:budget:export', 'ppk:contracts:export', 'ppk:bills:export',
   'ppk:import:pick', 'ppk:import:run', 'ppk:reports:get', 'ppk:reports:export',
   'ppk:budget:plan', 'ppk:budget:setPlan', 'ppk:contracts:setYearValues', 'ppk:sp2d:report', 'ppk:sp2d:add', 'ppk:sp2d:void', 'ppk:documents:related',
+  'ppk:accounts:create', 'ppk:accounts:setActive', 'ppk:accounts:resetPassword', 'ppk:accounts:changeOwn',
   'ppk:server:status', 'ppk:server:test', 'ppk:server:configure', 'ppk:server:setup', 'ppk:server:useLocal', 'ppk:server:users', 'ppk:server:login',
   'ppk:server:logout', 'ppk:server:createUser', 'ppk:server:setPin', 'ppk:server:setActive', 'ppk:server:backup', 'ppk:server:restore',
   'wa:preparePdf', 'wa:openPdf', 'wa:open', 'wa:recipients', 'wa:saveRecipients', 'wa:delivered', 'wa:cloudStatus', 'wa:cloudConfigure', 'wa:cloudForget', 'wa:cloudSend',

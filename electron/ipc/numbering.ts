@@ -9,7 +9,7 @@ import { getDb } from '../main/database';
 import * as repo from '../main/repo';
 import { getMainWindow } from '../main/window';
 import { renderHtmlPdf } from '../main/pdf';
-import { currentActor, login, logout, peekActor } from '../main/numbering/session';
+import { currentActor, login, logout, needsSetup, peekActor } from '../main/numbering/session';
 import { createUser, listUsers, setPin, updateUser } from '../main/numbering/users';
 import { configHistory, ensureDefaultMappings, getRegister, listCategoryMap, listRegisters, setCategoryMap, setTemplateMap, updateRegister } from '../main/numbering/registers';
 import { setNextSequence, suggestNext } from '../main/numbering/engine';
@@ -56,13 +56,13 @@ export function registerNumberingHandlers() {
   try { ensureDefaultMappings(db()); } catch { /* DB belum siap pada start; dicoba lagi saat panggilan pertama */ }
 
   // ----- pengguna & sesi -----
-  handle('numbering:whoami', S.empty, () => { ensureDefaultMappings(db()); return { actor: peekActor(db()), users: listUsers(db()).filter((u) => u.is_active) }; });
-  handle('numbering:login', z.object({ user_id: S.id, pin: z.string().max(20).optional() }), ({ user_id, pin }) => login(db(), user_id, pin));
+  handle('numbering:whoami', S.empty, () => { ensureDefaultMappings(db()); return { actor: peekActor(db()), users: listUsers(db()).filter((u) => u.is_active), setup: needsSetup(db()) }; });
+  handle('numbering:login', z.object({ user_id: S.id, pin: z.string().max(64).optional() }), ({ user_id, pin }) => login(db(), user_id, pin));
   handle('numbering:logout', S.empty, () => { logout(); return true; });
   handle('numbering:users', S.empty, () => listUsers(db()));
-  handle('numbering:createUser', z.object({ name: z.string().max(80), role: z.enum(['admin', 'operator']), pin: z.string().max(20).nullish() }), (i) => createUser(db(), actor(), i));
+  handle('numbering:createUser', z.object({ name: z.string().max(80), role: z.enum(['admin', 'operator']), pin: z.string().max(64).nullish() }), (i) => createUser(db(), actor(), i));
   handle('numbering:updateUser', z.object({ id: S.id, name: z.string().max(80).optional(), role: z.enum(['admin', 'operator']).optional(), is_active: z.boolean().optional() }), ({ id, ...p }) => updateUser(db(), actor(), id, p));
-  handle('numbering:setPin', z.object({ id: S.id, pin: z.string().max(20).nullable() }), ({ id, pin }) => { setPin(db(), actor(), id, pin); return true; });
+  handle('numbering:setPin', z.object({ id: S.id, pin: z.string().max(64).nullable() }), ({ id, pin }) => { setPin(db(), actor(), id, pin); return true; });
 
   // ----- register & konfigurasi -----
   handle('numbering:summary', z.object({ year }), ({ year: y }) => summaries(db(), y));

@@ -1,12 +1,15 @@
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { DB } from '../db';
-import type { Actor, AppUser, Role } from '@shared/numbering';
+import { validSecret, type Actor, type AppUser, type Role } from '@shared/numbering';
 import { NumberingError } from './errors';
 import { audit } from './audit';
+import { clearFails, lockedMinutes, lockMessage, recordFail } from './lockout';
 
 import { nowIso } from './clock';
 const now = nowIso;
-const hash = (pin: string, salt: string) => scryptSync(pin, salt, 32).toString('hex');
+export const hash = (pin: string, salt: string) => scryptSync(pin, salt, 32).toString('hex');
+export const verifySecret = (secret: string | null | undefined, r: { pin_hash: string | null; pin_salt: string | null }) =>
+  !!secret && !!r.pin_hash && !!r.pin_salt && timingSafeEqual(Buffer.from(hash(secret, r.pin_salt), 'hex'), Buffer.from(r.pin_hash, 'hex'));
 
 interface Row { id: string; name: string; role: Role; pin_hash: string | null; pin_salt: string | null; is_active: number }
 const toUser = (r: Row): AppUser => ({ id: r.id, name: r.name, role: r.role, has_pin: !!r.pin_hash, is_active: !!r.is_active });
@@ -20,7 +23,8 @@ export function requireAdmin(a: Actor) {
   if (a.role !== 'admin') throw new NumberingError('FORBIDDEN', 'Tindakan ini hanya untuk administrator.');
 }
 
-const validPin = (pin: string) => /^\d{4,12}$/.test(pin);
+const validPin = validSecret;
+const PIN_RULE = 'Kata sandi minimal 8 karakter, atau PIN 4–12 digit angka.';
 const adminCount = (db: DB, exceptId?: string) =>
   (db.prepare("SELECT COUNT(*) n FROM app_users WHERE role='admin' AND is_active=1 AND id != ?").get(exceptId ?? '') as { n: number }).n;
 
@@ -28,7 +32,7 @@ export function createUser(db: DB, actor: Actor, i: { name: string; role: Role; 
   requireAdmin(actor);
   const name = i.name.trim();
   if (!name || name.length > 80) throw new NumberingError('INVALID', 'Nama pengguna wajib diisi (maks. 80 karakter).');
-  if (i.pin && !validPin(i.pin)) throw new NumberingError('INVALID', 'PIN harus 4–12 digit angka.');
+  if (i.pin && !validPin(i.pin)) throw new NumberingError('INVALID', PIN_RULE);
   const id = randomUUID();
   const salt = i.pin ? randomBytes(16).toString('hex') : null;
   try {
@@ -58,19 +62,23 @@ export function updateUser(db: DB, actor: Actor, id: string, p: { name?: string;
 /** Admin boleh mengatur PIN siapa pun; pengguna lain hanya PIN sendiri. pin=null menghapus PIN. */
 export function setPin(db: DB, actor: Actor, id: string, pin: string | null) {
   if (actor.role !== 'admin' && actor.id !== id) throw new NumberingError('FORBIDDEN', 'Anda hanya dapat mengubah PIN sendiri.');
-  if (pin !== null && !validPin(pin)) throw new NumberingError('INVALID', 'PIN harus 4–12 digit angka.');
+  if (pin !== null && !validPin(pin)) throw new NumberingError('INVALID', PIN_RULE);
   const salt = pin ? randomBytes(16).toString('hex') : null;
   const r = db.prepare('UPDATE app_users SET pin_hash=?, pin_salt=? WHERE id=?').run(pin && salt ? hash(pin, salt) : null, salt, id);
   if (!r.changes) throw new NumberingError('NOT_FOUND', 'Pengguna tidak ditemukan.');
   audit(db, actor, pin ? 'user.set_pin' : 'user.clear_pin', 'user', id, {});
 }
 
-export function authenticate(db: DB, id: string, pin?: string | null): Actor {
+/** allowNoPin: hanya saat belum ada satu pun kata sandi (pertama kali) atau mode server; selain itu akun tanpa kata sandi tidak bisa masuk. */
+export function authenticate(db: DB, id: string, pin?: string | null, allowNoPin = true): Actor {
   const r = db.prepare('SELECT * FROM app_users WHERE id=?').get(id) as Row | undefined;
   if (!r || !r.is_active) throw new NumberingError('NOT_FOUND', 'Pengguna tidak ditemukan atau nonaktif.');
-  if (r.pin_hash && r.pin_salt) {
-    const ok = !!pin && timingSafeEqual(Buffer.from(hash(pin, r.pin_salt), 'hex'), Buffer.from(r.pin_hash, 'hex'));
-    if (!ok) { audit(db, toActor(r), 'user.login_failed', 'user', id, {}); throw new NumberingError('FORBIDDEN', 'PIN salah.'); }
+  if (!r.pin_hash && !allowNoPin) throw new NumberingError('FORBIDDEN', 'Akun ini belum punya kata sandi. Minta administrator atau Pejabat PPK mengaturnya.');
+  if (r.pin_hash) {
+    const min = lockedMinutes(id);
+    if (min) throw new NumberingError('FORBIDDEN', lockMessage(min));
+    if (!verifySecret(pin, r)) { recordFail(id); audit(db, toActor(r), 'user.login_failed', 'user', id, {}); throw new NumberingError('FORBIDDEN', 'Kata sandi salah.'); }
+    clearFails(id);
   }
   const a = toActor(r);
   audit(db, a, 'user.login', 'user', id, {});

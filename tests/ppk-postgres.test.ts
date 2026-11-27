@@ -155,7 +155,7 @@ describe.skipIf(!URL_)('PostgreSQL', () => {
 
   it('masuk server wajib PIN dan tercatat di audit', async () => {
     expect((await listServerUsers(srv)).map((u) => u.id)).toContain(admin.id);
-    await expect(serverLogin(srv, admin.id, '000000')).rejects.toThrow(/PIN salah/);
+    await expect(serverLogin(srv, admin.id, '000000')).rejects.toThrow(/Kata sandi salah/);
     expect(await serverLogin(srv, admin.id, '123456')).toEqual(admin);
     const op = await createServerUser(srv, admin, { name: 'Operator Satu', pin: '4321' });
     await expect(createServerUser(srv, admin, { name: 'operator satu', pin: '4321' })).rejects.toThrow(/sudah dipakai/);
