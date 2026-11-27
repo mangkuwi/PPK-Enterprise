@@ -103,10 +103,10 @@ export const PG_TABLES = ['app_users', 'audit_log', 'ppk_user_roles', 'ppk_fisca
   'ppk_funding_sources', 'ppk_budget_accounts', 'ppk_service_categories', 'ppk_service_packages', 'ppk_tax_rates', 'ppk_vendors',
   'ppk_budget_lines', 'ppk_budget_versions', 'ppk_contracts', 'ppk_contract_addendums', 'ppk_contract_schedules', 'ppk_contract_funding_allocations',
   'ppk_bills', 'ppk_bill_funding', 'ppk_payments', 'ppk_budget_plans', 'ppk_sp2d_records', 'ppk_contract_year_values', 'ppk_invitations', 'ppk_files', 'ppk_invitation_extractions', 'ppk_agendas', 'ppk_agenda_assignees',
-  'ppk_user_phones', 'ppk_notifications'] as const;
+  'ppk_user_phones', 'ppk_notifications', 'ppk_tasks'] as const;
 
 /** Migrasi SQLite yang berisi tabel PPK (v12 = tabel undangan modul dokumen, tetap lokal). */
-const PG_MIGRATIONS = [8, 9, 10, 11, 13, 14, 15];
+const PG_MIGRATIONS = [8, 9, 10, 11, 13, 14, 15, 16];
 export const PG_SCHEMA_VERSION = PG_MIGRATIONS[PG_MIGRATIONS.length - 1];
 
 /** Satu migrasi SQLite → PostgreSQL: INTEGER → BIGINT, trigger dan data awal SQLite dibuang (trigger ditulis ulang di PG_TRIGGERS). */
@@ -192,6 +192,7 @@ CREATE TRIGGER trg_ppk_sp2d_upd BEFORE UPDATE ON ppk_sp2d_records FOR EACH ROW E
 
 /** Trigger PostgreSQL per migrasi, aturan sama dengan trigger SQLite. */
 const PG_TRIGGERS: Record<number, string> = {
+  16: `CREATE TRIGGER trg_ppk_tasks_nodel BEFORE DELETE ON ppk_tasks FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Tugas tidak boleh dihapus; arsipkan.');`,
   11: TRIGGERS_V8_11,
   13: `CREATE TRIGGER trg_ppk_agendas_nodel BEFORE DELETE ON ppk_agendas FOR EACH ROW EXECUTE FUNCTION ppk_forbid('Agenda tidak boleh dihapus; batalkan dengan alasan.');`,
   14: `

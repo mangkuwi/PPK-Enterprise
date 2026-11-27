@@ -16,6 +16,7 @@ import type { Bill, BillDetail, BillFilter, BillInput, PaymentInput, PaymentRow 
 import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, PlanRow, Warned } from '@shared/ppk/budget';
 import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow, YearValueRow } from '@shared/ppk/contracts';
 import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
+import type { Task, TaskInput } from '@shared/ppk/tasks';
 import type { Agenda, AgendaConflict, AgendaFilter, AgendaHistoryRow, AgendaHome, AgendaInput, InvitationFile, InvitationRow, InvitationStatus } from '@shared/ppk/agenda';
 import type { DeliveryLog, Recipient } from '@shared/whatsapp';
 
@@ -241,6 +242,12 @@ export const api = {
       status: () => call<GatewayState>('ppk:gateway:status', {}),
       configure: (url: string, api_key: string) => call<{ messages: number; last_webhook: string | null }>('ppk:gateway:configure', { url, api_key }),
       sync: () => call<GatewaySync>('ppk:gateway:sync', {})
+    },
+    tasks: {
+      list: (include_old = false) => call<Task[]>('ppk:tasks:list', { include_old }),
+      save: (id: string | null, version: number | null, values: TaskInput) => call<Task>('ppk:tasks:save', { id, version, values }),
+      setDone: (id: string, done: boolean) => call<Task>('ppk:tasks:setDone', { id, done }),
+      archive: (id: string) => call<boolean>('ppk:tasks:archive', { id })
     },
     agendas: {
       list: (f: AgendaFilter & { include_cancelled?: boolean } = {}) => call<Agenda[]>('ppk:agendas:list', f),

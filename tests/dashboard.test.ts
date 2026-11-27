@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activityText, dashboardYear, programProgress } from '@shared/dashboard';
+import { dashboardYear, programProgress } from '@shared/dashboard';
 
 const line = (description: string, pagu_terakhir: number, billed: number, year = 2026, is_active = 1) => ({ year, is_active, output_detail: description, description: 'Impor rekap.xlsx', activity_name: 'Kegiatan', pagu_terakhir, billed });
 
@@ -18,9 +18,5 @@ describe('dashboard', () => {
     expect(dashboardYear([{ year: 2025 }], 2026)).toBe(2025);
     expect(dashboardYear([{ year: 2026 }, { year: 2025 }], 2026)).toBe(2026);
     expect(dashboardYear([], 2026)).toBe(2026);
-  });
-  it('teks aktivitas', () => {
-    expect(activityText('number.batch')).toBe('Nomor ditambahkan ke Bank Nomor');
-    expect(activityText('ppk.schedule.set')).toBe('schedule set');
   });
 });
