@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Actor } from '@shared/numbering';
-import { overlaps, type Agenda, type AgendaConflict, type AgendaFilter, type AgendaHistoryRow, type AgendaInput, type AgendaStatus } from '@shared/ppk/agenda';
+import { overlaps, type Agenda, type AgendaConflict, type AgendaFilter, type AgendaHistoryRow, type AgendaInput, type AgendaStatus, type AssignStatus, ASSIGN_STATUS_LABEL } from '@shared/ppk/agenda';
 import type { PpkStore } from './store';
 import { PpkError, ppkAudit, requirePpk } from './access';
 import { date, text } from './validate';
@@ -32,19 +32,27 @@ function clean(i: AgendaInput) {
 async function setAssignees(t: PpkStore, id: string, pic: string | null, support: string[]) {
   const ids = [...(pic ? [pic] : []), ...support];
   for (const u of ids) if (!(await t.get('SELECT 1 FROM app_users WHERE id = ? AND is_active = 1', [u]))) throw new PpkError('INVALID', 'Penanggung jawab atau staf pendukung tidak ditemukan atau nonaktif.');
-  await t.run('DELETE FROM ppk_agenda_assignees WHERE agenda_id = ?', [id]);
-  for (const u of ids) await t.run('INSERT INTO ppk_agenda_assignees (agenda_id, user_id, role) VALUES (?,?,?)', [id, u, u === pic ? 'utama' : 'pendukung']);
+  // Tugas dan status orang yang tetap ditugaskan tidak hilang saat agenda diubah.
+  const was = new Set((await t.all<{ user_id: string }>('SELECT user_id FROM ppk_agenda_assignees WHERE agenda_id = ?', [id])).map((r) => r.user_id));
+  for (const u of was) if (!ids.includes(u)) await t.run('DELETE FROM ppk_agenda_assignees WHERE agenda_id = ? AND user_id = ?', [id, u]);
+  await t.run("UPDATE ppk_agenda_assignees SET role = 'pendukung' WHERE agenda_id = ? AND role = 'utama'", [id]); // indeks unik: satu utama
+  for (const u of ids) {
+    const role = u === pic ? 'utama' : 'pendukung';
+    if (was.has(u)) await t.run('UPDATE ppk_agenda_assignees SET role = ? WHERE agenda_id = ? AND user_id = ?', [role, id, u]);
+    else await t.run('INSERT INTO ppk_agenda_assignees (agenda_id, user_id, role) VALUES (?,?,?)', [id, u, role]);
+  }
 }
 
 async function attach(s: PpkStore, rows: Array<Omit<Agenda, 'pic' | 'support'>>): Promise<Agenda[]> {
   if (!rows.length) return [];
-  const a = await s.all<{ agenda_id: string; user_id: string; name: string; role: string }>(
-    `SELECT x.agenda_id, x.user_id, u.name, x.role FROM ppk_agenda_assignees x JOIN app_users u ON u.id = x.user_id
+  const a = await s.all<{ agenda_id: string; user_id: string; name: string; role: string; duty: string; status: AssignStatus }>(
+    `SELECT x.agenda_id, x.user_id, u.name, x.role, x.duty, x.status FROM ppk_agenda_assignees x JOIN app_users u ON u.id = x.user_id
       WHERE x.agenda_id IN (${rows.map(() => '?').join(',')}) ORDER BY u.name`, rows.map((r) => r.id));
   return rows.map((r) => {
     const mine = a.filter((x) => x.agenda_id === r.id);
     const p = mine.find((x) => x.role === 'utama');
-    return { ...r, pic: p ? { id: p.user_id, name: p.name } : null, support: mine.filter((x) => x.role === 'pendukung').map((x) => ({ id: x.user_id, name: x.name })) };
+    const who = (x: (typeof a)[number]) => ({ id: x.user_id, name: x.name, duty: x.duty, status: x.status });
+    return { ...r, pic: p ? who(p) : null, support: mine.filter((x) => x.role === 'pendukung').map(who) };
   });
 }
 
@@ -205,4 +213,21 @@ export async function agendaHistory(s: PpkStore, actor: Actor, id: string): Prom
   const rows = await s.all<{ at: string; actor_name: string; action: string; detail_json: string }>(
     "SELECT at, actor_name, action, detail_json FROM audit_log WHERE entity = 'ppk_agendas' AND entity_id = ? ORDER BY at", [id]);
   return rows.map((r) => ({ at: r.at, actor_name: r.actor_name, action: r.action.replace(/^ppk\./, ''), detail: JSON.parse(r.detail_json) }));
+}
+
+/** Tugas dan status satu orang di agenda. Orang yang ditugaskan boleh mengubah statusnya sendiri; tugas dan status orang lain butuh izin tulis. */
+export async function setAssignment(s: PpkStore, actor: Actor, agendaId: string, userId: string, v: { duty?: string; status: AssignStatus }): Promise<Agenda> {
+  await s.tx(async (t) => {
+    const self = actor.id === userId;
+    await requirePpk(t, actor, self && v.duty === undefined ? 'read' : 'write');
+    const a = await t.get<{ deleted_at: string | null }>('SELECT deleted_at FROM ppk_agendas WHERE id = ?', [agendaId]);
+    if (!a || a.deleted_at) throw new PpkError('NOT_FOUND', 'Agenda tidak ditemukan.');
+    const before = await t.get<{ duty: string; status: string }>('SELECT duty, status FROM ppk_agenda_assignees WHERE agenda_id = ? AND user_id = ?', [agendaId, userId]);
+    if (!before) throw new PpkError('INVALID', 'Orang ini tidak ditugaskan di agenda ini.');
+    if (!(v.status in ASSIGN_STATUS_LABEL)) throw new PpkError('INVALID', 'Status tugas tidak dikenal.');
+    const duty = v.duty === undefined ? before.duty : text(v.duty, 'Tugas', { max: 300 });
+    await t.run('UPDATE ppk_agenda_assignees SET duty = ?, status = ? WHERE agenda_id = ? AND user_id = ?', [duty, v.status, agendaId, userId]);
+    await ppkAudit(t, actor, 'agenda.assignment', 'ppk_agendas', agendaId, { user_id: userId, before, after: { duty, status: v.status } });
+  });
+  return getAgenda(s, actor, agendaId);
 }

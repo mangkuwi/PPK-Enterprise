@@ -5,9 +5,9 @@ import { seedDefaults } from '../electron/main/seed';
 import { createUser, setPin } from '../electron/main/numbering/users';
 import { sqliteStore, type PpkStore } from '../electron/main/ppk/store';
 import { setPpkRole } from '../electron/main/ppk/access';
-import { agendaConflicts, agendaHistory, createAgenda, deleteAgenda, getAgenda, listAgendas, restoreAgenda, setAgendaArchived, setAgendaStatus, updateAgenda } from '../electron/main/ppk/agenda';
+import { agendaConflicts, agendaHistory, createAgenda, deleteAgenda, getAgenda, listAgendas, restoreAgenda, setAgendaArchived, setAgendaStatus, setAssignment, updateAgenda } from '../electron/main/ppk/agenda';
 import { agendaHome } from '../electron/main/ppk/agendaHome';
-import { fileContent, fileKind, getInvitation, invitationFiles, markInvitation, uploadInvitation } from '../electron/main/ppk/inbox';
+import { agendaReports, fileContent, fileKind, getInvitation, invitationFiles, markInvitation, uploadInvitation, uploadReport } from '../electron/main/ppk/inbox';
 import { invitationCounts, listInvitations } from '../electron/main/ppk/agendaHome';
 import { overlaps, type AgendaInput } from '@shared/ppk/agenda';
 import type { Actor } from '@shared/numbering';
@@ -130,6 +130,33 @@ describe('detail pesan Kotak Masuk', () => {
     expect(d1.history.map((h) => h.action)).toEqual(['invitation.upload', 'invitation.processed']);
     expect((await getInvitation(s, citra, u2.id)).agenda?.title).toBe('Dari B');
     await expect(getInvitation(s, citra, 'tidak-ada')).rejects.toThrow(/tidak ditemukan/);
+  });
+});
+
+describe('penugasan dan laporan rapat', () => {
+  it('tugas dan status per orang; orang sendiri boleh ubah statusnya; tetap ada saat agenda diubah', async () => {
+    const a = await createAgenda(s, admin, { ...base, pic_user_id: budi.id, support_user_ids: [citra.id] });
+    expect([a.pic?.status, a.support[0].status]).toEqual(['ditugaskan', 'ditugaskan']);
+    await setAssignment(s, budi, a.id, budi.id, { duty: 'Siapkan paparan', status: 'diterima' });
+    await setAssignment(s, citra, a.id, citra.id, { status: 'selesai' }); // pembaca: hanya status dirinya
+    await expect(setAssignment(s, citra, a.id, budi.id, { status: 'selesai' })).rejects.toThrow(/tidak mengizinkan/);
+    await expect(setAssignment(s, citra, a.id, citra.id, { duty: 'x', status: 'selesai' })).rejects.toThrow(/tidak mengizinkan/);
+    await expect(setAssignment(s, budi, a.id, admin.id, { status: 'selesai' })).rejects.toThrow(/tidak ditugaskan/);
+    const got = await getAgenda(s, admin, a.id);
+    const u = await updateAgenda(s, admin, a.id, got.version, { ...base, title: 'Rapat diubah', pic_user_id: citra.id, support_user_ids: [budi.id] }); // tukar peran
+    expect([u.pic, u.support]).toEqual([{ id: citra.id, name: 'Citra', duty: '', status: 'selesai' }, [{ id: budi.id, name: 'Budi', duty: 'Siapkan paparan', status: 'diterima' }]]);
+    expect((await agendaHistory(s, admin, a.id)).filter((h) => h.action === 'agenda.assignment')).toHaveLength(2);
+  });
+  it('laporan rapat tersimpan utuh; agenda lewat tanpa laporan tampil di beranda', async () => {
+    const a = await createAgenda(s, admin, { ...base, agenda_date: '2026-11-02' });
+    await setAgendaStatus(s, admin, a.id, 'selesai', '');
+    expect((await agendaHome(s, admin, '2026-11-05')).needs_report.map((x) => x.id)).toEqual([a.id]);
+    await expect(uploadReport(s, citra, a.id, { filename: 'notulen.pdf', content: PDF })).rejects.toThrow(/tidak mengizinkan/);
+    await uploadReport(s, budi, a.id, { filename: 'notulen.pdf', content: PDF });
+    const [f] = await agendaReports(s, citra, a.id);
+    expect((await fileContent(s, citra, f.id)).content.equals(PDF)).toBe(true);
+    expect((await agendaHome(s, admin, '2026-11-05')).needs_report).toEqual([]);
+    expect(() => db.prepare('DELETE FROM ppk_files').run()).toThrow();
   });
 });
 

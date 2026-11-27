@@ -89,3 +89,27 @@ export async function markInvitation(s: PpkStore, actor: Actor, id: string, acti
     await ppkAudit(t, actor, action === 'diproses' ? 'invitation.processed' : 'invitation.archive', 'ppk_invitations', id, { before: inv.status, after, reason: why });
   });
 }
+
+/** Laporan rapat (notulen, foto, daftar hadir) untuk satu agenda. File asli disimpan utuh dan tidak bisa diubah atau dihapus. */
+export async function uploadReport(s: PpkStore, actor: Actor, agendaId: string, i: { filename: string; content: Buffer }): Promise<InvitationFile> {
+  if (!i.content.length) throw new PpkError('INVALID', 'File kosong.');
+  if (i.content.length > MAX_FILE) throw new PpkError('INVALID', 'Ukuran file maksimal 20 MB.');
+  const mime = fileKind(i.content, i.filename);
+  const filename = text(i.filename, 'Nama file', { required: true, max: 255 });
+  const sha = createHash('sha256').update(i.content).digest('hex');
+  const id = randomUUID(); const ts = now();
+  await s.tx(async (t) => {
+    await requirePpk(t, actor, 'write');
+    const a = await t.get<{ deleted_at: string | null }>('SELECT deleted_at FROM ppk_agendas WHERE id = ?', [agendaId]);
+    if (!a || a.deleted_at) throw new PpkError('NOT_FOUND', 'Agenda tidak ditemukan.');
+    await t.run(`INSERT INTO ppk_files (id, owner_type, owner_id, filename, mime_type, size_bytes, sha256, content, created_by, created_at)
+      VALUES (?, 'laporan', ?, ?, ?, ?, ?, ?, ?, ?)`, [id, agendaId, filename, mime, i.content.length, sha, i.content, actor.name, ts]);
+    await ppkAudit(t, actor, 'agenda.report', 'ppk_agendas', agendaId, { file_id: id, filename, size: i.content.length, sha256: sha });
+  });
+  return { id, filename, mime_type: mime, size_bytes: i.content.length, created_at: ts };
+}
+
+export async function agendaReports(s: PpkStore, actor: Actor, agendaId: string): Promise<InvitationFile[]> {
+  await requirePpk(s, actor, 'read');
+  return s.all("SELECT id, filename, mime_type, size_bytes, created_at FROM ppk_files WHERE owner_type = 'laporan' AND owner_id = ? ORDER BY created_at", [agendaId]);
+}
