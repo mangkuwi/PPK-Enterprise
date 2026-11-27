@@ -24,7 +24,8 @@ const KEYS = ['q', 'from', 'to', 'program_id', 'user_id', 'organizer', 'status']
 export default function AgendaPage() {
   const navigate = useNavigate();
   const { toast } = useFeedback();
-  const { can } = usePpkAccess();
+  const { can, access } = usePpkAccess();
+  const me = access?.user_id ?? '';
   const [sp, setSp] = useSearchParams();
   const f: AgendaFilter = Object.fromEntries(KEYS.map((k) => [k, sp.get(k) || undefined]).filter(([, v]) => v));
   if (!sp.get('from') && !sp.get('q') && !sp.get('status')) f.from = jakartaToday(); // bawaan: yang akan datang
@@ -64,7 +65,7 @@ export default function AgendaPage() {
           <label className="flex items-center gap-2"><span className="w-12 text-slate-500">Dari</span><Input type="date" value={f.from ?? ''} onChange={(e) => set('from', e.target.value)} /></label>
           <label className="flex items-center gap-2"><span className="w-12 text-slate-500">Sampai</span><Input type="date" value={sp.get('to') ?? ''} onChange={(e) => set('to', e.target.value)} /></label>
           <Select aria-label="Staf" value={sp.get('user_id') ?? ''} onChange={(e) => set('user_id', e.target.value)}>
-            <option value="">Semua staf</option>{people.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            <option value="">Semua staf</option>{people.data?.map((p) => <option key={p.id} value={p.id}>{p.id === me ? `Agenda saya (${p.name})` : p.name}</option>)}
           </Select>
           <Select aria-label="Program" value={sp.get('program_id') ?? ''} onChange={(e) => set('program_id', e.target.value)}>
             <option value="">Semua program</option>{programs.data?.map((p) => <option key={p.id} value={p.id}>{String(p.code ?? '')} {String(p.name ?? '')}</option>)}

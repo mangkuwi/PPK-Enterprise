@@ -9,6 +9,7 @@ import { usePpkAccess } from '@/features/ppk/usePpkAccess';
 import { AgendaCalendar, shortDate, timeText } from '@/features/ppk/AgendaViews';
 import { useActor } from '@/features/numbering/NumberingContext';
 import { TodoList } from '@/features/ppk/TodoList';
+import { PPK_ROLE_LABEL } from '@shared/ppk/access';
 import { useAsync } from '@/hooks/useAsync';
 import { api } from '@/services/api';
 import { cn, formatDateTime } from '@/lib/utils';
@@ -106,7 +107,8 @@ export default function DashboardPage() {
   return (
     <Page>
       <div className="mb-5">
-        <h1 className="text-2xl text-navy-900">Selamat datang{userName ? <>, <b>{userName}</b></> : ''}</h1>
+        <h1 className="text-2xl text-navy-900">Selamat datang{userName ? <>, <b>{userName}</b></> : ''}
+          {access?.role && <span className="ml-2 align-middle text-sm font-medium text-slate-500">· {PPK_ROLE_LABEL[access.role]}</span>}</h1>
         <p className="text-sm text-slate-600">Ringkasan agenda, kontrak, tagihan, anggaran, dan naskah dinas.</p>
       </div>
 
@@ -131,11 +133,12 @@ export default function DashboardPage() {
               {focus && <> Agenda berikutnya: <Link className="font-semibold text-blue-700 hover:underline" to={`/ppk/agenda/${focus.id}`}>{focus.title}</Link> · {shortDate(focus.agenda_date)} {timeText(focus)}.</>}</div>}
             <ul className="space-y-2">{todayList.map((a) => {
               const live = liveState(a, today, now); const past = !!a.end_time && a.end_time <= now; // HH:MM sebanding sebagai teks
+              const mine = a.pic?.id === access?.user_id ? 'Anda PJ' : a.support.some((p) => p.id === access?.user_id) ? 'Anda pendukung' : null;
               return (
-                <li key={a.id} className={cn('flex items-center gap-4 rounded-xl border p-3', live === 'berlangsung' ? 'border-green-300 bg-green-50' : past ? 'border-slate-200 opacity-70' : 'border-slate-200')}>
+                <li key={a.id} className={cn('flex items-center gap-4 rounded-xl border p-3', live === 'berlangsung' ? 'border-green-300 bg-green-50' : past ? 'border-slate-200 opacity-70' : mine ? 'border-blue-300 bg-blue-50/50' : 'border-slate-200')}>
                   <div className="w-28 shrink-0"><div className="text-base font-bold text-navy-900">{timeText(a)}</div>
                     {live === 'berlangsung' ? <span className="text-xs font-semibold text-green-700">● Sedang berlangsung</span> : <span className="text-xs text-slate-500">{startsInText(a, today, now) ?? ''}</span>}</div>
-                  <Link to={`/ppk/agenda/${a.id}`} className="min-w-0 flex-1"><div className="font-semibold text-navy-900 hover:underline">{a.title}</div>
+                  <Link to={`/ppk/agenda/${a.id}`} className="min-w-0 flex-1"><div className="font-semibold text-navy-900 hover:underline">{a.title}{mine && <Badge tone="navy" className="ml-2 align-middle">{mine}</Badge>}</div>
                     <div className="text-sm">{a.meeting_url ? <span className="text-blue-700"><Video size={13} className="mr-1 inline" />Online ({joinLabel(a.meeting_url).replace(/^Gabung /, '')})</span> : <span className="text-slate-600">{a.location && <MapPin size={13} className="mr-1 inline" />}{a.location || 'Lokasi belum diisi'}</span>}
                       <span className="text-slate-500"> · {a.pic ? `PJ: ${a.pic.name}` : 'Belum ada penanggung jawab'}</span></div></Link>
                   {a.meeting_url && <a href={a.meeting_url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"><Video size={16} /> {joinLabel(a.meeting_url).replace(/^Gabung /, 'Join ')}</a>}

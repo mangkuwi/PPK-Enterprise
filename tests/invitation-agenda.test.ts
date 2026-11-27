@@ -115,7 +115,8 @@ describe('agenda PPK', () => {
     const andi = createUser(db, admin, { name: 'Andi Pratama', role: 'operator', pin: '1111' });
     const budi = createUser(db, admin, { name: 'Budi Santoso', role: 'operator', pin: '2222' });
     await setPpkRole(s, admin, andi.id, 'ppk'); await setPpkRole(s, admin, budi.id, 'staf');
-    expect((await agendaPeople(s, admin)).map((p) => p.name)).toEqual(['Administrator', 'Andi Pratama', 'Budi Santoso']);
+    createUser(db, admin, { name: 'Citra Tanpa Peran', role: 'operator', pin: '3333' });
+    expect((await agendaPeople(s, admin)).map((p) => p.name)).toEqual(['Administrator', 'Andi Pratama', 'Budi Santoso', 'Citra Tanpa Peran']);
     const a = await createAgenda(s, admin, input({ pic_user_id: andi.id, support_user_ids: [budi.id, andi.id] }));
     expect(a.pic?.name).toBe('Andi Pratama');
     expect(a.support.map((x) => x.name)).toEqual(['Budi Santoso']); // PIC tidak dobel sebagai pendukung
