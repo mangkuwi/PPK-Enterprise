@@ -34,7 +34,7 @@ export default function App() {
   return (
     <div className="flex h-full">
       <Sidebar />
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <main className="flex min-w-0 flex-1 flex-col overflow-clip">
         <TopBar />
         <div className="min-h-0 flex-1">
         <Routes>

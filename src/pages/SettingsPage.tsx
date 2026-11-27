@@ -120,8 +120,8 @@ export default function SettingsPage() {
             <Button variant="destructive" onClick={restore} disabled={!!busy}>Restore dari Backup…</Button>
           </div>
           <p className="text-xs text-slate-500">Berkas backup (.zip) dapat dipindahkan ke komputer Windows lain lalu di-restore dari menu ini.</p>
-          <div className="flex flex-wrap items-end gap-4 rounded border border-slate-200 p-3">
-            <Switch checked={form.auto_backup === 'true'} onChange={(v) => set('auto_backup', String(v))} label="Backup lengkap otomatis setiap hari" />
+          <div className="flex flex-wrap items-start gap-4 rounded border border-slate-200 p-3">
+            <div className="mt-7"><Switch checked={form.auto_backup === 'true'} onChange={(v) => set('auto_backup', String(v))} label="Backup lengkap otomatis setiap hari" /></div>
             <Field label="Simpan backup otomatis terakhir" hint="Yang lebih lama dihapus otomatis">
               <Input type="number" min={1} max={365} className="w-28" value={form.auto_backup_keep ?? '14'} onChange={(e) => set('auto_backup_keep', e.target.value)} /></Field>
             <p className="text-xs text-slate-500">Disimpan di subfolder "otomatis" pada folder backup. Setiap backup diperiksa keutuhannya (dibuka ulang dan dicek integritas) sebelum backup lama dihapus. Klik Simpan di atas setelah mengubah.</p>

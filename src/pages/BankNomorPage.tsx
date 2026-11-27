@@ -153,11 +153,11 @@ export function GeneratePanel({ registerId, registerName, onDone }: { registerId
   return (
     <Card className="mb-4 p-4">
       <h2 className="mb-2 flex items-center gap-2 font-semibold text-navy-900"><Plus size={16} /> Tambahkan nomor {registerName}</h2>
-      <div className="grid items-end gap-3 md:grid-cols-4">
+      <div className="grid items-start gap-3 md:grid-cols-4">
         <Field label="Tanggal penomoran" hint={isIso(date) ? longDate(date) : undefined}><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
         <Field label="Jumlah nomor" hint="1–500; maks. 99 per kategori per tanggal (format DDSS)."><Input type="number" min={1} max={500} value={qty} onChange={(e) => setQty(e.target.value)} /></Field>
-        <Button variant={pv ? 'outline' : 'default'} onClick={preview} disabled={!ok || busy}><Plus size={15} /> Tambahkan Nomor</Button>
-        {pv ? <Button onClick={commit} disabled={busy}>Simpan ke Bank Nomor</Button> : <span />}
+        <Button className="md:mt-5" variant={pv ? 'outline' : 'default'} onClick={preview} disabled={!ok || busy}><Plus size={15} /> Tambahkan Nomor</Button>
+        {pv ? <Button className="md:mt-5" onClick={commit} disabled={busy}>Simpan ke Bank Nomor</Button> : <span />}
       </div>
       {error && <div className="mt-3 flex items-start gap-2 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800"><AlertTriangle size={16} className="mt-0.5 shrink-0" />{error}</div>}
       {pv && (

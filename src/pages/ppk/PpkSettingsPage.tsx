@@ -15,24 +15,31 @@ import { MASTERS, MASTER_KEYS, type MasterDef, type MasterKey, type MasterRow } 
 import { PPK_ROLES, PPK_ROLE_LABEL, type PpkRole } from '@shared/ppk/access';
 import { PASSWORD_RULE, validPassword } from '@shared/numbering';
 
-type Tab = MasterKey | 'accounts' | 'tax';
 const defOf = (k: MasterKey) => MASTERS[k] as MasterDef;
 
 export default function PpkSettingsPage() {
-  const [tab, setTab] = useState<Tab>('programs');
   const { can } = usePpkAccess();
-  const tabs: Array<[Tab, string]> = [...MASTER_KEYS.map((k) => [k, defOf(k).label] as [Tab, string]), ['tax', 'Tarif Pajak'], ...(can('accounts') ? [['accounts', 'Akun Staf'] as [Tab, string]] : [])];
+  // Tiga tab saja; sembilan jenis data master dipilih lewat daftar agar tab tidak bertumpuk dua baris.
+  const [picked, setTab] = useState<'accounts' | 'master' | 'tax' | null>(null);
+  const [master, setMaster] = useState<MasterKey>('programs');
+  type T = 'accounts' | 'master' | 'tax';
+  const tabs: Array<[T, string]> = [...(can('accounts') ? [['accounts', 'Akun Staf'] as [T, string]] : []), ['master', 'Data Master'], ['tax', 'Tarif Pajak']];
+  const tab = picked ?? tabs[0][0]; // hak akses dimuat belakangan: tab pertama mengikuti hak akses
   return (
     <Page>
       <PpkGate>
-        <PageHeader title="Pengaturan PPK" subtitle="Data master dipakai semua modul PPK. Data tidak dihapus; nonaktifkan bila tidak dipakai lagi." />
-        <div className="mb-4 flex flex-wrap gap-1 border-b border-slate-200" role="tablist">
-          {tabs.map(([k, label]) => (
-            <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-              className={cn('-mb-px border-b-2 px-3 py-2 text-sm font-medium', tab === k ? 'border-navy-800 text-navy-900' : 'border-transparent text-slate-500 hover:text-slate-800')}>{label}</button>
-          ))}
+        <PageHeader title="Pengaturan PPK" subtitle="Akun staf, data master, dan tarif pajak modul PPK. Data tidak dihapus; nonaktifkan bila tidak dipakai lagi." />
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200">
+          <div className="flex gap-1" role="tablist">
+            {tabs.map(([k, label]) => (
+              <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+                className={cn('-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium', tab === k ? 'border-navy-800 text-navy-900' : 'border-transparent text-slate-500 hover:text-slate-800')}>{label}</button>
+            ))}
+          </div>
+          {tab === 'master' && <label className="mb-2 flex items-center gap-2 text-sm text-slate-600">Jenis data
+            <Select className="w-56" value={master} onChange={(e) => setMaster(e.target.value as MasterKey)}>{MASTER_KEYS.map((k) => <option key={k} value={k}>{defOf(k).label}</option>)}</Select></label>}
         </div>
-        {tab === 'accounts' ? <AccountsTab canAdmin={can('roles')} /> : tab === 'tax' ? <TaxTab /> : <MasterTab key={tab} k={tab} canEdit={can('master')} />}
+        {tab === 'accounts' ? <AccountsTab canAdmin={can('roles')} /> : tab === 'tax' ? <TaxTab /> : <MasterTab key={master} k={master} canEdit={can('master')} />}
       </PpkGate>
     </Page>
   );
@@ -152,11 +159,11 @@ function AccountsTab({ canAdmin }: { canAdmin: boolean }) {
   return (
     <div className="space-y-4">
       <Card className="p-4">
-        <form className="flex flex-wrap items-end gap-2" onSubmit={create}>
+        <form className="flex flex-wrap items-start gap-3" onSubmit={create}>
           <Field label="Nama staf" required><Input className="w-56" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} /></Field>
           <Field label="Kata sandi awal" hint={PASSWORD_RULE} required><Input className="w-48" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} /></Field>
           <Field label="Peran PPK" required><Select className="w-44" value={role} onChange={(e) => setRole(e.target.value as PpkRole)}>{roles.map((r) => <option key={r} value={r}>{PPK_ROLE_LABEL[r]}</option>)}</Select></Field>
-          <Button type="submit" disabled={!name.trim() || !pw}><Plus size={16} /> Buat akun</Button>
+          <Button className="mt-5" type="submit" disabled={!name.trim() || !pw}><Plus size={16} /> Buat akun</Button>
         </form>
       </Card>
       {users.error && <Empty>{users.error}</Empty>}
@@ -171,11 +178,11 @@ function AccountsTab({ canAdmin }: { canAdmin: boolean }) {
                 <tr key={u.id} className="border-t border-slate-100">
                   <td className="px-3 py-2">{u.name}{self && <span className="text-xs text-slate-500"> (Anda)</span>}</td>
                   <td className="px-3 py-2">{u.app_role === 'admin' ? <span>{PPK_ROLE_LABEL.admin} <span className="text-xs text-slate-500">(administrator aplikasi)</span></span> : locked || self ? (u.ppk_role ? PPK_ROLE_LABEL[u.ppk_role] : 'Tanpa akses') : (
-                    <Select className="w-48" value={u.ppk_role ?? ''} onChange={(e) => void act(() => api.ppk.setRole(u.id, (e.target.value || null) as PpkRole | null), 'Peran diperbarui.')} aria-label={`Peran PPK ${u.name}`}>
+                    <Select className="w-40" value={u.ppk_role ?? ''} onChange={(e) => void act(() => api.ppk.setRole(u.id, (e.target.value || null) as PpkRole | null), 'Peran diperbarui.')} aria-label={`Peran PPK ${u.name}`}>
                       <option value="">Tanpa akses</option>{roles.map((r) => <option key={r} value={r}>{PPK_ROLE_LABEL[r]}</option>)}</Select>)}</td>
                   <td className="px-3 py-2">{u.has_pin ? <Badge tone="green">Ada</Badge> : <Badge tone="amber">Belum, tidak bisa masuk</Badge>}</td>
                   <td className="px-3 py-2">{u.is_active ? 'Aktif' : <Badge>Nonaktif</Badge>}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right">{!locked && !self && <div className="inline-flex items-center gap-2">
+                  <td className="px-3 py-2 text-right">{!locked && !self && <div className="flex flex-wrap items-center justify-end gap-2">
                     {resetFor === u.id ? <>
                       <Input className="w-40" type="password" autoComplete="new-password" aria-label={`Kata sandi baru ${u.name}`} value={newPw} onChange={(e) => setNewPw(e.target.value)} autoFocus />
                       <Button size="sm" disabled={!newPw} onClick={() => void reset(u.id)}>Simpan</Button>
