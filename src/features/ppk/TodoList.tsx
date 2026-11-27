@@ -13,23 +13,26 @@ import { shortDate } from './AgendaViews';
 import { usePpkAccess } from './usePpkAccess';
 import { TASK_CATEGORIES, TASK_PRIORITIES, TASK_PRIORITY_LABEL, type Task, type TaskInput } from '@shared/ppk/tasks';
 
-type Filter = 'semua' | 'tinggi' | 'berjalan' | 'selesai';
+type Filter = 'saya' | 'semua' | 'tinggi' | 'berjalan' | 'selesai';
 const EMPTY: TaskInput = { title: '', notes: '', due_date: null, priority: 'sedang', category: '', assignee_user_id: null };
 const TONE = { tinggi: 'red', sedang: 'amber', rendah: 'slate' } as const;
 
 /** To Do List staf PPK: centang selesai, tambah/ubah lewat dialog, arsipkan (tidak dihapus). */
 export function TodoList({ today }: { today: string }) {
   const { toast } = useFeedback();
-  const { can } = usePpkAccess();
+  const { can, access } = usePpkAccess();
+  const me = access?.user_id;
   const tasks = useAsync(() => api.ppk.tasks.list(), []);
-  const [filter, setFilter] = useState<Filter>('semua');
+  const [chosen, setFilter] = useState<Filter | null>(null);
   const [all, setAll] = useState(false);
   const [edit, setEdit] = useState<Task | 'baru' | null>(null);
   const list = tasks.data ?? [];
   const pick: Record<Filter, Task[]> = {
-    semua: list, tinggi: list.filter((t) => t.priority === 'tinggi' && t.status === 'berjalan'),
+    saya: list.filter((t) => t.assignee_user_id === me && t.status === 'berjalan'), semua: list, tinggi: list.filter((t) => t.priority === 'tinggi' && t.status === 'berjalan'),
     berjalan: list.filter((t) => t.status === 'berjalan'), selesai: list.filter((t) => t.status === 'selesai')
   };
+  // Bawaan: tugas saya yang masih berjalan, bila ada.
+  const filter: Filter = chosen ?? (pick.saya.length ? 'saya' : 'semua');
   const shown = all ? pick[filter] : pick[filter].slice(0, 6);
   const toggle = async (t: Task) => { try { await api.ppk.tasks.setDone(t.id, t.status !== 'selesai'); tasks.reload(); } catch (e) { toast(errMsg(e), 'error'); } };
   const due = (d: string | null, done: boolean) => {
@@ -41,13 +44,13 @@ export function TodoList({ today }: { today: string }) {
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        {([['semua', 'Semua'], ['tinggi', 'Prioritas Tinggi'], ['berjalan', 'Berjalan'], ['selesai', 'Selesai']] as const).map(([k, l]) => (
+        {([['saya', 'Tugas Saya'], ['semua', 'Semua'], ['tinggi', 'Prioritas Tinggi'], ['berjalan', 'Berjalan'], ['selesai', 'Selesai']] as const).map(([k, l]) => (
           <button key={k} onClick={() => setFilter(k)} aria-pressed={filter === k}
             className={cn('rounded-full px-3 py-1 text-sm', filter === k ? 'bg-blue-600 font-semibold text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200')}>{l} ({pick[k].length})</button>))}
         {can('write') && <Button size="sm" className="ml-auto" onClick={() => setEdit('baru')}><Plus size={15} /> Tambah Tugas</Button>}
       </div>
       {tasks.error && <p className="text-sm text-red-700">{tasks.error}</p>}
-      {!tasks.loading && !shown.length && <Empty>{filter === 'semua' ? 'Belum ada tugas. Tambahkan tugas pertama Anda.' : 'Tidak ada tugas pada pilihan ini.'}</Empty>}
+      {!tasks.loading && !shown.length && <Empty>{filter === 'saya' ? 'Tidak ada tugas berjalan untuk Anda.' : filter === 'semua' ? 'Belum ada tugas. Tambahkan tugas pertama Anda.' : 'Tidak ada tugas pada pilihan ini.'}</Empty>}
       <ul className="divide-y divide-slate-100">{shown.map((t) => {
         const done = t.status === 'selesai';
         return (
@@ -59,7 +62,7 @@ export function TodoList({ today }: { today: string }) {
               <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs">
                 {done ? <Badge tone="green">Selesai</Badge> : <Badge tone={TONE[t.priority]}>{TASK_PRIORITY_LABEL[t.priority]}</Badge>}
                 {t.category && <Badge tone="slate">{t.category}</Badge>}
-                {t.assignee_name && <span className="text-slate-500">PJ: {t.assignee_name}</span>}
+                {t.assignee_name && <span className={t.assignee_user_id === me ? 'font-semibold text-blue-700' : 'text-slate-500'}>PJ: {t.assignee_user_id === me ? 'Anda' : t.assignee_name}</span>}
               </div>
             </button>
             <div className="shrink-0 text-right text-sm">{due(t.due_date, done)}</div>
@@ -67,16 +70,16 @@ export function TodoList({ today }: { today: string }) {
       })}</ul>
       {pick[filter].length > 6 && <button onClick={() => setAll(!all)} className="mt-2 w-full text-center text-sm font-medium text-blue-700 hover:underline">{all ? 'Tampilkan lebih sedikit' : `Lihat semua tugas (${pick[filter].length})`}</button>}
       <Dialog open={!!edit} onOpenChange={(o) => { if (!o) setEdit(null); }}>
-        {edit && <TaskForm task={edit === 'baru' ? null : edit} canEdit={can('write')} onDone={() => { setEdit(null); tasks.reload(); }} />}
+        {edit && <TaskForm task={edit === 'baru' ? null : edit} me={me ?? null} canEdit={can('write')} onDone={() => { setEdit(null); tasks.reload(); }} />}
       </Dialog>
     </div>
   );
 }
 
-function TaskForm({ task, canEdit, onDone }: { task: Task | null; canEdit: boolean; onDone: () => void }) {
+function TaskForm({ task, me, canEdit, onDone }: { task: Task | null; me: string | null; canEdit: boolean; onDone: () => void }) {
   const { toast, confirm } = useFeedback();
   const people = useAsync(() => api.ppk.agendas.people(), []);
-  const [v, setV] = useState<TaskInput>(task ? { title: task.title, notes: task.notes, due_date: task.due_date, priority: task.priority, category: task.category, assignee_user_id: task.assignee_user_id } : EMPTY);
+  const [v, setV] = useState<TaskInput>(task ? { title: task.title, notes: task.notes, due_date: task.due_date, priority: task.priority, category: task.category, assignee_user_id: task.assignee_user_id } : { ...EMPTY, assignee_user_id: me });
   const [busy, setBusy] = useState(false);
   const run = async (f: () => Promise<unknown>, ok: string) => { setBusy(true); try { await f(); toast(ok, 'success'); onDone(); } catch (e) { toast(errMsg(e), 'error'); } finally { setBusy(false); } };
   const save = () => run(() => api.ppk.tasks.save(task?.id ?? null, task?.version ?? null, v), task ? 'Tugas diperbarui.' : 'Tugas ditambahkan.');
@@ -92,7 +95,7 @@ function TaskForm({ task, canEdit, onDone }: { task: Task | null; canEdit: boole
         <Field label="Kategori"><Input list="task-categories" value={v.category} maxLength={60} disabled={!canEdit} onChange={(e) => setV({ ...v, category: e.target.value })} />
           <datalist id="task-categories">{TASK_CATEGORIES.map((c) => <option key={c} value={c} />)}</datalist></Field>
         <Field label="Penanggung jawab"><Select value={v.assignee_user_id ?? ''} disabled={!canEdit} onChange={(e) => setV({ ...v, assignee_user_id: e.target.value || null })}>
-          <option value="">Belum ditentukan</option>{(people.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+          <option value="">Belum ditentukan</option>{(people.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}{p.id === me ? ' (Anda)' : ''}</option>)}</Select></Field>
         <Field label="Catatan" className="col-span-2"><Textarea value={v.notes} maxLength={2000} disabled={!canEdit} onChange={(e) => setV({ ...v, notes: e.target.value })} /></Field>
       </div>
     </DialogContent>
