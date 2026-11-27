@@ -13,7 +13,7 @@ import { PpkGate } from '@/features/ppk/PpkGate';
 import { ReasonDialog, RupiahInput, rp, useFiscalYears, useWarnings } from '@/features/ppk/inputs';
 import { api } from '@/services/api';
 import { RelatedDocs } from '@/features/ppk/RelatedDocs';
-import { Num, UNITS } from '@/features/ppk/Num';
+import { Num } from '@/features/ppk/Num';
 import { ExportButton, SlashWrap, TBL } from '@/features/ppk/table';
 import { billMatrix } from '@shared/ppk/matrix';
 import { MONTH_LABEL } from '@shared/ppk/forecast';
@@ -399,7 +399,7 @@ const CELL_TONE: Record<string, string> = {
 /** Kontrak × bulan layanan: nilai tagihan per bulan dengan warna tahap pembayaran; klik sel untuk membuka tagihan. */
 function BillMatrix({ fiscalYearId, year, bills, onOpen }: { fiscalYearId: string; year: number; bills: Bill[]; onOpen: (id: string) => void }) {
   const contracts = useAsync(() => api.ppk.contracts.list({ fiscal_year_id: fiscalYearId }), [fiscalYearId]);
-  const [unit, setUnit] = useState<number>(1e6);
+  const unit = 1; // rupiah penuh, sama dengan tabel lain
   const rows = useMemo(() => billMatrix(contracts.data ?? [], bills, year), [contracts.data, bills, year]);
   if (contracts.error) return <Empty>{contracts.error}</Empty>;
   if (!contracts.data) return null;
@@ -410,13 +410,11 @@ function BillMatrix({ fiscalYearId, year, bills, onOpen }: { fiscalYearId: strin
     <div className="mb-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
       {Object.entries(CELL_TONE).map(([k, cls]) => <span key={k} className={cn('rounded px-2 py-0.5', cls)}>{k}</span>)}
       <span>Filter status dan pencarian di atas ikut berlaku.</span>
-      <Select className="ml-auto w-32" value={unit} onChange={(e) => setUnit(Number(e.target.value))} aria-label="Satuan angka">
-        {UNITS.map(([u, label]) => <option key={u} value={u}>{label}</option>)}
-      </Select>
+      <span className="ml-auto">Angka dalam Rupiah penuh. Geser tabel ke kanan untuk Okt–Des dan total.</span>
     </div>
     <Card className="max-h-[70vh] overflow-auto">
-      <table className="w-full border-separate border-spacing-0 text-xs">
-        <thead className="sticky top-0 z-20 bg-slate-50 text-slate-600"><tr>
+      <table className="w-full border-separate border-spacing-0 text-[13px]">
+        <thead className="sticky top-0 z-20 bg-slate-50 text-xs text-slate-600"><tr>
           <th className={cn(first, 'z-30 bg-slate-50')}>Kontrak / penyedia</th>
           {MONTH_LABEL.map((m) => <th key={m} className="border-b border-slate-200 px-2 py-2 text-right">{m}</th>)}
           <th className="border-b border-l border-slate-200 px-2 py-2 text-right">Nilai kontrak</th><th className="border-b border-slate-200 px-2 py-2 text-right">Tertagih</th>
@@ -427,7 +425,7 @@ function BillMatrix({ fiscalYearId, year, bills, onOpen }: { fiscalYearId: strin
             <td className={cn(first, 'border-b border-slate-100')} title={`${r.contract_number} · ${r.vendor_name}`}>
               <div className="truncate font-medium text-slate-800">{r.vendor_name}</div><div className="truncate text-[11px] text-slate-500">{r.contract_number}</div>
             </td>
-            {r.months.map((m, i) => <td key={i} className="border-b border-slate-100 p-0.5">
+            {r.months.map((m, i) => <td key={i} className="min-w-[8.5rem] whitespace-nowrap border-b border-slate-100 p-0.5">
               {m ? <button className={cn('w-full rounded px-1.5 py-1 text-right tabular-nums hover:ring-1 hover:ring-navy-700', CELL_TONE[m.stage])}
                 onClick={() => onOpen(m.bill_ids[0])} title={`${m.stage}${m.count > 1 ? ` · ${m.count} tagihan` : ''}`}>
                 <Num n={m.total} unit={unit} />{m.count > 1 && <sup className="ml-0.5">{m.count}</sup>}</button>

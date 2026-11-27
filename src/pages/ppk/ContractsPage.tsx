@@ -22,6 +22,8 @@ import {
   type AddendumInput, type AllocationRow, type Contract, type ContractDetail, type ContractInput, type ContractStatus, type ContractType, type ScheduleRow
 } from '@shared/ppk/contracts';
 
+/** Kolom Project sempit agar nomor kontrak dan angka tetap muat di layar. */
+const PROJECT_COL = 'w-36 min-w-36 max-w-36';
 const TONE: Record<ContractStatus, 'slate' | 'green' | 'navy' | 'red'> = { draft: 'slate', aktif: 'green', selesai: 'navy', dibatalkan: 'red' };
 const opts = (rows: MasterRow[] | undefined, label = (r: MasterRow) => [r.code, r.name].filter(Boolean).join(' — ')) =>
   rows?.map((r) => <option key={r.id} value={r.id}>{label(r)}</option>);
@@ -71,15 +73,14 @@ export default function ContractsPage() {
             <Card className={TBL.card}>
               <table className={TBL.table}>
                 <thead className={TBL.head}><tr>
-                  <th className={cn(TBL.th, TBL.first, 'z-30 bg-slate-50')}>Project / nomor kontrak</th><th className={TBL.th}>Penyedia</th><th className={TBL.th}>Uraian</th>
+                  <th className={cn(TBL.th, TBL.first, PROJECT_COL, 'z-30 bg-slate-50')}>Project</th><th className={TBL.th}>Nomor kontrak</th><th className={TBL.th}>Penyedia</th><th className={TBL.th}>Uraian</th>
                   <th className={TBL.thNum}>Nilai terakhir</th><th className={TBL.thNum}>Tertagih</th><th className={TBL.thNum}>Dibayar</th><th className={cn(TBL.thNum, 'bg-sky-100 text-navy-900')}>Sisa kontrak</th>
                   <th className={TBL.th}>Status / selesai</th>
                 </tr></thead>
                 <tbody>{rows.map((c) => (
                   <tr key={c.id} className={cn(TBL.row, 'cursor-pointer', c.status === 'dibatalkan' && 'text-slate-400')} onClick={() => setOpen(c.id)}>
-                    <td className={cn(TBL.td, TBL.first, 'font-medium text-navy-900')}>
-                      {contractProject(c) && <div className="mb-0.5 text-sm font-bold text-navy-800">{contractProject(c)}</div>}
-                      <button className="text-left text-xs font-normal text-slate-700 hover:underline" onClick={() => setOpen(c.id)}><SlashWrap text={c.contract_number} /></button>
+                    <td className={cn(TBL.td, TBL.first, PROJECT_COL, 'font-semibold text-navy-900')}>{contractProject(c) || <span className="font-normal text-slate-400">—</span>}</td>
+                    <td className={cn(TBL.td, 'min-w-56 max-w-64 [overflow-wrap:anywhere] font-medium text-navy-900')}><button className="text-left hover:underline" onClick={() => setOpen(c.id)}><SlashWrap text={c.contract_number} /></button>
                       {c.contract_type === 'kpbu' && <Badge className="ml-2">KPBU</Badge>}</td>
                     <td className={cn(TBL.td, 'min-w-40')}>{c.vendor_name}</td>
                     <td className={cn(TBL.td, 'min-w-72 max-w-md')}>{c.description}</td>
@@ -92,7 +93,7 @@ export default function ContractsPage() {
                   </tr>))}
                 </tbody>
                 <tfoot><tr>
-                  <td className={cn(TBL.foot, TBL.first, 'z-30 bg-slate-100')}>Total {live.length} kontrak tidak dibatalkan</td><td className={TBL.foot} colSpan={2} />
+                  <td className={cn(TBL.foot, TBL.first, PROJECT_COL, 'z-30 bg-slate-100')}>Total {live.length} kontrak</td><td className={TBL.foot} colSpan={3}>tidak termasuk yang dibatalkan</td>
                   {(['latest_value', 'billed', 'paid', 'sisa_kontrak'] as const).map((k) => <td key={k} className={cn(TBL.foot, 'whitespace-nowrap text-right tabular-nums')}><Num n={sum(k)} unit={1} /></td>)}
                   <td className={TBL.foot} />
                 </tr></tfoot>
