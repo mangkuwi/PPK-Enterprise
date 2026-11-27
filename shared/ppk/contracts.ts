@@ -64,9 +64,24 @@ export function daysUntil(date: string, today = new Date().toISOString().slice(0
 }
 
 /**
- * Project kontrak untuk identifikasi: Paket Layanan bila diisi, selain itu nama sheet asal impor
- * (catatan impor berbentuk "Impor <berkas> · <sheet> baris <n>"), mis. SATRIA 1, IP HUB, IP Transit.
+ * Project kontrak untuk identifikasi, mis. "IP Transit H58", "IP HUB", "OM IP HUB", "SATRIA 1".
+ * Dasar: Paket Layanan bila diisi, lalu nama sheet asal impor (catatan "Impor <berkas> · <sheet> baris <n>"),
+ * lalu tebakan dari uraian. Nomor hub di uraian ("Hub 58") ditambahkan sebagai H58, seperti di sheet REKON.
  */
-export function contractProject(c: { package_code: string | null; package_name: string | null; notes: string }): string {
-  return c.package_name || c.package_code || /· ([^·]+?) baris \d+/.exec(c.notes)?.[1]?.trim() || '';
+export function contractProject(c: { package_code: string | null; package_name: string | null; notes: string; description: string }): string {
+  const d = c.description ?? '';
+  const base = c.package_name || c.package_code || /· ([^·]+?) baris \d+/.exec(c.notes ?? '')?.[1]?.trim() || guessProject(d);
+  const hub = /\bhub\s*(\d{1,3})\b/i.exec(d)?.[1];
+  return hub && base && !new RegExp(`\\bH\\s*${hub}\\b`, 'i').test(base) ? `${base} H${hub}` : base;
 }
+const guessProject = (d: string) =>
+  /akses\s*internet/i.test(d) ? 'Akses Internet'
+    : /ip\s*transit/i.test(d) ? 'IP Transit'
+    : /ip\s*hub/i.test(d) ? (/operasional|pemeliharaan|maintenance|\bO&?M\b/i.test(d) ? 'OM IP HUB' : 'IP HUB')
+      : /kpbu|satria/i.test(d) ? 'SATRIA 1' : '';
+
+/** Pilihan filter project: tiap project + kelompoknya tanpa nomor hub (mis. "IP Transit" mencakup H58, H73, H9). */
+export const projectOptions = (projects: string[]) =>
+  [...new Set(projects.flatMap((p) => [p, p.replace(/ H\d+$/, '')]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'id'));
+/** sel kosong = semua; "IP Transit" cocok dengan "IP Transit" dan "IP Transit H58". */
+export const projectMatches = (project: string, sel: string | undefined) => !sel || project === sel || project.startsWith(`${sel} H`);

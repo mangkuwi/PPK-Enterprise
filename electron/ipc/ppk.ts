@@ -16,6 +16,8 @@ import { addSp2d, sp2dReport, voidSp2d } from '../main/ppk/sp2d';
 import { agendaConflicts, agendaHistory, agendaPeople, createAgenda, deleteAgenda, getAgenda, restoreAgenda, listAgendas, setAgendaArchived, setAgendaStatus, updateAgenda } from '../main/ppk/agenda';
 import { MAX_FILE, fileContent, invitationFiles, uploadInvitation } from '../main/ppk/inbox';
 import { relatedDocuments } from '../main/ppk/documents';
+import { archiveTask, listTasks, saveTask, setTaskDone } from '../main/ppk/tasks';
+import { TASK_PRIORITIES } from '@shared/ppk/tasks';
 import { agendaHome, listInvitations } from '../main/ppk/agendaHome';
 import { sqliteStore } from '../main/ppk/store';
 import { peekPpkActor, ppkActor, ppkStore } from '../main/ppk/server';
@@ -27,7 +29,7 @@ import { VENDOR_EXPORT_HEADER, createVendor, getVendor, listVendors, setVendorSt
 import { addBudgetRevision, createBudgetLine, getBudgetPlan, listBudgetLines, listBudgetVersions, setBudgetPlan, updateBudgetLine } from '../main/ppk/budget';
 import { addAddendum, createContract, getContract, listContracts, setAllocations, setContractStatus, setSchedule, setYearValues, updateContract, voidAddendum } from '../main/ppk/contracts';
 import { BUDGET_KIND_LABEL, type BudgetKind } from '@shared/ppk/budget';
-import { CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, type ContractStatus, type ContractType } from '@shared/ppk/contracts';
+import { CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, contractProject, projectMatches, type ContractStatus, type ContractType } from '@shared/ppk/contracts';
 import { budgetSheets, billSheets, contractSheets } from '../main/ppk/exports';
 import { addPayment, getBill, listBills, listPayments, saveBill, setBillStatus, voidPayment } from '../main/ppk/bills';
 import { BILL_STATUS_LABEL, PAYMENT_CHANNELS, type BillStatus } from '@shared/ppk/bills';
@@ -133,10 +135,12 @@ export function registerPpkHandlers() {
   const stamp = () => new Date().toISOString().slice(0, 10);
   handle('ppk:budget:export', z.object({ fiscal_year_id: S.id, include_inactive: z.boolean().optional() }), async (f) =>
     saveFile(writeXlsx(budgetSheets(await listBudgetLines(st(), actor(), f))), `Database-Anggaran-${stamp()}.xlsx`, 'xlsx'));
-  handle('ppk:contracts:export', z.object({ fiscal_year_id: S.id, vendor_id: S.id.optional(), status: z.union([contractStatus, z.literal('semua')]).optional(), search: text(200).optional() }), async (f) =>
-    saveFile(writeXlsx(contractSheets(await listContracts(st(), actor(), f))), `Database-Kontrak-${stamp()}.xlsx`, 'xlsx'));
-  handle('ppk:bills:export', z.object({ fiscal_year_id: S.id, status: z.union([billStatus, z.literal('semua')]).optional(), search: text(200).optional() }), async (f) => {
-    const [bills, payments] = await Promise.all([listBills(st(), actor(), f), listPayments(st(), actor(), f.fiscal_year_id)]);
+  handle('ppk:contracts:export', z.object({ fiscal_year_id: S.id, vendor_id: S.id.optional(), status: z.union([contractStatus, z.literal('semua')]).optional(), search: text(200).optional(), project: text(200).optional() }), async (f) =>
+    saveFile(writeXlsx(contractSheets((await listContracts(st(), actor(), f)).filter((c) => projectMatches(contractProject(c), f.project)))), `Database-Kontrak-${stamp()}.xlsx`, 'xlsx'));
+  handle('ppk:bills:export', z.object({ fiscal_year_id: S.id, status: z.union([billStatus, z.literal('semua')]).optional(), search: text(200).optional(), project: text(200).optional() }), async (f) => {
+    const [all, payments, contracts] = await Promise.all([listBills(st(), actor(), f), listPayments(st(), actor(), f.fiscal_year_id), listContracts(st(), actor(), { fiscal_year_id: f.fiscal_year_id })]);
+    const projectOf = new Map(contracts.map((c) => [c.id, contractProject(c)]));
+    const bills = all.filter((b) => projectMatches(projectOf.get(b.contract_id) ?? '', f.project));
     return saveFile(writeXlsx(billSheets(bills, payments)), `Tagihan-dan-Pembayaran-${stamp()}.xlsx`, 'xlsx');
   });
   handle('ppk:bills:voidPayment', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidPayment(st(), actor(), id, reason));
@@ -214,6 +218,11 @@ export function registerPpkHandlers() {
   handle('ppk:agendas:update', z.object({ id: S.id, version: z.number().int().min(1), values: agendaInput }), ({ id, version, values }) => updateAgenda(st(), actor(), id, version, values));
   handle('ppk:agendas:setStatus', z.object({ id: S.id, status: z.enum(['selesai', 'dibatalkan']), reason: text(500) }), ({ id, status, reason }) => setAgendaStatus(st(), actor(), id, status, reason));
   handle('ppk:agendas:people', S.empty, () => agendaPeople(st(), actor()));
+  const taskInput = z.object({ title: text(300), notes: text(2000), due_date: day.nullable(), priority: z.enum(TASK_PRIORITIES), category: text(60), assignee_user_id: S.id.nullable() });
+  handle('ppk:tasks:list', z.object({ include_old: z.boolean().optional() }), (f) => listTasks(st(), actor(), f));
+  handle('ppk:tasks:save', z.object({ id: S.id.nullable(), version: z.number().int().min(1).nullable(), values: taskInput }), ({ id, version, values }) => saveTask(st(), actor(), id, version, values));
+  handle('ppk:tasks:setDone', z.object({ id: S.id, done: z.boolean() }), ({ id, done }) => setTaskDone(st(), actor(), id, done));
+  handle('ppk:tasks:archive', z.object({ id: S.id }), async ({ id }) => { await archiveTask(st(), actor(), id); return true; });
   handle('ppk:agendas:home', S.empty, () => agendaHome(st(), actor()));
   handle('ppk:invitations:list', z.object({ status: z.enum(['baru', 'diproses', 'menunggu_verifikasi', 'dikonversi', 'gagal', 'ditolak', 'diarsipkan']).optional() }), (f) => listInvitations(st(), actor(), f));
   handle('ppk:sp2d:void', z.object({ id: S.id, reason: text(500) }), ({ id, reason }) => voidSp2d(st(), actor(), id, reason));

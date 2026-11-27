@@ -11,7 +11,7 @@ import { addBudgetRevision, createBudgetLine, listBudgetLines, listBudgetVersion
 import {
   addAddendum, createContract, getContract, listContracts, setAllocations, setContractStatus, setSchedule, updateContract, voidAddendum
 } from '../electron/main/ppk/contracts';
-import { contractProject, monthsBetween, splitEven, daysUntil, type ContractInput } from '@shared/ppk/contracts';
+import { contractProject, projectMatches, projectOptions, monthsBetween, splitEven, daysUntil, type ContractInput } from '@shared/ppk/contracts';
 import type { BudgetLineInput } from '@shared/ppk/budget';
 import type { Actor } from '@shared/numbering';
 
@@ -189,9 +189,24 @@ describe('fungsi murni kontrak', () => {
 });
 
 describe('project kontrak', () => {
-  it('Paket Layanan dulu, lalu nama sheet dari catatan impor', () => {
-    expect(contractProject({ package_code: 'HUB', package_name: 'IP HUB Timur', notes: 'Impor a.xlsx · SATRIA 1 baris 8' })).toBe('IP HUB Timur');
-    expect(contractProject({ package_code: null, package_name: null, notes: 'Impor Rekap PPK 2026.xlsx · OM IP HUB baris 7' })).toBe('OM IP HUB');
-    expect(contractProject({ package_code: null, package_name: null, notes: 'catatan bebas' })).toBe('');
+  const k = (notes: string, description = '', package_name: string | null = null) => contractProject({ package_code: null, package_name, notes, description });
+  it('Paket Layanan dulu, lalu sheet impor, lalu tebakan dari uraian; nomor hub jadi H58', () => {
+    expect(k('Impor a.xlsx · SATRIA 1 baris 8', '', 'IP HUB Timur')).toBe('IP HUB Timur');
+    expect(k('Impor Rekap PPK 2026.xlsx · OM IP HUB baris 7', 'Pemeliharaan Operasional IP HUB')).toBe('OM IP HUB');
+    expect(k('Impor a.xlsx · IP Transit baris 12', 'Surat Pesanan Pekerjaan IP Transit Hub 58 BMN dalam Mendukung Proyek SATRIA-1')).toBe('IP Transit H58');
+    expect(k('', 'Sewa Layanan IP Transit Hub 73 untuk SATRIA-1')).toBe('IP Transit H73');
+    expect(k('', 'Surat Pesanan Pembelian Jasa Operasional (Operation & Maintenance/OM) IP Hub dengan ST Engineering')).toBe('OM IP HUB');
+    expect(k('', 'Pekerjaan Sewa Layanan IP Hub dalam Mendukung Proyek SATRIA-1')).toBe('IP HUB');
+    expect(k('', 'PROYEK KPBU UNTUK PENYEDIAAN SATELIT')).toBe('SATRIA 1');
+    expect(k('catatan bebas', 'Pengadaan ATK')).toBe('');
+    expect(k('', 'IP Transit Hub 9', 'IP Transit H9')).toBe('IP Transit H9');
+    expect(k('', 'Sewa Akses Internet sekolah')).toBe('Akses Internet');
+  });
+  it('filter project: kelompok tanpa nomor hub mencakup semua hub', () => {
+    expect(projectOptions(['IP Transit H58', 'IP Transit H73', 'IP HUB', 'OM IP HUB', ''])).toEqual(['IP HUB', 'IP Transit', 'IP Transit H58', 'IP Transit H73', 'OM IP HUB']);
+    expect(projectMatches('IP Transit H58', 'IP Transit')).toBe(true);
+    expect(projectMatches('IP Transit H58', 'IP Transit H73')).toBe(false);
+    expect(projectMatches('OM IP HUB', 'IP HUB')).toBe(false);
+    expect(projectMatches('', '')).toBe(true);
   });
 });

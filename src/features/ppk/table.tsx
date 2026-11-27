@@ -3,6 +3,8 @@ import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { errMsg, useFeedback } from '@/components/ui/feedback';
 import type { SaveResult } from '@/services/api';
+import { Select } from '@/components/ui/form';
+import { projectOptions } from '@shared/ppk/contracts';
 
 /** Gaya tabel database PPK, sama dengan tabel Prognosis: header & total lengket, kolom pertama terkunci, rupiah penuh rata kanan. */
 export const TBL = {
@@ -33,3 +35,13 @@ export function ExportButton({ run, disabled }: { run: () => Promise<SaveResult>
 /** Nomor dokumen panjang dipatahkan setelah garis miring, bukan di tengah kata (tanpa menyisipkan karakter saat disalin). */
 export const SlashWrap = ({ text }: { text: string }) =>
   <>{text.split('/').map((p, i, a) => <Fragment key={i}>{p}{i < a.length - 1 && <>/<wbr /></>}</Fragment>)}</>;
+
+/** Filter jenis project (IP HUB, IP Transit, SATRIA 1, ...), pilihannya dari project kontrak yang ada. */
+export function ProjectFilter({ projects, value, onChange }: { projects: string[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <Select className="w-48" value={value} onChange={(e) => onChange(e.target.value)} aria-label="Filter project">
+      <option value="">Semua project</option>
+      {projectOptions(value ? [...projects, value] : projects).map((p) => <option key={p} value={p}>{p}</option>)}
+    </Select>
+  );
+}

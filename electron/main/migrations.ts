@@ -892,6 +892,28 @@ ALTER TABLE ppk_agenda_assignees ADD COLUMN status TEXT NOT NULL DEFAULT 'dituga
 ALTER TABLE ppk_agendas ADD COLUMN deleted_at TEXT;
 ALTER TABLE ppk_agendas ADD COLUMN deleted_by TEXT;
 ALTER TABLE ppk_agendas ADD COLUMN delete_reason TEXT NOT NULL DEFAULT '';`
+  },
+  {
+    version: 16,
+    name: 'ppk_tasks',
+    sql: `
+-- To Do List staf PPK (disetujui pemilik 2026-11-27). Hanya menambah tabel; tugas tidak dihapus, hanya diarsipkan.
+CREATE TABLE ppk_tasks (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+  notes TEXT NOT NULL DEFAULT '',
+  due_date TEXT CHECK (due_date IS NULL OR length(due_date) = 10),
+  priority TEXT NOT NULL DEFAULT 'sedang' CHECK (priority IN ('tinggi','sedang','rendah')),
+  category TEXT NOT NULL DEFAULT '',
+  assignee_user_id TEXT REFERENCES app_users(id),
+  status TEXT NOT NULL DEFAULT 'berjalan' CHECK (status IN ('berjalan','selesai')),
+  done_at TEXT, done_by TEXT,
+  archived_at TEXT, archived_by TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX idx_ppk_tasks_due ON ppk_tasks(status, due_date);
+CREATE TRIGGER trg_ppk_tasks_nodel BEFORE DELETE ON ppk_tasks BEGIN SELECT RAISE(ABORT, 'Tugas tidak boleh dihapus; arsipkan.'); END;`
   }
 ];
 

@@ -16,6 +16,7 @@ import type { Bill, BillDetail, BillFilter, BillInput, PaymentInput, PaymentRow 
 import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, PlanRow, Warned } from '@shared/ppk/budget';
 import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow, YearValueRow } from '@shared/ppk/contracts';
 import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
+import type { Task, TaskInput } from '@shared/ppk/tasks';
 import type { Agenda, AgendaConflict, AgendaFilter, AgendaHistoryRow, AgendaHome, AgendaInput, InvitationFile, InvitationRow, InvitationStatus } from '@shared/ppk/agenda';
 import type { DeliveryLog, Recipient } from '@shared/whatsapp';
 
@@ -201,7 +202,7 @@ export const api = {
       setSchedule: (id: string, rows: ScheduleRow[]) => call<Warned<Contract>>('ppk:contracts:setSchedule', { id, rows }),
       setAllocations: (id: string, rows: AllocationRow[]) => call<Warned<Contract>>('ppk:contracts:setAllocations', { id, rows }),
       setYearValues: (id: string, rows: YearValueRow[]) => call<Warned<Contract>>('ppk:contracts:setYearValues', { id, rows }),
-      exportXlsx: (f: ContractFilter & { fiscal_year_id: string }) => call<SaveResult>('ppk:contracts:export', f)
+      exportXlsx: (f: ContractFilter & { fiscal_year_id: string; project?: string }) => call<SaveResult>('ppk:contracts:export', f)
     },
     bills: {
       list: (f: BillFilter = {}) => call<Bill[]>('ppk:bills:list', f),
@@ -211,7 +212,7 @@ export const api = {
       addPayment: (bill_funding_id: string, payment: PaymentInput) => call<Warned<Bill>>('ppk:bills:addPayment', { bill_funding_id, payment }),
       voidPayment: (id: string, reason: string) => call<Bill>('ppk:bills:voidPayment', { id, reason }),
       payments: (fiscal_year_id: string) => call<PaymentRow[]>('ppk:bills:payments', { fiscal_year_id }),
-      exportXlsx: (f: BillFilter & { fiscal_year_id: string }) => call<SaveResult>('ppk:bills:export', f)
+      exportXlsx: (f: BillFilter & { fiscal_year_id: string; project?: string }) => call<SaveResult>('ppk:bills:export', f)
     },
     import: {
       pick: () => call<{ canceled: true } | { canceled: false; token: string; file_name: string }>('ppk:import:pick', {}),
@@ -241,6 +242,12 @@ export const api = {
       status: () => call<GatewayState>('ppk:gateway:status', {}),
       configure: (url: string, api_key: string) => call<{ messages: number; last_webhook: string | null }>('ppk:gateway:configure', { url, api_key }),
       sync: () => call<GatewaySync>('ppk:gateway:sync', {})
+    },
+    tasks: {
+      list: (include_old = false) => call<Task[]>('ppk:tasks:list', { include_old }),
+      save: (id: string | null, version: number | null, values: TaskInput) => call<Task>('ppk:tasks:save', { id, version, values }),
+      setDone: (id: string, done: boolean) => call<Task>('ppk:tasks:setDone', { id, done }),
+      archive: (id: string) => call<boolean>('ppk:tasks:archive', { id })
     },
     agendas: {
       list: (f: AgendaFilter & { include_cancelled?: boolean } = {}) => call<Agenda[]>('ppk:agendas:list', f),
