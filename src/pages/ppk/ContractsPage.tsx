@@ -14,11 +14,11 @@ import { ReasonDialog, RupiahInput, rp, useFiscalYears, useWarnings } from '@/fe
 import { api } from '@/services/api';
 import { RelatedDocs } from '@/features/ppk/RelatedDocs';
 import { Num } from '@/features/ppk/Num';
-import { ExportButton, SlashWrap, TBL } from '@/features/ppk/table';
+import { ExportButton, ProjectFilter, SlashWrap, TBL } from '@/features/ppk/table';
 import type { MasterRow } from '@shared/ppk/master';
 import { budgetLabel } from '@shared/ppk/budget';
 import {
-  CONTRACT_NEXT, CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, contractProject, daysUntil, monthsBetween, splitEven,
+  CONTRACT_NEXT, CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, contractProject, projectMatches, daysUntil, monthsBetween, splitEven,
   type AddendumInput, type AllocationRow, type Contract, type ContractDetail, type ContractInput, type ContractStatus, type ContractType, type ScheduleRow
 } from '@shared/ppk/contracts';
 
@@ -41,7 +41,9 @@ export default function ContractsPage() {
   const { years, id: fyId, setId: setFy } = useFiscalYears();
   const [status, setStatus] = useState<ContractStatus | 'semua'>('semua');
   const [search, setSearch] = useState(''); const q = useDebounced(search);
+  const [project, setProject] = useState('');
   const list = useAsync(() => (fyId ? api.ppk.contracts.list({ fiscal_year_id: fyId, status, search: q }) : Promise.resolve([])), [fyId, status, q]);
+  const shown = list.data?.filter((c) => projectMatches(contractProject(c), project));
   const [form, setForm] = useState<Contract | 'new' | null>(null);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -50,7 +52,7 @@ export default function ContractsPage() {
       <PpkGate>
         <PageHeader title="Database Kontrak" subtitle="Kontrak induk, addendum, jadwal nilai per bulan, dan pembebanan ke anggaran."
           actions={<>
-            <ExportButton run={() => api.ppk.contracts.exportXlsx({ fiscal_year_id: fyId, status, search: q })} disabled={!list.data?.length} />
+            <ExportButton run={() => api.ppk.contracts.exportXlsx({ fiscal_year_id: fyId, status, search: q, project })} disabled={!shown?.length} />
             {can('write') && <Button onClick={() => setForm('new')} disabled={!fyId}><Plus size={16} />Tambah Kontrak</Button>}
           </>} />
         <div className="mb-4 flex flex-wrap gap-3">
@@ -61,12 +63,13 @@ export default function ContractsPage() {
             <option value="semua">Semua status</option>
             {Object.entries(CONTRACT_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
+          <ProjectFilter projects={list.data?.map(contractProject) ?? []} value={project} onChange={setProject} />
           <Input className="max-w-sm" placeholder="Cari nomor, uraian, project, atau penyedia" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Cari kontrak" />
         </div>
         {list.error && <Empty>{list.error}</Empty>}
-        {list.data && !list.data.length && <Empty>Belum ada kontrak{search ? ' yang cocok' : ''} untuk tahun ini.</Empty>}
-        {!!list.data?.length && (() => {
-          const rows = list.data; const live = rows.filter((c) => c.status !== 'dibatalkan');
+        {shown && !shown.length && <Empty>Belum ada kontrak{search || project ? ' yang cocok' : ''} untuk tahun ini.</Empty>}
+        {!!shown?.length && (() => {
+          const rows = shown; const live = rows.filter((c) => c.status !== 'dibatalkan');
           const sum = (k: 'latest_value' | 'billed' | 'paid' | 'sisa_kontrak') => live.reduce((a, c) => a + c[k], 0);
           return <>
             <p className="mb-2 text-xs text-slate-500">{rows.length} kontrak · angka dalam Rupiah penuh · klik baris untuk detail.</p>
