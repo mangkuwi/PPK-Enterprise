@@ -53,7 +53,7 @@ export function agendaFromInvitation(d: { id?: string | null; title: string; let
 export type InvitationStatus = 'baru' | 'diproses' | 'menunggu_verifikasi' | 'dikonversi' | 'gagal' | 'ditolak' | 'diarsipkan';
 export const INVITATION_STATUS_LABEL: Record<InvitationStatus, string> = {
   baru: 'Undangan baru', diproses: 'Sedang diproses', menunggu_verifikasi: 'Menunggu verifikasi', dikonversi: 'Berhasil dikonversi',
-  gagal: 'Gagal diproses', ditolak: 'Ditolak', diarsipkan: 'Diarsipkan'
+  gagal: 'Gagal diproses', ditolak: 'Selesai tanpa agenda', diarsipkan: 'Diarsipkan'
 };
 export interface InvitationRow {
   id: string; source: 'whatsapp' | 'unggah'; sender_phone: string; sender_name: string; received_at: string;
@@ -138,6 +138,20 @@ export function overlaps(a: Pick<Agenda, 'agenda_date' | 'start_time' | 'end_tim
 export interface AgendaConflict { id: string; title: string; agenda_date: string; start_time: string; end_time: string; shared_staff: string[] }
 export interface AgendaHistoryRow { at: string; actor_name: string; action: string; detail: Record<string, unknown> }
 export interface InvitationFile { id: string; filename: string; mime_type: string; size_bytes: number; created_at: string }
+
+/** Kategori Kotak Masuk dipetakan dari status undangan yang sudah ada (tanpa kolom baru). "Sudah diproses" tanpa agenda = status ditolak. */
+export type InboxCategory = 'baru' | 'belum' | 'sudah' | 'arsip' | 'gagal';
+export const INBOX_CATEGORY: Record<InboxCategory, { label: string; statuses: InvitationStatus[] }> = {
+  baru: { label: 'Baru', statuses: ['baru'] },
+  belum: { label: 'Belum diproses', statuses: ['baru', 'diproses', 'menunggu_verifikasi'] },
+  sudah: { label: 'Sudah diproses', statuses: ['dikonversi', 'ditolak'] },
+  arsip: { label: 'Diarsipkan', statuses: ['diarsipkan'] },
+  gagal: { label: 'Gagal', statuses: ['gagal'] }
+};
+export interface InvitationDetail extends InvitationRow {
+  reject_reason: string; verified_by: string | null; verified_at: string | null; duplicate_of: string | null;
+  files: InvitationFile[]; agenda: { id: string; title: string; agenda_date: string } | null; history: AgendaHistoryRow[];
+}
 
 /** Posisi kartu di grid jam satu hari: menit dari awal grid, durasi, dan lajur bila jam beririsan. Agenda tanpa jam tidak masuk grid. */
 export function layoutDay<T extends Pick<Agenda, 'agenda_date' | 'start_time' | 'end_time'>>(items: T[], startHour: number):

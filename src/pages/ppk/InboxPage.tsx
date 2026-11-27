@@ -1,25 +1,23 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CalendarPlus, FileUp, MessageCircle, Paperclip, RefreshCw, Settings2, Upload } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { CalendarPlus, Eye, FileUp, MessageCircle, Paperclip, RefreshCw, Settings2, Upload } from 'lucide-react';
 import { Input } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { errMsg, useFeedback } from '@/components/ui/feedback';
 import { usePpkAccess } from '@/features/ppk/usePpkAccess';
-import { AgendaForm, EMPTY_AGENDA } from '@/features/ppk/AgendaForm';
-import { parseAgendaMessage, type AgendaMessage } from '@shared/ppk/agendaMessage';
-import type { AgendaInput } from '@shared/ppk/agenda';
+import { AgendaForm, agendaFromMessage, EMPTY_AGENDA } from '@/features/ppk/AgendaForm';
+import { parseAgendaMessage } from '@shared/ppk/agendaMessage';
 import { Page } from '@/components/layout/Page';
 import { Badge, Card, Empty, PageHeader } from '@/components/ui/card';
 import { useAsync } from '@/hooks/useAsync';
 import { PpkGate } from '@/features/ppk/PpkGate';
 import { api } from '@/services/api';
 import { cn, formatDateTime } from '@/lib/utils';
-import { INVITATION_STATUS_LABEL, type InvitationStatus } from '@shared/ppk/agenda';
+import { INBOX_CATEGORY, INVITATION_STATUS_LABEL, type InboxCategory, type InvitationStatus } from '@shared/ppk/agenda';
 
-const FILTERS: Array<[InvitationStatus | '', string]> = [['', 'Semua pesan'], ['baru', 'Undangan baru'], ['diproses', 'Sedang diproses'],
-  ['menunggu_verifikasi', 'Menunggu verifikasi'], ['dikonversi', 'Berhasil dikonversi'], ['gagal', 'Gagal diproses'], ['diarsipkan', 'Diarsipkan']];
-const TONE: Record<InvitationStatus, 'navy' | 'amber' | 'green' | 'red' | 'slate'> = {
+const CATEGORIES = Object.entries(INBOX_CATEGORY) as Array<[InboxCategory, (typeof INBOX_CATEGORY)[InboxCategory]]>;
+export const INVITATION_TONE: Record<InvitationStatus, 'navy' | 'amber' | 'green' | 'red' | 'slate'> = {
   baru: 'navy', diproses: 'slate', menunggu_verifikasi: 'amber', dikonversi: 'green', gagal: 'red', ditolak: 'slate', diarsipkan: 'slate'
 };
 
@@ -60,30 +58,21 @@ function GatewayPanel({ admin, onSynced }: { admin: boolean; onSynced: () => voi
 /** Kotak masuk undangan (WhatsApp dan unggah manual). Verifikasi dan penerimaan webhook dibangun di fase berikutnya. */
 export default function InboxPage() {
   const [q, setQ] = useSearchParams();
-  const status = (q.get('status') ?? '') as InvitationStatus | '';
-  const list = useAsync(() => api.ppk.invitations.list(status || undefined), [status]);
+  const cat = (q.get('kategori') ?? '') as InboxCategory | '';
+  const list = useAsync(() => api.ppk.invitations.byCategory(cat || undefined), [cat]);
+  const counts = useAsync(() => api.ppk.invitations.counts(), [list.data]);
+  const total = (st?: InvitationStatus[]) => Object.entries(counts.data ?? {}).reduce((n, [k, v]) => n + (!st || st.includes(k as InvitationStatus) ? v ?? 0 : 0), 0);
   const navigate = useNavigate();
   const { toast } = useFeedback();
   const { can } = usePpkAccess();
-  const [form, setForm] = useState<AgendaInput | null>(null);
-  const [parsed, setParsed] = useState<AgendaMessage | null>(null);
-  /** Format AGENDA PPK mengisi formulir; selain itu teks asli masuk ke kolom agenda rapat dan staf mengisi sendiri. */
-  const fromMessage = (id: string, text: string) => {
-    const m = parseAgendaMessage(text); setParsed(m);
-    setForm(m ? { ...EMPTY_AGENDA, invitation_id: id, title: m.title, agenda_date: m.agenda_date, start_time: m.start_time, end_time: m.end_time,
-      location: m.location, organizer: m.organizer, meeting_url: m.meeting_url, agenda_text: text } : { ...EMPTY_AGENDA, invitation_id: id, agenda_text: text });
-  };
+  const [form, setForm] = useState<ReturnType<typeof agendaFromMessage> | null>(null);
   const upload = async () => {
     try {
       const r = await api.ppk.invitations.upload();
       if (!r) return;
       if (r.duplicate_of) toast('File yang sama persis pernah diunggah. Periksa agar agenda tidak ganda.', 'error');
-      list.reload(); setParsed(null); setForm({ ...EMPTY_AGENDA, invitation_id: r.id });
+      list.reload(); setForm({ input: { ...EMPTY_AGENDA, invitation_id: r.id }, parsed: null });
     } catch (e) { toast(errMsg(e), 'error'); }
-  };
-  const openFirst = async (id: string) => {
-    try { const [f] = await api.ppk.invitations.files(id); if (f) await api.ppk.invitations.openFile(f.id); else toast('Undangan ini tanpa lampiran.', 'error'); }
-    catch (e) { toast(errMsg(e), 'error'); }
   };
   return (
     <Page>
@@ -91,33 +80,35 @@ export default function InboxPage() {
         <PageHeader title="Kotak Masuk WhatsApp" subtitle="Undangan yang diteruskan staf ke nomor WhatsApp Business kantor, dan undangan yang diunggah manual."
           actions={can('write') && <Button variant="outline" onClick={upload}><FileUp size={16} /> Unggah surat undangan</Button>} />
         <GatewayPanel admin={can('roles')} onSynced={list.reload} />
-        <div className="mb-4 flex flex-wrap gap-1" role="tablist" aria-label="Saring status">
-          {FILTERS.map(([v, l]) => <button key={v || 'semua'} role="tab" aria-selected={status === v} onClick={() => setQ(v ? { status: v } : {})}
-            className={cn('rounded-full border px-3 py-1 text-sm', status === v ? 'border-navy-800 bg-navy-800 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-100')}>{l}</button>)}
+        <div className="mb-4 flex flex-wrap gap-1" role="tablist" aria-label="Kategori pesan">
+          {([['', 'Semua', undefined], ...CATEGORIES.map(([k, c]) => [k, c.label, c.statuses])] as Array<[InboxCategory | '', string, InvitationStatus[] | undefined]>).map(([v, l, st]) => (
+            <button key={v || 'semua'} role="tab" aria-selected={cat === v} onClick={() => setQ(v ? { kategori: v } : {})}
+              className={cn('rounded-full border px-3 py-1 text-sm', cat === v ? 'border-navy-800 bg-navy-800 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-100')}>
+              {l}{counts.data && <span className={cn('ml-1.5 tabular-nums', cat === v ? 'text-navy-100' : 'text-slate-400')}>{total(st)}</span>}</button>))}
         </div>
         {list.error && <Empty>{list.error}</Empty>}
-        {list.data && !list.data.length && <Empty>Tidak ada pesan{status ? ` berstatus "${INVITATION_STATUS_LABEL[status]}"` : ''}.</Empty>}
+        {list.data && !list.data.length && <Empty>Tidak ada pesan{cat ? ` di "${INBOX_CATEGORY[cat].label}"` : ''}.</Empty>}
         <div className="space-y-2">{list.data?.map((i) => (
           <Card key={i.id} className="flex flex-wrap items-start gap-3 p-3 text-sm">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-navy-100 text-navy-800">{i.source === 'whatsapp' ? <MessageCircle size={16} /> : <Upload size={16} />}</div>
             <div className="min-w-0 flex-1">
-              <div className="font-medium text-navy-900">{i.sender_name || i.sender_phone || 'Unggah manual'}</div>
+              <Link to={`/ppk/kotak-masuk/${i.id}`} className="font-medium text-navy-900 hover:underline">{i.sender_name || i.sender_phone || 'Unggah manual'}</Link>
               <div className="text-xs text-slate-500">Diterima {formatDateTime(i.received_at)}{i.file_count > 0 && <> · <Paperclip size={11} className="inline" /> {i.file_count} lampiran</>}</div>
               {i.message_text && <div className="mt-1 line-clamp-2 whitespace-pre-line text-slate-700">{i.message_text}</div>}
               {parseAgendaMessage(i.message_text) && <Badge tone="green" className="mt-1">Format AGENDA PPK</Badge>}
               {i.error_message && <div className="mt-1 text-red-700">{i.error_message}</div>}
             </div>
             <div className="flex flex-col items-end gap-2">
-              <Badge tone={TONE[i.status]}>{INVITATION_STATUS_LABEL[i.status]}</Badge>
+              <Badge tone={INVITATION_TONE[i.status]}>{INVITATION_STATUS_LABEL[i.status]}</Badge>
               <div className="flex gap-1">
-                {i.file_count > 0 && <Button size="sm" variant="ghost" onClick={() => openFirst(i.id)}><Paperclip size={14} /> Lihat file</Button>}
-                {can('write') && ['baru', 'menunggu_verifikasi'].includes(i.status) && <Button size="sm" onClick={() => fromMessage(i.id, i.message_text)}><CalendarPlus size={14} /> Buat agenda</Button>}
+                <Button size="sm" variant="ghost" onClick={() => navigate(`/ppk/kotak-masuk/${i.id}`)}><Eye size={14} /> Buka</Button>
+                {can('write') && ['baru', 'menunggu_verifikasi'].includes(i.status) && <Button size="sm" onClick={() => setForm(agendaFromMessage(i.id, i.message_text))}><CalendarPlus size={14} /> Buat agenda</Button>}
               </div>
             </div>
           </Card>))}
         </div>
         <Dialog open={!!form} onOpenChange={(o) => { if (!o) setForm(null); }}>
-          {form && <AgendaForm initial={form} parsed={parsed} onSaved={(a) => { setForm(null); navigate(`/ppk/agenda/${a.id}`); }} />}
+          {form && <AgendaForm initial={form.input} parsed={form.parsed} onSaved={(a) => { setForm(null); navigate(`/ppk/agenda/${a.id}`); }} />}
         </Dialog>
       </PpkGate>
     </Page>

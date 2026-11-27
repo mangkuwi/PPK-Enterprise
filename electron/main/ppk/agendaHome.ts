@@ -1,5 +1,5 @@
 import type { Actor } from '@shared/numbering';
-import type { AgendaHome, InvitationRow, InvitationStatus } from '@shared/ppk/agenda';
+import { INBOX_CATEGORY, type AgendaHome, type InboxCategory, type InvitationRow, type InvitationStatus } from '@shared/ppk/agenda';
 import { addDays, jakartaToday } from '@shared/date';
 import type { PpkStore } from './store';
 import { requirePpk } from './access';
@@ -9,12 +9,20 @@ const OPEN = "a.status = 'terjadwal' AND a.archived_at IS NULL AND a.deleted_at 
 const NO_PIC = "NOT EXISTS (SELECT 1 FROM ppk_agenda_assignees x WHERE x.agenda_id = a.id AND x.role = 'utama')";
 const n = async (s: PpkStore, sql: string, p: Array<string | number> = []) => Number((await s.get<{ n: number }>(sql, p))?.n ?? 0);
 
-/** Undangan masuk, terbaru dulu. */
-export async function listInvitations(s: PpkStore, actor: Actor, f: { status?: InvitationStatus; limit?: number } = {}): Promise<InvitationRow[]> {
+/** Undangan masuk, terbaru dulu. Saring per status atau per kategori Kotak Masuk. */
+export async function listInvitations(s: PpkStore, actor: Actor, f: { status?: InvitationStatus; category?: InboxCategory; limit?: number } = {}): Promise<InvitationRow[]> {
   await requirePpk(s, actor, 'read');
+  const st = f.category ? INBOX_CATEGORY[f.category].statuses : f.status ? [f.status] : [];
   return s.all<InvitationRow>(`SELECT i.id, i.source, i.sender_phone, i.sender_name, i.received_at, i.message_text, i.status, i.error_message,
       (SELECT COUNT(*) FROM ppk_files f WHERE f.owner_type = 'undangan' AND f.owner_id = i.id) AS file_count
-    FROM ppk_invitations i ${f.status ? 'WHERE i.status = ?' : ''} ORDER BY i.received_at DESC LIMIT ?`, [...(f.status ? [f.status] : []), f.limit ?? 200]);
+    FROM ppk_invitations i ${st.length ? `WHERE i.status IN (${st.map(() => '?').join(',')})` : ''} ORDER BY i.received_at DESC LIMIT ?`, [...st, f.limit ?? 200]);
+}
+
+/** Jumlah undangan per status (untuk angka di tab Kotak Masuk). */
+export async function invitationCounts(s: PpkStore, actor: Actor): Promise<Partial<Record<InvitationStatus, number>>> {
+  await requirePpk(s, actor, 'read');
+  const rows = await s.all<{ status: InvitationStatus; n: number }>('SELECT status, COUNT(*) AS n FROM ppk_invitations GROUP BY status');
+  return Object.fromEntries(rows.map((r) => [r.status, Number(r.n)]));
 }
 
 /** Beranda Agenda PPK. `today` hanya diisi test; aplikasi memakai tanggal Asia/Jakarta. */
