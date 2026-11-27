@@ -68,7 +68,8 @@ export interface InvitationRow {
 export interface AgendaHome {
   today: string;
   counts: { month_total: number; today_total: number; wa_incoming: number; pending_verification: number; pending_assignment: number };
-  inbox: { baru: number; menunggu_verifikasi: number; gagal: number; dikonversi_bulan_ini: number };
+  /** belum_* = belum diproses (baru/diproses/menunggu verifikasi) dengan lampiran PDF / tanpa lampiran; diproses_bulan_ini = jadi agenda atau selesai tanpa agenda. */
+  inbox: { baru: number; menunggu_verifikasi: number; gagal: number; dikonversi_bulan_ini: number; belum_pdf: number; belum_teks: number; diproses_bulan_ini: number };
   today_agendas: Agenda[];
   upcoming: Agenda[];
   awaiting_verification: InvitationRow[];

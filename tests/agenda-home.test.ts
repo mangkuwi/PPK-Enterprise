@@ -77,9 +77,10 @@ describe('beranda Agenda PPK', () => {
     invite('k7', 'dikonversi', { verified_at: '2026-10-31T16:59:00Z' }); // 31 Okt 23.59 WIB = bulan lalu
     invite('k8', 'dikonversi', { verified_at: '2026-10-31T17:00:00Z' }); // 1 Nov 00.00 WIB = bulan ini
 
+    db.prepare("INSERT INTO ppk_files (id, owner_type, owner_id, filename, mime_type, size_bytes, sha256, content, created_by, created_at) VALUES ('f1','undangan','w1','u.pdf','application/pdf',1,'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',x'25','uji','t')").run();
     const h = await agendaHome(s, admin, TODAY);
     expect(h.counts).toEqual({ month_total: 4, today_total: 2, wa_incoming: 2, pending_verification: 1, pending_assignment: 3 });
-    expect(h.inbox).toEqual({ baru: 2, menunggu_verifikasi: 1, gagal: 1, dikonversi_bulan_ini: 2 });
+    expect(h.inbox).toEqual({ baru: 2, menunggu_verifikasi: 1, gagal: 1, dikonversi_bulan_ini: 2, belum_pdf: 1, belum_teks: 3, diproses_bulan_ini: 3 });
     expect(h.today_agendas.map((a) => a.title)).toEqual(['Pagi', 'Siang']); // urut jam mulai
     expect(h.upcoming.map((a) => a.title)).toEqual(['Besok', 'Minggu depan']);
     expect(h.awaiting_verification.map((i) => i.id)).toEqual(['v4444']);
