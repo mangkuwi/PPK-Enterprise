@@ -1,5 +1,5 @@
 import { BUDGET_KIND_LABEL, type BudgetLine } from '@shared/ppk/budget';
-import { CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, type Contract } from '@shared/ppk/contracts';
+import { CONTRACT_STATUS_LABEL, CONTRACT_TYPE_LABEL, contractProject, type Contract } from '@shared/ppk/contracts';
 import { billStage, type Bill, type PaymentRow } from '@shared/ppk/bills';
 import type { WriteSheet } from '../numbering/xlsx';
 
@@ -19,11 +19,11 @@ export function budgetSheets(rows: BudgetLine[]): WriteSheet[] {
 
 export function contractSheets(rows: Contract[]): WriteSheet[] {
   return [sheet('Kontrak', [
-    ['Nomor kontrak', 28], ['Nomor kontrak penyedia', 24], ['Tanggal kontrak', 13], ['Penyedia', 32], ['Program', 14], ['Kegiatan', 30], ['Paket', 12], ['Jenis', 10],
+    ['Nomor kontrak', 28], ['Project', 18], ['Nomor kontrak penyedia', 24], ['Tanggal kontrak', 13], ['Penyedia', 32], ['Program', 14], ['Kegiatan', 30], ['Paket', 12], ['Jenis', 10],
     ['Uraian', 44], ['Mulai', 12], ['Selesai', 12], ['Selesai terakhir', 14], ['Tahun jamak', 10],
     ['Nilai awal', 20, M], ['Perubahan addendum', 20, M], ['Jumlah addendum', 10], ['Nilai terakhir', 20, M], ['Dibebankan ke anggaran', 20, M],
     ['Tertagih', 20, M], ['Dibayar', 20, M], ['Sisa kontrak', 20, M], ['Dibayar tahun lalu', 20, M], ['Status', 11], ['Catatan', 30]
-  ], rows.map((c) => [c.contract_number, c.vendor_contract_number, c.contract_date, c.vendor_name, c.program_code, c.activity_name, c.package_code, CONTRACT_TYPE_LABEL[c.contract_type] ?? c.contract_type,
+  ], rows.map((c) => [c.contract_number, contractProject(c), c.vendor_contract_number, c.contract_date, c.vendor_name, c.program_code, c.activity_name, c.package_code, CONTRACT_TYPE_LABEL[c.contract_type] ?? c.contract_type,
     c.description, c.start_date, c.end_date, c.effective_end, c.is_multi_year ? 'Ya' : 'Tidak',
     c.initial_value, c.addendum_total, c.addendum_count, c.latest_value, c.allocated, c.billed, c.paid, c.sisa_kontrak, c.prior_year_paid,
     CONTRACT_STATUS_LABEL[c.status] ?? c.status, c.notes]))];
