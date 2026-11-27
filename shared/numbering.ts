@@ -196,3 +196,8 @@ export interface DocNumbering { number_text: string; in_content: boolean }
 export interface CategoryMapRow { category_id: string; category_name: string; register_id: string | null }
 export interface TemplateMapRow { id: string; name: string; category_name: string | null; register_id: string | null }
 export interface ImportRecordRow { id: string; register_id: string; filename: string; sheet: string; status: 'committed' | 'failed'; total_rows: number; imported_rows: number; skipped_rows: number; created_by_name: string; created_at: string }
+
+/** Kata sandi akun baru/reset: 8–64 karakter. PIN angka lama (4–12 digit) tetap diterima di layar lama dan untuk masuk. */
+export const validPassword = (s: string) => s.length >= 8 && s.length <= 64;
+export const validSecret = (s: string) => /^\d{4,12}$/.test(s) || validPassword(s);
+export const PASSWORD_RULE = 'Kata sandi minimal 8 karakter (maks. 64).';

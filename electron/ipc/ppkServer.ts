@@ -1,6 +1,7 @@
 import { dialog } from 'electron';
 import fs from 'node:fs';
 import { z } from 'zod';
+import { validSecret } from '@shared/numbering';
 import { handle } from './handle';
 import * as S from './schemas';
 import { defaultBackupDir, getDb } from '../main/database';
@@ -18,7 +19,7 @@ import {
 
 const conf = z.object({ host: z.string().trim().min(1).max(200), port: z.number().int().min(1).max(65535), database: z.string().trim().min(1).max(63),
   user: z.string().trim().min(1).max(63), password: z.string().max(200) });
-const pin = z.string().regex(/^\d{4,12}$/, 'PIN harus 4–12 digit angka.');
+const pin = z.string().max(64).refine(validSecret, 'Kata sandi minimal 8 karakter, atau PIN 4–12 digit angka.');
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** Server berisi skema: perbarui bila dibuat versi aplikasi lama (migrasi hanya menambah), lalu cek versinya sama. */
@@ -49,7 +50,7 @@ export function registerPpkServerHandlers() {
   });
 
   // copy: pindahkan data PPK komputer ini ke server kosong. fresh: server kosong baru, administrator = pengguna ini dengan PIN baru. join: server sudah berisi.
-  handle('ppk:server:setup', z.object({ action: z.enum(['copy', 'fresh', 'join']), pin: z.string().max(12).optional() }), async ({ action, pin: p }) => {
+  handle('ppk:server:setup', z.object({ action: z.enum(['copy', 'fresh', 'join']), pin: z.string().max(64).optional() }), async ({ action, pin: p }) => {
     const admin = await requireLocalAdmin(db());
     const pool = serverPool(db());
     if (action !== 'join') {
@@ -74,7 +75,7 @@ export function registerPpkServerHandlers() {
   });
 
   handle('ppk:server:users', S.empty, () => listServerUsers(pgStore(serverPool(db()))));
-  handle('ppk:server:login', z.object({ user_id: S.id, pin: z.string().max(12) }), async ({ user_id, pin: p }) => {
+  handle('ppk:server:login', z.object({ user_id: S.id, pin: z.string().max(64) }), async ({ user_id, pin: p }) => {
     const pool = serverPool(db());
     await ready(pool);
     const a = await serverLogin(pgStore(pool), user_id, p);

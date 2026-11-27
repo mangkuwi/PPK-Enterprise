@@ -13,6 +13,8 @@ import { PpkGate } from '@/features/ppk/PpkGate';
 import { ReasonDialog, RupiahInput, rp, useFiscalYears, useWarnings } from '@/features/ppk/inputs';
 import { api } from '@/services/api';
 import { RelatedDocs } from '@/features/ppk/RelatedDocs';
+import { Num } from '@/features/ppk/Num';
+import { ExportButton, SlashWrap, TBL } from '@/features/ppk/table';
 import type { MasterRow } from '@shared/ppk/master';
 import { budgetLabel } from '@shared/ppk/budget';
 import {
@@ -45,7 +47,10 @@ export default function ContractsPage() {
     <Page>
       <PpkGate>
         <PageHeader title="Database Kontrak" subtitle="Kontrak induk, addendum, jadwal nilai per bulan, dan pembebanan ke anggaran."
-          actions={can('write') && <Button onClick={() => setForm('new')} disabled={!fyId}><Plus size={16} />Tambah Kontrak</Button>} />
+          actions={<>
+            <ExportButton run={() => api.ppk.contracts.exportXlsx({ fiscal_year_id: fyId, status, search: q })} disabled={!list.data?.length} />
+            {can('write') && <Button onClick={() => setForm('new')} disabled={!fyId}><Plus size={16} />Tambah Kontrak</Button>}
+          </>} />
         <div className="mb-4 flex flex-wrap gap-3">
           <Select className="w-40" value={fyId} onChange={(e) => setFy(e.target.value)} aria-label="Tahun anggaran">
             {years.map((y) => <option key={y.id} value={y.id}>TA {y.year}</option>)}
@@ -58,28 +63,41 @@ export default function ContractsPage() {
         </div>
         {list.error && <Empty>{list.error}</Empty>}
         {list.data && !list.data.length && <Empty>Belum ada kontrak{search ? ' yang cocok' : ''} untuk tahun ini.</Empty>}
-        {!!list.data?.length && (
-          <Card className="overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs text-slate-600"><tr>
-                <th className="px-3 py-2 text-left">Nomor kontrak</th><th className="px-3 py-2 text-left">Penyedia</th><th className="px-3 py-2 text-left">Uraian</th>
-                <th className="px-3 py-2 text-right">Nilai terakhir</th><th className="px-3 py-2 text-right">Tertagih / sisa</th><th className="px-3 py-2 text-left">Selesai</th><th className="px-3 py-2 text-left">Status</th>
-              </tr></thead>
-              <tbody>{list.data.map((c) => (
-                <tr key={c.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => setOpen(c.id)}>
-                  <td className="whitespace-nowrap px-3 py-2 font-medium text-navy-900"><button className="text-left hover:underline" onClick={() => setOpen(c.id)}>{c.contract_number}</button>
-                    {c.contract_type === 'kpbu' && <Badge className="ml-2">KPBU</Badge>}</td>
-                  <td className="px-3 py-2">{c.vendor_name}</td>
-                  <td className="max-w-xs truncate px-3 py-2" title={c.description}>{c.description}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{rp(c.latest_value)}{c.addendum_count > 0 && <div className="text-xs text-slate-500">{c.addendum_count} addendum</div>}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{rp(c.billed)}<div className="text-xs text-slate-500">sisa {rp(c.sisa_kontrak)}</div></td>
-                  <td className="whitespace-nowrap px-3 py-2">{c.effective_end}<EndBadge c={c} /></td>
-                  <td className="px-3 py-2"><Badge tone={TONE[c.status]}>{CONTRACT_STATUS_LABEL[c.status]}</Badge></td>
-                </tr>))}
-              </tbody>
-            </table>
-          </Card>
-        )}
+        {!!list.data?.length && (() => {
+          const rows = list.data; const live = rows.filter((c) => c.status !== 'dibatalkan');
+          const sum = (k: 'latest_value' | 'billed' | 'paid' | 'sisa_kontrak') => live.reduce((a, c) => a + c[k], 0);
+          return <>
+            <p className="mb-2 text-xs text-slate-500">{rows.length} kontrak · angka dalam Rupiah penuh · klik baris untuk detail.</p>
+            <Card className={TBL.card}>
+              <table className={TBL.table}>
+                <thead className={TBL.head}><tr>
+                  <th className={cn(TBL.th, TBL.first, 'z-30 bg-slate-50')}>Nomor kontrak</th><th className={TBL.th}>Penyedia</th><th className={TBL.th}>Uraian</th>
+                  <th className={TBL.thNum}>Nilai terakhir</th><th className={TBL.thNum}>Tertagih</th><th className={TBL.thNum}>Dibayar</th><th className={cn(TBL.thNum, 'bg-sky-100 text-navy-900')}>Sisa kontrak</th>
+                  <th className={TBL.th}>Selesai</th><th className={TBL.th}>Status</th>
+                </tr></thead>
+                <tbody>{rows.map((c) => (
+                  <tr key={c.id} className={cn(TBL.row, 'cursor-pointer', c.status === 'dibatalkan' && 'text-slate-400')} onClick={() => setOpen(c.id)}>
+                    <td className={cn(TBL.td, TBL.first, 'font-medium text-navy-900')}><button className="text-left hover:underline" onClick={() => setOpen(c.id)}><SlashWrap text={c.contract_number} /></button>
+                      {c.contract_type === 'kpbu' && <Badge className="ml-2">KPBU</Badge>}</td>
+                    <td className={cn(TBL.td, 'min-w-48')}>{c.vendor_name}</td>
+                    <td className={cn(TBL.td, 'max-w-xs')}><div className="line-clamp-2" title={c.description}>{c.description}</div></td>
+                    <td className={TBL.num}><Num n={c.latest_value} unit={1} />{c.addendum_count > 0 && <div className="text-xs text-slate-500">{c.addendum_count} addendum</div>}</td>
+                    <td className={TBL.num}><Num n={c.billed} unit={1} /></td>
+                    <td className={TBL.num}><Num n={c.paid} unit={1} /></td>
+                    <td className={cn(TBL.num, 'bg-sky-50/60 font-medium', c.sisa_kontrak < 0 && 'text-red-700')}><Num n={c.sisa_kontrak} unit={1} /></td>
+                    <td className={cn(TBL.td, 'whitespace-nowrap')}>{c.effective_end}<EndBadge c={c} /></td>
+                    <td className={TBL.td}><Badge tone={TONE[c.status]}>{CONTRACT_STATUS_LABEL[c.status]}</Badge></td>
+                  </tr>))}
+                </tbody>
+                <tfoot><tr>
+                  <td className={cn(TBL.foot, TBL.first, 'z-30 bg-slate-100')}>Total {live.length} kontrak tidak dibatalkan</td><td className={TBL.foot} colSpan={2} />
+                  {(['latest_value', 'billed', 'paid', 'sisa_kontrak'] as const).map((k) => <td key={k} className={cn(TBL.foot, 'whitespace-nowrap text-right tabular-nums')}><Num n={sum(k)} unit={1} /></td>)}
+                  <td className={TBL.foot} colSpan={2} />
+                </tr></tfoot>
+              </table>
+            </Card>
+          </>;
+        })()}
         {form && <ContractForm fiscalYearId={fyId} contract={form === 'new' ? null : form} onClose={() => setForm(null)}
           onSaved={(c) => { setForm(null); list.reload(); setOpen(c.id); }} />}
         {open && !form && <ContractDetailDialog id={open} canWrite={can('write')} onClose={() => setOpen(null)} onEdit={(c) => setForm(c)} onChanged={list.reload} />}

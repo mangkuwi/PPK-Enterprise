@@ -3,7 +3,7 @@ import type { Actor } from '@shared/numbering';
 import { formatRupiah } from '@shared/ppk/money';
 import { proposeTax } from '@shared/ppk/tax';
 import { budgetLabel, type Warned } from '@shared/ppk/budget';
-import { PAYMENT_CHANNELS, type Bill, type BillDetail, type BillFilter, type BillFundingView, type BillInput, type BillStatus, type PaymentInput, type PaymentView } from '@shared/ppk/bills';
+import { PAYMENT_CHANNELS, type Bill, type BillDetail, type BillFilter, type BillFundingView, type BillInput, type BillStatus, type PaymentInput, type PaymentRow, type PaymentView } from '@shared/ppk/bills';
 import type { PpkStore } from './store';
 import { PpkError, ppkAudit, requirePpk } from './access';
 import { constraintError, date, rupiah, text } from './validate';
@@ -48,6 +48,18 @@ export async function getBill(s: PpkStore, actor: Actor, id: string): Promise<Bi
   const payments = await s.all<PaymentView & { bill_funding_id: string }>(`SELECT py.* FROM ppk_payments py JOIN ppk_bill_funding bf ON bf.id = py.bill_funding_id
     WHERE bf.bill_id = ? ORDER BY py.payment_date, py.created_at`, [id]);
   return { bill, funding: funding.map((f) => ({ ...f, payments: payments.filter((x) => x.bill_funding_id === f.id) })) };
+}
+
+/** Semua pembayaran (termasuk yang dibatalkan) untuk tagihan TA terpilih. */
+export async function listPayments(s: PpkStore, actor: Actor, fiscal_year_id: string): Promise<PaymentRow[]> {
+  await requirePpk(s, actor, 'read');
+  return s.all<PaymentRow>(`SELECT py.*, b.id AS bill_id, b.bill_number, b.service_month, b.status AS bill_status, c.contract_number, v.name AS vendor_name,
+    ba.code AS mak, bl.output_detail, fs.code AS source_code, bl.kind
+    FROM ppk_payments py JOIN ppk_bill_funding bf ON bf.id = py.bill_funding_id JOIN ppk_bills b ON b.id = bf.bill_id
+    JOIN ppk_contracts c ON c.id = b.contract_id JOIN ppk_vendors v ON v.id = c.vendor_id
+    JOIN ppk_budget_lines bl ON bl.id = bf.budget_line_id JOIN ppk_budget_accounts ba ON ba.id = bl.budget_account_id
+    JOIN ppk_funding_sources fs ON fs.id = bl.funding_source_id
+    WHERE c.fiscal_year_id = ? ORDER BY py.payment_date DESC, py.created_at DESC LIMIT 20000`, [fiscal_year_id]);
 }
 
 function clean(i: BillInput) {

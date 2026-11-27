@@ -65,7 +65,7 @@ describe('hak akses PPK', () => {
   it('mengubah data wajib PIN', async () => {
     const u = createUser(db, admin, { name: 'TanpaPIN', role: 'operator', pin: null });
     await setPpkRole(s, admin, u.id, 'staf');
-    await expect(createVendor(s, { id: u.id, name: u.name, role: 'operator' }, vin())).rejects.toThrow(/PIN/);
+    await expect(createVendor(s, { id: u.id, name: u.name, role: 'operator' }, vin())).rejects.toThrow(/kata sandi/);
   });
   it('hanya Admin PPK mengatur peran, tercatat di audit', async () => {
     await expect(setPpkRole(s, staf, reader.id, 'admin')).rejects.toThrow(/tidak mengizinkan/);

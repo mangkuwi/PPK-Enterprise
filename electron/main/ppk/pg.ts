@@ -2,9 +2,11 @@
  * Modul PPK di PostgreSQL (Tahap 6, multiuser LAN). Hanya tabel PPK + pengguna + audit yang pindah ke server;
  * modul dokumen dan penomoran tetap di SQLite lokal tiap komputer (keputusan Fase 0, jalur A).
  */
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import pg from 'pg';
-import type { Actor } from '@shared/numbering';
+import { validSecret, type Actor } from '@shared/numbering';
+import { hash, verifySecret } from '../numbering/users';
+import { clearFails, lockedMinutes, lockMessage, recordFail } from '../numbering/lockout';
 import { MIGRATIONS } from '../migrations';
 import type { Param, PpkStore } from './store';
 import { PpkError, ppkAudit, requirePpk } from './access';
@@ -248,12 +250,11 @@ export async function installPgSchema(pool: pg.Pool) {
 
 // ---------- Pengguna server ----------
 
-const hash = (pin: string, salt: string) => scryptSync(pin, salt, 32).toString('hex'); // sama dengan numbering/users.ts
-const validPin = (pin: string) => /^\d{4,12}$/.test(pin);
+const validPin = validSecret;
 
 /** Server baru tanpa data lama: administrator pertama + data awal. PIN wajib karena server dipakai bersama. */
 export async function initFreshServer(pool: pg.Pool, admin: { id: string; name: string }, pin: string) {
-  if (!validPin(pin)) throw new PpkError('INVALID', 'PIN harus 4–12 digit angka.');
+  if (!validPin(pin)) throw new PpkError('INVALID', 'Kata sandi minimal 8 karakter, atau PIN 4–12 digit angka.');
   const st = await pgStatus(pool);
   if (st.users > 0) throw new PpkError('CONFLICT', 'Server sudah berisi pengguna. Masuk dengan pengguna yang ada.');
   const now = new Date().toISOString(); const salt = randomBytes(16).toString('hex');
@@ -276,17 +277,20 @@ export async function serverLogin(s: PpkStore, userId: string, pin: string): Pro
   const r = await s.get<{ id: string; name: string; role: 'admin' | 'operator'; pin_hash: string | null; pin_salt: string | null }>(
     'SELECT id, name, role, pin_hash, pin_salt FROM app_users WHERE id = ? AND is_active = 1', [userId]);
   if (!r) throw new PpkError('NOT_FOUND', 'Pengguna tidak ditemukan atau nonaktif.');
-  const ok = !!r.pin_hash && !!r.pin_salt && !!pin && timingSafeEqual(Buffer.from(hash(pin, r.pin_salt), 'hex'), Buffer.from(r.pin_hash, 'hex'));
+  const key = `server:${r.id}`; const min = lockedMinutes(key);
+  if (min) throw new PpkError('FORBIDDEN', lockMessage(min));
+  const ok = verifySecret(pin, r);
   const actor: Actor = { id: r.id, name: r.name, role: r.role };
   await ppkAudit(s, actor, ok ? 'server.login' : 'server.login_failed', 'user', r.id, {});
-  if (!ok) throw new PpkError('FORBIDDEN', 'PIN salah.');
+  if (!ok) { recordFail(key); throw new PpkError('FORBIDDEN', 'Kata sandi salah.'); }
+  clearFails(key);
   return actor;
 }
 
 export async function createServerUser(s: PpkStore, actor: Actor, i: { name: string; pin: string }) {
   const name = i.name.trim();
   if (!name || name.length > 80) throw new PpkError('INVALID', 'Nama pengguna wajib diisi (maks. 80 karakter).');
-  if (!validPin(i.pin)) throw new PpkError('INVALID', 'PIN harus 4–12 digit angka.');
+  if (!validPin(i.pin)) throw new PpkError('INVALID', 'Kata sandi minimal 8 karakter, atau PIN 4–12 digit angka.');
   return s.tx(async (t) => {
     await requirePpk(t, actor, 'roles');
     if (await t.get('SELECT 1 FROM app_users WHERE lower(name) = lower(?)', [name])) throw new PpkError('DUPLICATE', `Nama pengguna "${name}" sudah dipakai.`);
@@ -298,7 +302,7 @@ export async function createServerUser(s: PpkStore, actor: Actor, i: { name: str
 }
 
 export async function setServerUserPin(s: PpkStore, actor: Actor, userId: string, pin: string) {
-  if (!validPin(pin)) throw new PpkError('INVALID', 'PIN harus 4–12 digit angka.');
+  if (!validPin(pin)) throw new PpkError('INVALID', 'Kata sandi minimal 8 karakter, atau PIN 4–12 digit angka.');
   await s.tx(async (t) => {
     if (actor.id !== userId) await requirePpk(t, actor, 'roles');
     const salt = randomBytes(16).toString('hex');
