@@ -5,7 +5,14 @@ import { Field, Input, Select, Textarea } from '@/components/ui/form';
 import { errMsg, useFeedback } from '@/components/ui/feedback';
 import { useAsync } from '@/hooks/useAsync';
 import { api } from '@/services/api';
+import { formatDateID } from '@shared/date';
 import { dayName, type Agenda, type AgendaConflict, type AgendaInput } from '@shared/ppk/agenda';
+
+/** ' (6 jam)' / ' (1 jam 30 menit)'; kosong bila jam selesai tidak setelah jam mulai. */
+const duration = (a: string, b: string) => {
+  const m = b && a ? (Number(b.slice(0, 2)) * 60 + Number(b.slice(3, 5))) - (Number(a.slice(0, 2)) * 60 + Number(a.slice(3, 5))) : 0;
+  return m > 0 ? ` (${[Math.floor(m / 60) && `${Math.floor(m / 60)} jam`, m % 60 && `${m % 60} menit`].filter(Boolean).join(' ')})` : '';
+};
 
 /** Formulir agenda (baru dari surat undangan, atau ubah). Penanggung jawab dipilih dari pengguna yang punya peran PPK. */
 export function AgendaForm({ initial, existing, onSaved }: { initial: AgendaInput; existing?: Agenda; onSaved: (a: Agenda) => void }) {
@@ -35,11 +42,15 @@ export function AgendaForm({ initial, existing, onSaved }: { initial: AgendaInpu
       {people.error && <p className="mb-2 text-sm text-red-700" role="alert">{people.error}</p>}
       <div className="grid gap-3 text-sm md:grid-cols-2">
         <Field label="Judul kegiatan" required className="md:col-span-2"><Input value={v.title} onChange={set('title')} /></Field>
+        <fieldset className="grid gap-3 rounded-lg border border-navy-200 bg-navy-50/50 p-3 md:col-span-2 md:grid-cols-3">
+          <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-navy-800">Waktu kegiatan</legend>
+          <Field label="Tanggal kegiatan" required><Input type="date" value={v.agenda_date} onChange={set('agenda_date')} /></Field>
+          <Field label="Jam mulai (WIB)" hint="Kosongkan bila sepanjang hari"><Input type="time" value={v.start_time} onChange={set('start_time')} /></Field>
+          <Field label="Jam selesai (WIB)"><Input type="time" value={v.end_time} onChange={set('end_time')} /></Field>
+          <p className="text-sm font-medium text-navy-900 md:col-span-3" aria-live="polite">{v.agenda_date ? `${dayName(v.agenda_date)}, ${formatDateID(v.agenda_date)} · ${v.start_time ? `${v.start_time}${v.end_time ? `–${v.end_time}` : ''} WIB${duration(v.start_time, v.end_time)}` : 'sepanjang hari'}` : 'Isi tanggal kegiatan; hari terisi otomatis.'}</p>
+        </fieldset>
         <Field label="Nomor surat"><Input value={v.letter_number} onChange={set('letter_number')} /></Field>
-        <Field label="Tanggal surat" hint="Tanggal pada surat, bukan tanggal acara"><Input type="date" value={v.letter_date ?? ''} onChange={(e) => setV({ ...v, letter_date: e.target.value || null })} /></Field>
-        <Field label="Tanggal" required hint={v.agenda_date ? `Hari: ${dayName(v.agenda_date)}` : 'Hari terisi otomatis dari tanggal'}><Input type="date" value={v.agenda_date} onChange={set('agenda_date')} /></Field>
-        <Field label="Jam mulai"><Input type="time" value={v.start_time} onChange={set('start_time')} /></Field>
-        <Field label="Jam selesai"><Input type="time" value={v.end_time} onChange={set('end_time')} /></Field>
+        <Field label="Tanggal surat" hint="Tanggal pada surat, bukan tanggal kegiatan"><Input type="date" value={v.letter_date ?? ''} onChange={(e) => setV({ ...v, letter_date: e.target.value || null })} /></Field>
         <Field label="Lokasi"><Input value={v.location} onChange={set('location')} /></Field>
         <Field label="Tautan Zoom/Teams/Google Meet"><Input value={v.meeting_url} onChange={set('meeting_url')} placeholder="https://" /></Field>
         <Field label="Penyelenggara"><Input value={v.organizer} onChange={set('organizer')} /></Field>
