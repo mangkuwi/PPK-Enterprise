@@ -30,7 +30,7 @@ describe('migrasi v12–v13', () => {
     old.pragma('user_version = 11');
     const before = (old.prepare('SELECT COUNT(*) n FROM ppk_funding_sources').get() as { n: number }).n;
     expect(runMigrations(old)).toBe(LATEST_SCHEMA);
-    expect(LATEST_SCHEMA).toBe(15);
+    expect(LATEST_SCHEMA).toBe(16);
     for (const t of ['invitation_recipients', 'invitation_delivery_logs', 'ppk_agendas', 'ppk_agenda_assignees'])
       expect(old.prepare(`SELECT COUNT(*) n FROM ${t}`).get(), t).toEqual({ n: 0 });
     expect(old.prepare('SELECT COUNT(*) n FROM ppk_funding_sources').get()).toEqual({ n: before });
