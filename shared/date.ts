@@ -19,3 +19,10 @@ export const jakartaToday = (d = new Date()) => d.toLocaleDateString('sv-SE', { 
 
 /** Tambah n hari ke tanggal YYYY-MM-DD (kalender, tanpa zona waktu). */
 export const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+
+/** Nomor minggu ISO-8601 dari tanggal 'YYYY-MM-DD' (Senin awal minggu). */
+export function isoWeek(iso: string): number {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7)); // Kamis di minggu yang sama menentukan tahunnya
+  return Math.ceil(((d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
+}

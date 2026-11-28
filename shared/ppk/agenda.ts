@@ -199,3 +199,20 @@ export function startsInText(a: Pick<Agenda, 'agenda_date' | 'start_time'>, toda
   const t = (m: number) => [Math.floor(m / 60) && `${Math.floor(m / 60)} jam`, m % 60 && `${m % 60} menit`].filter(Boolean).join(' ') || 'kurang dari 1 menit';
   return d > 0 ? `dimulai ${t(d)} lagi` : d === 0 ? 'dimulai sekarang' : `dimulai ${t(-d)} lalu`;
 }
+
+/** Jenis rapat dari isian agenda: tautan + lokasi = hybrid, tautan saja = online, selain itu offline. */
+export function meetingMode(a: Pick<Agenda, 'meeting_url' | 'location'>): 'Online' | 'Offline' | 'Hybrid' {
+  return a.meeting_url.trim() ? (a.location.trim() ? 'Hybrid' : 'Online') : 'Offline';
+}
+
+/** Label tombol Join, hanya untuk tautan http(s) yang valid; null = tombol tidak ditampilkan. */
+export function joinButton(url: string): string | null {
+  let u: URL;
+  try { u = new URL(url.trim()); } catch { return null; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  const h = u.hostname.toLowerCase();
+  if (h === 'zoom.us' || h.endsWith('.zoom.us')) return 'Join Zoom';
+  if (h === 'meet.google.com') return 'Join Google Meet';
+  if (/^teams\.(microsoft|live)\.com$/.test(h)) return 'Join Teams';
+  return 'Buka Tautan Rapat';
+}

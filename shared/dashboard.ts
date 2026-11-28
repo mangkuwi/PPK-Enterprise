@@ -22,3 +22,26 @@ export function programProgress(lines: Line[], year: number): { programs: Progra
   const total = pct(programs.reduce((a, p) => ({ ...a, pagu: a.pagu + p.pagu, billed: a.billed + p.billed }), { name: 'Total', pagu: 0, billed: 0, pct: 0 }));
   return { programs, total };
 }
+
+/** Empat program yang dipantau di Dashboard; dicocokkan dengan nama detail output/uraian anggaran. */
+export const MONITORED = [
+  { key: 'satria', label: 'SATRIA 1', match: /satria/i },
+  { key: 'iphub', label: 'IP HUB', match: /ip\s*-?\s*hub/i },
+  { key: 'iptransit', label: 'IP Transit', match: /ip\s*-?\s*transit/i },
+  { key: 'akses', label: 'Akses Internet', match: /akses\s*internet/i }
+] as const;
+
+export interface MonitoredProgram extends ProgramProgress { key: string; sources: string[] }
+
+/** Realisasi per program dipantau (gabungan semua detail output yang cocok) + program lain yang tidak cocok. */
+export function monitoredPrograms(programs: ProgramProgress[]): { rows: MonitoredProgram[]; others: ProgramProgress[] } {
+  const rows: MonitoredProgram[] = MONITORED.map((m) => ({ key: m.key, name: m.label, pagu: 0, billed: 0, pct: 0, sources: [] }));
+  const others: ProgramProgress[] = [];
+  for (const p of programs) {
+    const i = MONITORED.findIndex((m) => m.match.test(p.name));
+    if (i < 0) { others.push(p); continue; }
+    rows[i].pagu += p.pagu; rows[i].billed += p.billed; rows[i].sources.push(p.name);
+  }
+  for (const r of rows) r.pct = r.pagu > 0 ? Math.round((r.billed / r.pagu) * 1000) / 10 : 0;
+  return { rows, others };
+}

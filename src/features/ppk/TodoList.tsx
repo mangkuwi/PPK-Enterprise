@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Check, Plus } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { AlarmClock, CalendarDays, Check, MoreVertical, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge, Empty } from '@/components/ui/card';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -11,18 +11,25 @@ import { cn } from '@/lib/utils';
 import { addDays } from '@shared/date';
 import { shortDate } from './AgendaViews';
 import { usePpkAccess } from './usePpkAccess';
-import { TASK_CATEGORIES, TASK_PRIORITIES, TASK_PRIORITY_LABEL, type Task, type TaskInput } from '@shared/ppk/tasks';
+import { dueState, TASK_CATEGORIES, TASK_PRIORITIES, TASK_PRIORITY_LABEL, type Task, type TaskInput } from '@shared/ppk/tasks';
 
 type Filter = 'saya' | 'semua' | 'tinggi' | 'berjalan' | 'selesai';
 const EMPTY: TaskInput = { title: '', notes: '', due_date: null, priority: 'sedang', category: '', assignee_user_id: null };
 const TONE = { tinggi: 'red', sedang: 'amber', rendah: 'slate' } as const;
 
 /** To Do List staf PPK: centang selesai, tambah/ubah lewat dialog, arsipkan (tidak dihapus). */
-export function TodoList({ today }: { today: string }) {
+type Tasks = { data?: Task[]; error?: string; loading: boolean; reload: () => void };
+
+/** Dashboard memuat tugas sekali lalu membaginya ke kartu ringkasan dan daftar ini; tanpa prop, daftar memuat sendiri. */
+export function TodoList({ today, tasks: shared, title }: { today: string; tasks?: Tasks; title?: ReactNode }) {
+  const own = useAsync(() => (shared ? Promise.resolve(undefined) : api.ppk.tasks.list()), [!!shared]);
+  return <TodoListView today={today} tasks={shared ?? own} title={title} />;
+}
+
+function TodoListView({ today, tasks, title }: { today: string; tasks: Tasks; title?: ReactNode }) {
   const { toast } = useFeedback();
   const { can, access } = usePpkAccess();
   const me = access?.user_id;
-  const tasks = useAsync(() => api.ppk.tasks.list(), []);
   const [chosen, setFilter] = useState<Filter | null>(null);
   const [all, setAll] = useState(false);
   const [edit, setEdit] = useState<Task | 'baru' | null>(null);
@@ -35,37 +42,49 @@ export function TodoList({ today }: { today: string }) {
   const filter: Filter = chosen ?? (pick.saya.length ? 'saya' : 'semua');
   const shown = all ? pick[filter] : pick[filter].slice(0, 6);
   const toggle = async (t: Task) => { try { await api.ppk.tasks.setDone(t.id, t.status !== 'selesai'); tasks.reload(); } catch (e) { toast(errMsg(e), 'error'); } };
-  const due = (d: string | null, done: boolean) => {
+  const due = (t: Task) => {
+    const d = t.due_date;
     if (!d) return <span className="text-slate-400">Tanpa tenggat</span>;
-    const late = !done && d < today;
-    return <span className={cn(late || (!done && d === today) ? 'font-semibold text-red-600' : 'text-slate-600')}>{d === today ? 'Hari ini' : d === addDays(today, 1) ? 'Besok' : shortDate(d)}{late && ' · terlambat'}</span>;
+    const st = dueState(t, today);
+    const late = st === 'terlambat';
+    return (
+      <span className="flex flex-col items-end gap-0.5">
+        <span className={cn('inline-flex items-center gap-1', late || st === 'hari_ini' ? 'font-semibold text-red-600' : 'text-slate-600')}>
+          <CalendarDays size={14} />{d === today ? 'Hari ini' : d === addDays(today, 1) ? 'Besok' : shortDate(d)}</span>
+        {late && <span className="rounded bg-red-100 px-1.5 text-[11px] font-semibold text-red-700">Terlambat</span>}
+        {st === 'segera' && <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-amber-700" title="Pengingat: tenggat ≤ 3 hari"><AlarmClock size={11} /> Pengingat</span>}
+      </span>);
   };
 
+  const addBtn = can('write') && <Button size="sm" className="ml-auto bg-blue-600 hover:bg-blue-700" onClick={() => setEdit('baru')}><Plus size={15} /> Tambah Tugas</Button>;
   return (
     <div>
+      {title && <div className="mb-3 flex items-center gap-2">{title}{addBtn}</div>}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        {([['saya', 'Tugas Saya'], ['semua', 'Semua'], ['tinggi', 'Prioritas Tinggi'], ['berjalan', 'Berjalan'], ['selesai', 'Selesai']] as const).map(([k, l]) => (
+        {([['semua', 'Semua'], ['saya', 'Tugas Saya'], ['tinggi', 'Prioritas Tinggi'], ['berjalan', 'Sedang Berjalan'], ['selesai', 'Selesai']] as const).map(([k, l]) => (
           <button key={k} onClick={() => setFilter(k)} aria-pressed={filter === k}
             className={cn('rounded-full px-3 py-1 text-sm', filter === k ? 'bg-blue-600 font-semibold text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200')}>{l} ({pick[k].length})</button>))}
-        {can('write') && <Button size="sm" className="ml-auto" onClick={() => setEdit('baru')}><Plus size={15} /> Tambah Tugas</Button>}
+        {!title && addBtn}
       </div>
       {tasks.error && <p className="text-sm text-red-700">{tasks.error}</p>}
       {!tasks.loading && !shown.length && <Empty>{filter === 'saya' ? 'Tidak ada tugas berjalan untuk Anda.' : filter === 'semua' ? 'Belum ada tugas. Tambahkan tugas pertama Anda.' : 'Tidak ada tugas pada pilihan ini.'}</Empty>}
-      <ul className="divide-y divide-slate-100">{shown.map((t) => {
+      <ul className="space-y-1">{shown.map((t) => {
         const done = t.status === 'selesai';
+        const late = dueState(t, today) === 'terlambat';
         return (
-          <li key={t.id} className={cn('flex items-center gap-3 py-2', done && 'opacity-60')}>
+          <li key={t.id} className={cn('flex items-center gap-3 rounded-lg border px-3 py-2', done ? 'border-green-100 bg-green-50/70' : late ? 'border-red-200 bg-red-50/40' : 'border-transparent hover:bg-slate-50')}>
             <button role="checkbox" aria-checked={done} aria-label={`${done ? 'Buka lagi' : 'Tandai selesai'}: ${t.title}`} disabled={!can('write')} onClick={() => void toggle(t)}
               className={cn('grid h-5 w-5 shrink-0 place-items-center rounded border-2', done ? 'border-green-600 bg-green-600 text-white' : 'border-slate-400 hover:border-blue-600')}>{done && <Check size={13} />}</button>
             <button onClick={() => setEdit(t)} className="min-w-0 flex-1 text-left">
-              <div className={cn('truncate font-medium text-navy-900 hover:underline', done && 'line-through')}>{t.title}</div>
+              <div className={cn('truncate font-medium text-navy-900 hover:underline', done && 'text-slate-500 line-through')}>{t.title}</div>
               <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs">
                 {done ? <Badge tone="green">Selesai</Badge> : <Badge tone={TONE[t.priority]}>{TASK_PRIORITY_LABEL[t.priority]}</Badge>}
                 {t.category && <Badge tone="slate">{t.category}</Badge>}
                 {t.assignee_name && <span className={t.assignee_user_id === me ? 'font-semibold text-blue-700' : 'text-slate-500'}>PJ: {t.assignee_user_id === me ? 'Anda' : t.assignee_name}</span>}
               </div>
             </button>
-            <div className="shrink-0 text-right text-sm">{due(t.due_date, done)}</div>
+            <div className="shrink-0 text-right text-sm">{due(t)}</div>
+            <button onClick={() => setEdit(t)} className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-navy-900" aria-label={`Rincian tugas: ${t.title}`} title="Rincian / ubah"><MoreVertical size={16} /></button>
           </li>);
       })}</ul>
       {pick[filter].length > 6 && <button onClick={() => setAll(!all)} className="mt-2 w-full text-center text-sm font-medium text-blue-700 hover:underline">{all ? 'Tampilkan lebih sedikit' : `Lihat semua tugas (${pick[filter].length})`}</button>}

@@ -6,6 +6,7 @@ import { createUser, setPin } from '../electron/main/numbering/users';
 import { sqliteStore, type PpkStore } from '../electron/main/ppk/store';
 import { setPpkRole } from '../electron/main/ppk/access';
 import { archiveTask, listTasks, saveTask, setTaskDone } from '../electron/main/ppk/tasks';
+import { recentActivity } from '../electron/main/ppk/activity';
 import type { TaskInput } from '@shared/ppk/tasks';
 import type { Actor } from '@shared/numbering';
 
@@ -43,5 +44,12 @@ describe('To Do List', () => {
     await expect(saveTask(s, budi, null, null, { ...base, title: ' ' })).rejects.toThrow(/wajib/);
     await expect(saveTask(s, budi, null, null, { ...base, due_date: '2026-02-30' })).rejects.toThrow(/tanggal/);
     expect((db.prepare("SELECT action FROM audit_log WHERE action LIKE 'ppk.task.%' ORDER BY at").all() as Array<{ action: string }>).map((r) => r.action)).toEqual(['ppk.task.create', 'ppk.task.archive']);
+  });
+  it('Aktivitas Terbaru dari log audit, terbaru dulu, dengan judul tugas', async () => {
+    const a = await saveTask(s, budi, null, null, { ...base, title: 'Rekonsiliasi billing' });
+    await setTaskDone(s, budi, a.id, true);
+    const act = await recentActivity(s, citra);
+    expect(act.map((x) => x.text)).toEqual(['Tugas selesai: Rekonsiliasi billing', 'Tugas ditambahkan: Rekonsiliasi billing']);
+    expect(act[0]).toMatchObject({ actor: 'Budi', kind: 'tugas', done: true });
   });
 });
