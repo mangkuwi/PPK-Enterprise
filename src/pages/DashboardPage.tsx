@@ -115,7 +115,7 @@ function TodayAgendaPanel({ list, focus, today, now, me }: { list: Agenda[]; foc
         const mode = meetingMode(a); const join = a.meeting_url ? joinButton(a.meeting_url) : null;
         const mine = a.pic?.id === me ? 'Anda PJ' : a.support.some((p) => p.id === me) ? 'Anda pendukung' : null;
         return (
-          <li key={a.id} className={cn('flex items-center gap-3 rounded-xl p-2', live === 'berlangsung' ? 'bg-green-50 ring-1 ring-green-300' : past && 'opacity-60')}>
+          <li key={a.id} className={cn('flex flex-wrap items-center gap-3 rounded-xl p-2 md:flex-nowrap', live === 'berlangsung' ? 'bg-green-50 ring-1 ring-green-300' : past && 'opacity-60')}>
             <div className="w-[104px] shrink-0 text-sm font-bold leading-tight text-navy-900">{timeText(a)}
               {live === 'berlangsung' ? <div className="text-[11px] font-semibold text-green-700">● Berlangsung</div> : <div className="text-[11px] font-normal leading-tight text-slate-500">{startsInText(a, today, now) ?? ''}</div>}</div>
             <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', live === 'berlangsung' ? 'bg-green-500' : 'bg-blue-600')} aria-hidden />
@@ -126,7 +126,7 @@ function TodayAgendaPanel({ list, focus, today, now, me }: { list: Agenda[]; foc
                 {a.location && <span className="truncate text-slate-600">{a.location}</span>}
                 {mine && <Badge tone="navy">{mine}</Badge>}
               </div></Link>
-            {join && <a href={a.meeting_url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"><Video size={14} /> {join}</a>}
+            {join && <a href={a.meeting_url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 max-md:w-full max-md:py-3 max-md:text-base"><Video size={14} /> {join}</a>}
           </li>);
       })}</ul>
     </Panel>
@@ -245,13 +245,17 @@ export default function DashboardPage() {
           <div className="min-w-0 flex-1 basis-60">
             <h1 className="text-xl font-bold drop-shadow sm:text-2xl">Selamat Datang{userName ? `, ${userName}` : ''} 👋</h1>
             <p className="text-sm text-blue-100">Dashboard PPK Management{access?.role ? ` · ${PPK_ROLE_LABEL[access.role]}` : ''}</p>
+            <p className="mt-1 text-sm font-semibold md:hidden">{dayName(today)}, {formatDateID(today)}</p>
           </div>
-          <div className="flex items-center gap-3 rounded-xl bg-white px-4 py-2.5 text-navy-900 shadow-lg">
+          <div className="flex items-center gap-3 rounded-xl bg-white max-md:hidden px-4 py-2.5 text-navy-900 shadow-lg">
             <CalendarDays size={26} className="text-navy-700" />
             <div className="leading-tight"><b className="block">{dayName(today)}, {formatDateID(today)}</b><span className="text-xs text-slate-600">Minggu ke-{isoWeek(today)} | Tahun Anggaran {today.slice(0, 4)}</span></div>
           </div>
         </div>
       </section>
+
+      {/* HP: agenda hari ini langsung di bawah sapaan, tombol Join besar selebar layar. */}
+      {ppk && <div className="mb-5 md:hidden"><TodayAgendaPanel list={todayList} focus={focus} today={today} now={now} me={access?.user_id} /></div>}
 
       <PpkGate>
         {o.error && <div className="mb-3 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800" role="alert">{o.error}</div>}
@@ -286,7 +290,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="space-y-5">
-          {ppk && <TodayAgendaPanel list={todayList} focus={focus} today={today} now={now} me={access?.user_id} />}
+          {ppk && <div className="max-md:hidden"><TodayAgendaPanel list={todayList} focus={focus} today={today} now={now} me={access?.user_id} /></div>}
           {ppk && <AgendaCalendarPanel today={today} upcoming={h?.upcoming ?? []} />}
           <ActivityPanel ppk={ppk} docs={s?.recentDocuments ?? []} />
 
