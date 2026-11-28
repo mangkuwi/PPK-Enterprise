@@ -143,6 +143,7 @@ export interface Stats {
   totalTemplates: number;
   documentsThisMonth: number;
   activeDrafts: number;
+  inReview: number;
   lastDocument: DocumentSummary | null;
   recentDocuments: DocumentSummary[];
   favoriteTemplates: TemplateSummary[];

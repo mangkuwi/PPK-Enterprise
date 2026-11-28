@@ -34,7 +34,8 @@ export default function AgendaPage() {
   const list = useAsync(() => api.ppk.agendas.list(f), [key]);
   const people = useAsync(() => api.ppk.agendas.people(), []);
   const programs = useAsync(() => api.ppk.masterList('programs'), []);
-  const [form, setForm] = useState<AgendaInput | null>(null);
+  // ?baru=1 (dari tombol Tambah Agenda di Dashboard) langsung membuka formulir agenda baru.
+  const [form, setForm] = useState<AgendaInput | null>(() => (sp.get('baru') ? { ...EMPTY_AGENDA, agenda_date: jakartaToday() } : null));
   const [editing, setEditing] = useState<Agenda | null>(null);
   const remove = useDeleteAgenda(() => list.reload());
 

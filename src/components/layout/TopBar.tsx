@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, UserCircle2 } from 'lucide-react';
+import { CalendarDays, Menu, UserCircle2 } from 'lucide-react';
 import { GROUPS, activeTab, sectionFor } from '@shared/nav';
 import { dayName } from '@shared/ppk/agenda';
 import { formatDateID, isoWeek, jakartaToday } from '@shared/date';
@@ -31,13 +31,13 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
         <div className="relative flex items-center gap-2 px-3 py-2.5 md:gap-4 md:px-6">
           <button onClick={onMenu} className="-ml-1 rounded-lg p-2 hover:bg-white/10 md:hidden" aria-label="Buka menu"><Menu size={22} /></button>
           <div className="min-w-0">
-            <div className="truncate text-lg font-bold leading-tight drop-shadow">{home ? `Selamat Datang${name ? `, ${name}` : ''} 👋` : 'PPK Management'}</div>
+            <div className="truncate text-lg font-bold leading-tight drop-shadow">PPK Management</div>
             <div className="truncate text-xs text-blue-100">
-              {home ? <><span className="md:hidden">{dayName(today)}, {formatDateID(today)}</span><span className="max-md:hidden">Dashboard PPK Management</span></>
+              {home ? <><span className="md:hidden">{dayName(today)}, {formatDateID(today)}</span><span className="max-md:hidden">Pengelolaan Tugas, Agenda, Dokumen &amp; Kontrak</span></>
                 : [group, s?.label].filter(Boolean).join(' › ') || 'Beranda'}</div>
           </div>
-          <div className="ml-auto hidden rounded-lg bg-white/10 px-3 py-1.5 text-right text-xs leading-tight text-blue-100 ring-1 ring-white/20 backdrop-blur-sm md:block">
-            <b className="block text-sm text-white">{dayName(today)}, {formatDateID(today)}</b>Minggu ke-{isoWeek(today)} | Tahun Anggaran {today.slice(0, 4)}</div>
+          <div className="ml-auto hidden items-center gap-2.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs leading-tight text-blue-100 ring-1 ring-white/20 backdrop-blur-sm md:flex">
+            <CalendarDays size={22} className="text-white" /><div><b className="block text-sm text-white">{dayName(today)}, {formatDateID(today)}</b>Minggu ke-{isoWeek(today)} | TA {today.slice(0, 4)}</div></div>
           <button onClick={openLogin} className="ml-auto flex shrink-0 items-center gap-2 rounded-lg px-2 py-1 text-left hover:bg-white/10 md:ml-0" title="Profil pengguna / ganti pengguna" aria-label="Profil pengguna">
             <span className="grid h-9 w-9 place-items-center rounded-full bg-white/20 text-sm font-bold text-white ring-1 ring-white/30">{name ? name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') : <UserCircle2 size={20} />}</span>
             <span className="hidden text-xs leading-tight lg:block"><b className="block text-sm text-white">{name ?? 'Belum masuk'}</b><span className="text-blue-100">{role}</span></span>
