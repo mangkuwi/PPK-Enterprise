@@ -287,6 +287,7 @@ export default function DashboardPage() {
 
         <div className="space-y-5">
           {ppk && <TodayAgendaPanel list={todayList} focus={focus} today={today} now={now} me={access?.user_id} />}
+          {ppk && <AgendaCalendarPanel today={today} upcoming={h?.upcoming ?? []} />}
           <ActivityPanel ppk={ppk} docs={s?.recentDocuments ?? []} />
 
           <Panel icon={Zap} title="Quick Access">
@@ -302,7 +303,6 @@ export default function DashboardPage() {
             </div>
           </Panel>
 
-          {ppk && <AgendaCalendarPanel today={today} upcoming={h?.upcoming ?? []} />}
           {ppk && h && <InboxActionsPanel h={h} />}
         </div>
       </div>
