@@ -48,8 +48,9 @@ Akses web menyala lagi otomatis setiap kali aplikasi dibuka, sampai Anda klik **
 ## Yang perlu diketahui
 
 - Laptop server harus **menyala dan aplikasi terbuka**. Bila aplikasi ditutup, HP menampilkan "Tidak terhubung ke komputer server PPK".
-- Dari browser **tidak bisa**: memilih/mengunggah berkas, menyimpan ekspor Excel/PDF, mencetak, backup/restore, dan mengubah pengaturan
-  komputer server. Semua itu tetap dilakukan di laptop server.
+- Dari browser bisa mengunggah berkas (impor Excel, undangan, laporan) dan mengunduh ekspor Excel/PDF/Word. Yang **tidak bisa**:
+  mencetak langsung (ekspor PDF lalu cetak), backup/restore, dan mengubah pengaturan komputer server.
+- Ingin laptop server tanpa jendela aplikasi (semua orang lewat browser)? Lihat `docs/SERVER-LAPTOP.md` (`npm run server`).
 - Setiap browser punya sesi sendiri. Sesi berakhir bila tidak dipakai 12 jam, saat keluar, atau saat aplikasi di laptop server ditutup.
 - Salah kata sandi 5 kali mengunci akun itu 5 menit (sama seperti desktop). Semua login tercatat di log audit.
 - Sambungan memakai **HTTP biasa** (tanpa gembok). Aman untuk jaringan kantor yang tertutup, jangan dibuka ke internet

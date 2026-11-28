@@ -43,15 +43,50 @@ declare global {
 }
 
 // Dibuka dari browser (mode web): panggilan yang sama dikirim ke komputer server lewat HTTP.
+// Perintah yang memilih berkas: browser membuka pemilih berkas dulu lalu mengunggahnya bersama perintah.
+const DOC = '.pdf,.doc,.docx,.jpg,.jpeg,.png';
+const PICK: Record<string, { accept: string; canceled: unknown }> = {
+  'templates:import': { accept: '.json', canceled: { canceled: true } },
+  'templates:importDocx': { accept: '.docx,.dotx', canceled: { canceled: true } },
+  'importer:upload': { accept: '.docx,.dotx', canceled: { canceled: true } },
+  'numbering:importPick': { accept: '.xlsx', canceled: { canceled: true } },
+  'ppk:import:pick': { accept: '.xlsx', canceled: { canceled: true } },
+  'ppk:invitations:upload': { accept: DOC, canceled: null },
+  'ppk:agendas:uploadReport': { accept: DOC, canceled: null }
+};
+
+function pickFile(accept: string): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = accept;
+    input.onchange = () => resolve(input.files?.[0] ?? null);
+    input.addEventListener('cancel', () => resolve(null));
+    input.click();
+  });
+}
+
+type WebReply = { ok: true; data: unknown } | { ok: false; error: string };
+async function webInvoke(channel: string, payload: unknown): Promise<WebReply> {
+  const pick = PICK[channel];
+  const file = pick ? await pickFile(pick.accept) : null;
+  if (pick && !file) return { ok: true, data: pick.canceled };
+  try {
+    const headers: Record<string, string> = { 'X-PPK': '1' };
+    let body: BodyInit;
+    if (file) {
+      Object.assign(headers, { 'X-Channel': channel, 'X-Payload': encodeURIComponent(JSON.stringify(payload ?? {})), 'X-File-Name': encodeURIComponent(file.name) });
+      body = file;
+    } else { headers['Content-Type'] = 'application/json'; body = JSON.stringify({ channel, payload }); }
+    const r = await fetch(file ? '/api/invoke-file' : '/api/invoke', { method: 'POST', credentials: 'same-origin', headers, body });
+    const res = (await r.json()) as WebReply & { download?: { url: string; name: string }; open?: string };
+    if (res.download) { const a = document.createElement('a'); a.href = res.download.url; a.download = res.download.name; document.body.append(a); a.click(); a.remove(); }
+    if (res.open && !window.open(res.open, '_blank', 'noopener')) location.href = res.open;
+    return res;
+  } catch { return { ok: false, error: 'Tidak terhubung ke komputer server PPK. Pastikan satu jaringan dan aplikasi di server menyala.' }; }
+}
+
 if (typeof window !== 'undefined' && !window.api && location.protocol.startsWith('http') && !import.meta.env.DEV) {
-  window.api = {
-    invoke: async (channel, payload) => {
-      try {
-        const r = await fetch('/api/invoke', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-PPK': '1' }, body: JSON.stringify({ channel, payload }) });
-        return await r.json();
-      } catch { return { ok: false, error: 'Tidak terhubung ke komputer server PPK. Pastikan satu jaringan dan aplikasi di server menyala.' }; }
-    }
-  };
+  window.api = { invoke: webInvoke };
 }
 
 /** true bila halaman dibuka dari browser (HP/laptop lain), bukan dari aplikasi desktop. */

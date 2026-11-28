@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "start": "electron .",
+    "server": "electron . --server",
     "build:renderer": "vite build",
     "build:electron": "node scripts/build-electron.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
