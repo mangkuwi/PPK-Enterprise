@@ -30,10 +30,12 @@ function useJakartaClock() {
 /** Kartu ringkasan berwarna (komponen bersama untuk empat angka utama). */
 function StatCard({ to, icon: Icon, label, value, hint, color }: { to?: string; icon: typeof Hash; label: string; value: ReactNode; hint: ReactNode; color: string }) {
   const body = <>
-    <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-white/20 ring-4 ring-white/10"><Icon size={26} /></div>
-    <div className="min-w-0"><div className="truncate text-sm font-medium opacity-95">{label}</div><div className="text-3xl font-bold leading-tight">{value}</div><div className="truncate text-xs opacity-90">{hint}</div></div>
+    {/* Laptop (lima kartu sempit): ikon disembunyikan agar judul tidak terpotong. */}
+    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/20 ring-4 ring-white/10 lg:max-[1440px]:hidden"><Icon size={21} /></div>
+    <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium opacity-95" title={label}>{label}</div><div className="text-2xl font-bold leading-tight">{value}</div>
+      <div className="truncate text-xs opacity-90" title={typeof hint === 'string' ? hint : undefined}>{hint}</div></div>
   </>;
-  const cls = cn('flex items-center gap-4 rounded-2xl p-4 text-white shadow-md shadow-slate-300/50 transition', color, to && 'hover:-translate-y-0.5 hover:brightness-110');
+  const cls = cn('flex h-full min-w-0 items-center gap-3 rounded-2xl px-3.5 py-3 text-white shadow-md shadow-slate-300/50 transition', color, to && 'hover:-translate-y-0.5 hover:brightness-110');
   return to ? <Link to={to} className={cls}>{body}</Link> : <div className={cls}>{body}</div>;
 }
 
@@ -49,7 +51,14 @@ function Panel({ icon: Icon, title, to, action, children, className }: { icon: t
 }
 
 /** Kotak Masuk WhatsApp dan tindakan tertunda. Semua angka dari agendaHome (query), tidak ada yang disimpan. */
+/** Jam 'HH:MM' bila pesan diterima hari ini (WIB), selain itu tanggal singkat. */
+const waTime = (iso: string, today: string) => {
+  const d = new Date(iso);
+  return jakartaToday(d) === today ? d.toLocaleTimeString('sv-SE', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) : shortDate(jakartaToday(d));
+};
+
 function InboxActionsPanel({ h }: { h: AgendaHome }) {
+  const today = h.today;
   const msgs = useAsync(() => api.ppk.invitations.list(), []);
   const latest = [...(msgs.data ?? [])].sort((x, y) => y.received_at.localeCompare(x.received_at)).slice(0, 3);
   const tiles: Array<[string, number, string, string]> = [
@@ -69,10 +78,10 @@ function InboxActionsPanel({ h }: { h: AgendaHome }) {
         <li key={m.id}><Link to={`/ppk/kotak-masuk/${m.id}`} className="flex items-start gap-3 py-2 hover:bg-slate-50">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-violet-100 text-violet-700"><Users size={17} /></span>
           <div className="min-w-0 flex-1"><div className="flex items-baseline justify-between gap-2"><b className="truncate text-sm text-navy-900">{m.sender_name || m.sender_phone || 'Unggah manual'}</b>
-            <span className="shrink-0 text-xs text-slate-500">{m.received_at.slice(0, 10) === new Date().toISOString().slice(0, 10) ? formatDateTime(m.received_at).slice(-5) : formatDateTime(m.received_at).slice(0, -6)}</span></div>
+            <span className="shrink-0 text-xs text-slate-500">{waTime(m.received_at, today)}</span></div>
             <div className="truncate text-xs text-slate-600">{m.message_text || (m.file_count ? `${m.file_count} lampiran` : '(tanpa teks)')}</div></div>
         </Link></li>))}</ul>}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{tiles.map(([l, n, to, c]) => (
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">{tiles.map(([l, n, to, c]) => (
         <Link key={l} to={to} className={cn('rounded-lg px-3 py-2 transition hover:brightness-95', c)}><div className="text-xl font-bold leading-tight">{n}</div><div className="text-xs font-medium leading-tight">{l}</div></Link>))}</div>
       {h.inbox.gagal > 0 && <Link to="/ppk/kotak-masuk?kategori=gagal" className="mt-2 block text-sm text-red-700 hover:underline">{h.inbox.gagal} pesan gagal diproses, minta pengirim mengirim ulang.</Link>}
       <div className="mt-3 border-t border-slate-100 pt-2">
@@ -103,7 +112,7 @@ function AgendaItems({ list, today, now, me }: { list: Agenda[]; today: string; 
             {live === 'berlangsung' ? <div className="text-[11px] font-semibold text-green-700">● Berlangsung</div> : <div className="text-[11px] font-normal leading-tight text-slate-500">{startsInText(a, today, now) ?? ''}</div>}</div>
           <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', live === 'berlangsung' ? 'bg-green-500' : 'bg-blue-600')} aria-hidden />
           <Link to={`/ppk/agenda/${a.id}`} className="min-w-0 flex-1">
-            <div className="line-clamp-2 text-sm font-semibold leading-snug text-navy-900 hover:underline" title={a.title}>{a.title}</div>
+            <div className="text-sm font-semibold leading-snug text-navy-900 hover:underline">{a.title}</div>
             <div className="flex flex-wrap items-center gap-x-2 text-xs">
               <span className={cn('inline-flex items-center gap-1 font-medium', MODE_TONE[mode])}>{mode === 'Offline' ? <MapPin size={12} /> : <Video size={12} />}{mode}</span>
               {a.location && <span className="truncate text-slate-600">{a.location}</span>}
@@ -292,7 +301,7 @@ export default function DashboardPage() {
 
       <PpkGate>
         {o.error && <div className="mb-3 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800" role="alert">{o.error}</div>}
-        <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           <StatCard icon={CheckCircle2} color="bg-gradient-to-br from-blue-600 to-blue-800" label="Tugas Saya" value={mine ? mine.length : '–'}
             hint={t ? (t.near ? `${t.near} mendekati deadline${t.late ? ` · ${t.late} terlambat` : ''}` : 'Perlu ditindaklanjuti') : 'Memuat…'} />
           <StatCard to="/ppk/agenda" icon={CalendarDays} color="bg-gradient-to-br from-violet-600 to-purple-800" label="Agenda Minggu Ini" value={h ? week : '–'}
