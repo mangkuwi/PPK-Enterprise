@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Activity, ArrowRight, BarChart3, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, CloudUpload, FilePlus2, FileSignature, FileText, Gauge, Globe, Hash, Layers, ListTodo, Mail, MapPin, MessageCircle, Network, Plus, Receipt, RefreshCw, Satellite, Star, TrendingUp, Users, Video, Wallet, Wifi, Zap } from 'lucide-react';
+import { Activity, ArrowRight, BarChart3, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, CloudUpload, FilePlus2, FileSignature, FileText, Gauge, Globe, Hash, Layers, ListTodo, Mail, MapPin, MessageCircle, Network, Plus, Receipt, RefreshCw, Satellite, Star, TrendingUp, Video, Wallet, Wifi, Zap } from 'lucide-react';
 import { Page } from '@/components/layout/Page';
 import { Button } from '@/components/ui/button';
 import { Badge, Card, Empty, STATUS_LABEL, STATUS_TONE } from '@/components/ui/card';
@@ -13,7 +13,7 @@ import { api } from '@/services/api';
 import { cn, formatDateTime } from '@/lib/utils';
 import { addDays, formatDateID, jakartaToday } from '@shared/date';
 import { dashboardYear, monitoredPrograms, programProgress } from '@shared/dashboard';
-import { calendarDays, dayName, focusAgenda, joinButton, liveState, meetingMode, shiftCursor, startsInText, type Agenda, type AgendaHome } from '@shared/ppk/agenda';
+import { calendarDays, dayName, focusAgenda, joinButton, liveState, meetingMode, shiftCursor, startsInText, type Agenda } from '@shared/ppk/agenda';
 import { taskStats } from '@shared/ppk/tasks';
 import { timeAgo, type ActivityKind } from '@shared/ppk/activity';
 import { formatRupiah } from '@shared/ppk/money';
@@ -47,52 +47,6 @@ function Panel({ icon: Icon, title, to, action, children, className }: { icon: t
         <div className="flex items-center gap-3">{action}{to && <Link to={to} className="flex items-center gap-1 whitespace-nowrap text-sm font-semibold text-blue-700 hover:underline">Lihat Semua <ArrowRight size={14} /></Link>}</div></div>
       {children}
     </Card>
-  );
-}
-
-/** Kotak Masuk WhatsApp dan tindakan tertunda. Semua angka dari agendaHome (query), tidak ada yang disimpan. */
-/** Jam 'HH:MM' bila pesan diterima hari ini (WIB), selain itu tanggal singkat. */
-const waTime = (iso: string, today: string) => {
-  const d = new Date(iso);
-  return jakartaToday(d) === today ? d.toLocaleTimeString('sv-SE', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) : shortDate(jakartaToday(d));
-};
-
-function InboxActionsPanel({ h }: { h: AgendaHome }) {
-  const today = h.today;
-  const msgs = useAsync(() => api.ppk.invitations.list(), []);
-  const latest = [...(msgs.data ?? [])].sort((x, y) => y.received_at.localeCompare(x.received_at)).slice(0, 3);
-  const tiles: Array<[string, number, string, string]> = [
-    ['Pesan baru', h.inbox.baru, '/ppk/kotak-masuk?kategori=baru', 'bg-blue-50 text-blue-800'],
-    ['PDF belum diproses', h.inbox.belum_pdf, '/ppk/kotak-masuk?kategori=belum', 'bg-amber-50 text-amber-800'],
-    ['Teks belum diproses', h.inbox.belum_teks, '/ppk/kotak-masuk?kategori=belum', 'bg-amber-50 text-amber-800'],
-    ['Diproses bulan ini', h.inbox.diproses_bulan_ini, '/ppk/kotak-masuk?kategori=sudah', 'bg-emerald-50 text-emerald-800']
-  ];
-  const todo: Array<[string, string, string]> = [
-    ...h.awaiting_verification.map((i): [string, string, string] => [`/ppk/kotak-masuk/${i.id}`, 'Verifikasi undangan', i.sender_name || i.sender_phone || 'Unggah manual']),
-    ...h.unassigned.map((a): [string, string, string] => [`/ppk/agenda/${a.id}`, 'Belum ada PIC', `${shortDate(a.agenda_date)} · ${a.title}`]),
-    ...h.needs_report.map((a): [string, string, string] => [`/ppk/agenda/${a.id}`, 'Laporan rapat belum ada', `${shortDate(a.agenda_date)} · ${a.title}`])
-  ];
-  return (
-    <Panel icon={MessageCircle} title="Pesan WhatsApp" to="/ppk/kotak-masuk">
-      {latest.length > 0 && <ul className="mb-3 divide-y divide-slate-100">{latest.map((m) => (
-        <li key={m.id}><Link to={`/ppk/kotak-masuk/${m.id}`} className="flex items-start gap-3 py-2 hover:bg-slate-50">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-violet-100 text-violet-700"><Users size={17} /></span>
-          <div className="min-w-0 flex-1"><div className="flex items-baseline justify-between gap-2"><b className="truncate text-sm text-navy-900">{m.sender_name || m.sender_phone || 'Unggah manual'}</b>
-            <span className="shrink-0 text-xs text-slate-500">{waTime(m.received_at, today)}</span></div>
-            <div className="truncate text-xs text-slate-600">{m.message_text || (m.file_count ? `${m.file_count} lampiran` : '(tanpa teks)')}</div></div>
-        </Link></li>))}</ul>}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">{tiles.map(([l, n, to, c]) => (
-        <Link key={l} to={to} className={cn('rounded-lg px-3 py-2 transition hover:brightness-95', c)}><div className="text-xl font-bold leading-tight">{n}</div><div className="text-xs font-medium leading-tight">{l}</div></Link>))}</div>
-      {h.inbox.gagal > 0 && <Link to="/ppk/kotak-masuk?kategori=gagal" className="mt-2 block text-sm text-red-700 hover:underline">{h.inbox.gagal} pesan gagal diproses, minta pengirim mengirim ulang.</Link>}
-      <div className="mt-3 border-t border-slate-100 pt-2">
-        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Tindakan tertunda</div>
-        {!todo.length && <p className="text-sm text-slate-500">Tidak ada tindakan tertunda.</p>}
-        {/* Dibatasi 3 baris agar panel tetap pendek di layar depan. */}
-        <ul className="divide-y divide-slate-100">{todo.slice(0, 3).map(([to, kind, what]) => (
-          <li key={`${kind}${to}`}><Link to={to} className="flex gap-2 py-1.5 text-sm hover:bg-slate-50"><span className="w-44 shrink-0 font-medium text-amber-800 max-sm:w-32">{kind}</span><span className="min-w-0 flex-1 truncate">{what}</span></Link></li>))}</ul>
-        {todo.length > 3 && <Link to="/ppk/kotak-masuk" className="mt-1 block text-sm font-medium text-blue-700 hover:underline">+{todo.length - 3} tindakan lainnya</Link>}
-      </div>
-    </Panel>
   );
 }
 
@@ -305,7 +259,6 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <div className="min-w-0 space-y-5">
           {ppk && <Card className="rounded-2xl border-slate-200/80 p-4 shadow-sm shadow-slate-200/60"><TodoList today={today} tasks={o.tasks} title={<h2 className="flex items-center gap-2 text-lg font-bold text-navy-900"><ListTodo size={20} className="text-blue-600" /> To Do List</h2>} /></Card>}
-          {ppk && h && <InboxActionsPanel h={h} />}
           {ppk && <MonitoringPanel o={o} today={today} />}
           <Panel icon={FilePlus2} title="Dokumen Terbaru" to="/archive">
             {s?.recentDocuments.length ? <ul className="divide-y divide-slate-100">{s.recentDocuments.map((d) => (
