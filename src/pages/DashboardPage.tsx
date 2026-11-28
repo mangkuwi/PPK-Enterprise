@@ -89,14 +89,16 @@ function InboxActionsPanel({ h }: { h: AgendaHome }) {
   ];
   return (
     <Panel icon={MessageCircle} title="Kotak Masuk WhatsApp" to="/ppk/kotak-masuk">
-      <div className="grid grid-cols-2 gap-2">{tiles.map(([l, n, to, c]) => (
-        <Link key={l} to={to} className={cn('rounded-lg p-3 transition hover:brightness-95', c)}><div className="text-2xl font-bold leading-tight">{n}</div><div className="text-xs font-medium">{l}</div></Link>))}</div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{tiles.map(([l, n, to, c]) => (
+        <Link key={l} to={to} className={cn('rounded-lg px-3 py-2 transition hover:brightness-95', c)}><div className="text-xl font-bold leading-tight">{n}</div><div className="text-xs font-medium leading-tight">{l}</div></Link>))}</div>
       {h.inbox.gagal > 0 && <Link to="/ppk/kotak-masuk?kategori=gagal" className="mt-2 block text-sm text-red-700 hover:underline">{h.inbox.gagal} pesan gagal diproses, minta pengirim mengirim ulang.</Link>}
       <div className="mt-3 border-t border-slate-100 pt-2">
         <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Tindakan tertunda</div>
         {!todo.length && <p className="text-sm text-slate-500">Tidak ada tindakan tertunda.</p>}
-        <ul className="divide-y divide-slate-100">{todo.map(([to, kind, what]) => (
-          <li key={`${kind}${to}`}><Link to={to} className="flex gap-2 py-1.5 text-sm hover:bg-slate-50"><span className="w-44 shrink-0 font-medium text-amber-800">{kind}</span><span className="min-w-0 flex-1 truncate">{what}</span></Link></li>))}</ul>
+        {/* Dibatasi 3 baris agar panel tetap pendek di layar depan. */}
+        <ul className="divide-y divide-slate-100">{todo.slice(0, 3).map(([to, kind, what]) => (
+          <li key={`${kind}${to}`}><Link to={to} className="flex gap-2 py-1.5 text-sm hover:bg-slate-50"><span className="w-44 shrink-0 font-medium text-amber-800 max-sm:w-32">{kind}</span><span className="min-w-0 flex-1 truncate">{what}</span></Link></li>))}</ul>
+        {todo.length > 3 && <Link to="/ppk/kotak-masuk" className="mt-1 block text-sm font-medium text-blue-700 hover:underline">+{todo.length - 3} tindakan lainnya</Link>}
       </div>
     </Panel>
   );
@@ -242,7 +244,7 @@ export default function DashboardPage() {
     <Page>
       <section className="relative mb-5 overflow-hidden rounded-2xl bg-[#0b1d4a] text-white shadow-md">
         <img src={banner} alt="" aria-hidden decoding="async" className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-left" />
-        <div className="relative flex flex-wrap items-center gap-4 px-4 py-5 sm:px-6">
+        <div className="relative flex flex-wrap items-center gap-4 px-4 py-4 sm:px-6">
           <div className="min-w-0 flex-1 basis-60">
             <h1 className="text-xl font-bold drop-shadow sm:text-2xl">Selamat Datang{userName ? `, ${userName}` : ''} 👋</h1>
             <p className="text-sm text-blue-100">Dashboard PPK Management{access?.role ? ` · ${PPK_ROLE_LABEL[access.role]}` : ''}</p>
@@ -272,6 +274,23 @@ export default function DashboardPage() {
         </div>
       </PpkGate>
 
+      {/* Akses cepat dan Kotak Masuk WhatsApp di layar depan, tanpa menggulir. */}
+      <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Panel icon={Zap} title="Quick Access">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {([['/generator?cat=ND', FileText, 'Buat Nota Dinas', 'bg-blue-50 text-blue-700'], ['/generator', Mail, 'Buat Surat', 'bg-violet-50 text-violet-700'],
+              ['/ppk/rekonsiliasi', TrendingUp, 'Input SAKTI', 'bg-emerald-50 text-emerald-700'], ['/ppk/laporan', Gauge, 'Monitoring SLA', 'bg-orange-50 text-orange-700']] as const).map(([to, Icon, label, c]) => (
+              <Link key={label} to={to} className={cn('flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-center text-sm font-semibold transition hover:-translate-y-0.5 hover:shadow-sm', c)}><Icon size={24} />{label}</Link>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 text-sm">
+            {([['/bank-nomor', Hash, 'Tambahkan Nomor'], ['/ppk/tagihan', Receipt, 'Catat Tagihan'], ['/ppk/laporan', TrendingUp, 'Prognosis']] as const).map(([to, Icon, label]) => (
+              <Link key={label} to={to} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700 hover:bg-slate-200"><Icon size={14} />{label}</Link>))}
+          </div>
+        </Panel>
+        {ppk && h && <InboxActionsPanel h={h} />}
+      </div>
+
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         <div className="space-y-5">
           {ppk && <Card className="rounded-2xl border-slate-200/80 p-4 shadow-sm shadow-slate-200/60"><TodoList today={today} tasks={o.tasks} title={<h2 className="flex items-center gap-2 text-lg font-bold text-navy-900"><ListTodo size={20} className="text-blue-600" /> To Do List</h2>} /></Card>}
@@ -295,20 +314,7 @@ export default function DashboardPage() {
           {ppk && <AgendaCalendarPanel today={today} upcoming={h?.upcoming ?? []} />}
           <ActivityPanel ppk={ppk} docs={s?.recentDocuments ?? []} />
 
-          <Panel icon={Zap} title="Quick Access">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-4">
-              {([['/generator?cat=ND', FileText, 'Buat Nota Dinas', 'bg-blue-50 text-blue-700'], ['/generator', Mail, 'Buat Surat', 'bg-violet-50 text-violet-700'],
-                ['/ppk/rekonsiliasi', TrendingUp, 'Input SAKTI', 'bg-emerald-50 text-emerald-700'], ['/ppk/laporan', Gauge, 'Monitoring SLA', 'bg-orange-50 text-orange-700']] as const).map(([to, Icon, label, c]) => (
-                <Link key={label} to={to} className={cn('flex flex-col items-center gap-2 rounded-xl p-4 text-center text-sm font-semibold transition hover:-translate-y-0.5 hover:shadow-sm', c)}><Icon size={26} />{label}</Link>
-              ))}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2 text-sm">
-              {([['/bank-nomor', Hash, 'Tambahkan Nomor'], ['/ppk/tagihan', Receipt, 'Catat Tagihan'], ['/ppk/laporan', TrendingUp, 'Prognosis']] as const).map(([to, Icon, label]) => (
-                <Link key={label} to={to} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700 hover:bg-slate-200"><Icon size={14} />{label}</Link>))}
-            </div>
-          </Panel>
 
-          {ppk && h && <InboxActionsPanel h={h} />}
         </div>
       </div>
     </Page>
