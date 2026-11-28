@@ -80,7 +80,7 @@ function TodoListView({ today, tasks, title }: { today: string; tasks: Tasks; ti
               <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs">
                 {done ? <Badge tone="green">Selesai</Badge> : <Badge tone={TONE[t.priority]}>{TASK_PRIORITY_LABEL[t.priority]}</Badge>}
                 {t.category && <Badge tone="slate">{t.category}</Badge>}
-                {t.assignee_name && <span className={t.assignee_user_id === me ? 'font-semibold text-blue-700' : 'text-slate-500'}>PJ: {t.assignee_user_id === me ? 'Anda' : t.assignee_name}</span>}
+                {t.assignee_name && <span className={t.assignee_user_id === me ? 'font-semibold text-blue-700' : 'text-slate-500'}>PIC: {t.assignee_user_id === me ? 'Anda' : t.assignee_name}</span>}
               </div>
             </button>
             <div className="shrink-0 text-right text-sm">{due(t)}</div>
@@ -113,7 +113,7 @@ function TaskForm({ task, me, canEdit, onDone }: { task: Task | null; me: string
         <Field label="Prioritas"><Select value={v.priority} disabled={!canEdit} onChange={(e) => setV({ ...v, priority: e.target.value as TaskInput['priority'] })}>{TASK_PRIORITIES.map((p) => <option key={p} value={p}>{TASK_PRIORITY_LABEL[p]}</option>)}</Select></Field>
         <Field label="Kategori"><Input list="task-categories" value={v.category} maxLength={60} disabled={!canEdit} onChange={(e) => setV({ ...v, category: e.target.value })} />
           <datalist id="task-categories">{TASK_CATEGORIES.map((c) => <option key={c} value={c} />)}</datalist></Field>
-        <Field label="Penanggung jawab"><Select value={v.assignee_user_id ?? ''} disabled={!canEdit} onChange={(e) => setV({ ...v, assignee_user_id: e.target.value || null })}>
+        <Field label="PIC"><Select value={v.assignee_user_id ?? ''} disabled={!canEdit} onChange={(e) => setV({ ...v, assignee_user_id: e.target.value || null })}>
           <option value="">Belum ditentukan</option>{(people.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}{p.id === me ? ' (Anda)' : ''}</option>)}</Select></Field>
         <Field label="Catatan" className="col-span-2"><Textarea value={v.notes} maxLength={2000} disabled={!canEdit} onChange={(e) => setV({ ...v, notes: e.target.value })} /></Field>
       </div>

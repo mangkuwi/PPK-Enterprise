@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopBar } from './components/layout/TopBar';
@@ -32,11 +33,12 @@ import AgendaDetailPage from './pages/ppk/AgendaDetailPage';
 import InboxDetailPage from './pages/ppk/InboxDetailPage';
 
 export default function App() {
+  const [menu, setMenu] = useState(false); // menu lipat di layar HP
   return (
     <div className="flex h-full">
-      <Sidebar />
+      <Sidebar mobileOpen={menu} onClose={() => setMenu(false)} />
       <main className="flex min-w-0 flex-1 flex-col overflow-clip">
-        <TopBar />
+        <TopBar onMenu={() => setMenu(true)} />
         <div className="min-h-0 flex-1">
         <Routes>
           <Route path="/" element={<DashboardPage />} />

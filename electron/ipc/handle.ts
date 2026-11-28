@@ -14,20 +14,25 @@ function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Semua handler terdaftar, juga dipakai mode web (electron/ipc/web.ts) tanpa event IPC. */
+export const handlers = new Map<string, (raw: unknown) => Promise<Result>>();
+
 /** Mendaftarkan handler IPC dengan validasi pengirim + validasi payload (zod) + penanganan error seragam. */
 export function handle<S extends z.ZodTypeAny>(
   channel: Channel,
   schema: S,
   fn: (input: z.infer<S>, event: IpcMainInvokeEvent) => unknown | Promise<unknown>
 ) {
-  ipcMain.handle(channel, async (event, raw): Promise<Result> => {
+  const run = async (raw: unknown, event: IpcMainInvokeEvent | null): Promise<Result> => {
     try {
-      if (!isTrustedUrl(event.senderFrame?.url)) throw new Error('Pengirim IPC tidak dipercaya.');
+      if (event && !isTrustedUrl(event.senderFrame?.url)) throw new Error('Pengirim IPC tidak dipercaya.');
       const input = schema.parse(raw ?? {});
-      return { ok: true, data: await fn(input, event) };
+      return { ok: true, data: await fn(input, event as IpcMainInvokeEvent) };
     } catch (err) {
       log('error', `IPC ${channel} gagal`, err);
       return { ok: false, error: message(err) };
     }
-  });
+  };
+  handlers.set(channel, (raw) => run(raw, null));
+  ipcMain.handle(channel, (event, raw) => run(raw, event));
 }

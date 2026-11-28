@@ -84,7 +84,7 @@ function InboxActionsPanel({ h }: { h: AgendaHome }) {
   ];
   const todo: Array<[string, string, string]> = [
     ...h.awaiting_verification.map((i): [string, string, string] => [`/ppk/kotak-masuk/${i.id}`, 'Verifikasi undangan', i.sender_name || i.sender_phone || 'Unggah manual']),
-    ...h.unassigned.map((a): [string, string, string] => [`/ppk/agenda/${a.id}`, 'Belum ada penanggung jawab', `${shortDate(a.agenda_date)} · ${a.title}`]),
+    ...h.unassigned.map((a): [string, string, string] => [`/ppk/agenda/${a.id}`, 'Belum ada PIC', `${shortDate(a.agenda_date)} · ${a.title}`]),
     ...h.needs_report.map((a): [string, string, string] => [`/ppk/agenda/${a.id}`, 'Laporan rapat belum ada', `${shortDate(a.agenda_date)} · ${a.title}`])
   ];
   return (
@@ -113,9 +113,9 @@ function TodayAgendaPanel({ list, focus, today, now, me }: { list: Agenda[]; foc
       <ul className="relative space-y-1">{list.map((a) => {
         const live = liveState(a, today, now); const past = !!a.end_time && a.end_time <= now; // HH:MM sebanding sebagai teks
         const mode = meetingMode(a); const join = a.meeting_url ? joinButton(a.meeting_url) : null;
-        const mine = a.pic?.id === me ? 'Anda PJ' : a.support.some((p) => p.id === me) ? 'Anda pendukung' : null;
+        const mine = a.pic?.id === me ? 'Anda PIC' : a.support.some((p) => p.id === me) ? 'Anda ikut' : null;
         return (
-          <li key={a.id} className={cn('flex items-center gap-3 rounded-xl p-2', live === 'berlangsung' ? 'bg-green-50 ring-1 ring-green-300' : past && 'opacity-60')}>
+          <li key={a.id} className={cn('flex flex-wrap items-center gap-3 rounded-xl p-2 md:flex-nowrap', live === 'berlangsung' ? 'bg-green-50 ring-1 ring-green-300' : past && 'opacity-60')}>
             <div className="w-[104px] shrink-0 text-sm font-bold leading-tight text-navy-900">{timeText(a)}
               {live === 'berlangsung' ? <div className="text-[11px] font-semibold text-green-700">● Berlangsung</div> : <div className="text-[11px] font-normal leading-tight text-slate-500">{startsInText(a, today, now) ?? ''}</div>}</div>
             <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', live === 'berlangsung' ? 'bg-green-500' : 'bg-blue-600')} aria-hidden />
@@ -125,8 +125,9 @@ function TodayAgendaPanel({ list, focus, today, now, me }: { list: Agenda[]; foc
                 <span className={cn('inline-flex items-center gap-1 font-medium', MODE_TONE[mode])}>{mode === 'Offline' ? <MapPin size={12} /> : <Video size={12} />}{mode}</span>
                 {a.location && <span className="truncate text-slate-600">{a.location}</span>}
                 {mine && <Badge tone="navy">{mine}</Badge>}
-              </div></Link>
-            {join && <a href={a.meeting_url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"><Video size={14} /> {join}</a>}
+              </div>
+              {(a.pic || a.support.length > 0) && <div className="line-clamp-2 text-xs text-slate-500">{[a.pic && `PIC: ${a.pic.name}`, a.support.length > 0 && `Ikut: ${a.support.map((x) => x.name).join(', ')}`].filter(Boolean).join(' · ')}</div>}</Link>
+            {join && <a href={a.meeting_url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 max-md:w-full max-md:py-3 max-md:text-base"><Video size={14} /> {join}</a>}
           </li>);
       })}</ul>
     </Panel>
@@ -241,17 +242,21 @@ export default function DashboardPage() {
     <Page>
       <section className="relative mb-5 overflow-hidden rounded-2xl bg-[#0b1d4a] text-white shadow-md">
         <img src={banner} alt="" aria-hidden decoding="async" className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-left" />
-        <div className="relative flex flex-wrap items-center gap-4 px-6 py-5">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold drop-shadow">Selamat Datang{userName ? `, ${userName}` : ''} 👋</h1>
+        <div className="relative flex flex-wrap items-center gap-4 px-4 py-5 sm:px-6">
+          <div className="min-w-0 flex-1 basis-60">
+            <h1 className="text-xl font-bold drop-shadow sm:text-2xl">Selamat Datang{userName ? `, ${userName}` : ''} 👋</h1>
             <p className="text-sm text-blue-100">Dashboard PPK Management{access?.role ? ` · ${PPK_ROLE_LABEL[access.role]}` : ''}</p>
+            <p className="mt-1 text-sm font-semibold md:hidden">{dayName(today)}, {formatDateID(today)}</p>
           </div>
-          <div className="flex items-center gap-3 rounded-xl bg-white px-4 py-2.5 text-navy-900 shadow-lg">
+          <div className="flex items-center gap-3 rounded-xl bg-white max-md:hidden px-4 py-2.5 text-navy-900 shadow-lg">
             <CalendarDays size={26} className="text-navy-700" />
             <div className="leading-tight"><b className="block">{dayName(today)}, {formatDateID(today)}</b><span className="text-xs text-slate-600">Minggu ke-{isoWeek(today)} | Tahun Anggaran {today.slice(0, 4)}</span></div>
           </div>
         </div>
       </section>
+
+      {/* HP: agenda hari ini langsung di bawah sapaan, tombol Join besar selebar layar. */}
+      {ppk && <div className="mb-5 md:hidden"><TodayAgendaPanel list={todayList} focus={focus} today={today} now={now} me={access?.user_id} /></div>}
 
       <PpkGate>
         {o.error && <div className="mb-3 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800" role="alert">{o.error}</div>}
@@ -286,7 +291,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="space-y-5">
-          {ppk && <TodayAgendaPanel list={todayList} focus={focus} today={today} now={now} me={access?.user_id} />}
+          {ppk && <div className="max-md:hidden"><TodayAgendaPanel list={todayList} focus={focus} today={today} now={now} me={access?.user_id} /></div>}
           {ppk && <AgendaCalendarPanel today={today} upcoming={h?.upcoming ?? []} />}
           <ActivityPanel ppk={ppk} docs={s?.recentDocuments ?? []} />
 

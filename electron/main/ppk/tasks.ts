@@ -34,7 +34,7 @@ export async function saveTask(s: PpkStore, actor: Actor, id: string | null, ver
   const tid = id ?? randomUUID();
   await s.tx(async (t) => {
     await requirePpk(t, actor, 'write');
-    if (v.assignee_user_id && !(await t.get('SELECT id FROM app_users WHERE id = ? AND is_active = 1', [v.assignee_user_id]))) throw new PpkError('INVALID', 'Penanggung jawab tidak ditemukan atau nonaktif.');
+    if (v.assignee_user_id && !(await t.get('SELECT id FROM app_users WHERE id = ? AND is_active = 1', [v.assignee_user_id]))) throw new PpkError('INVALID', 'PIC tidak ditemukan atau nonaktif.');
     if (!id) {
       await t.run(`INSERT INTO ppk_tasks (id, title, notes, due_date, priority, category, assignee_user_id, created_by, created_at, updated_by, updated_at)
         VALUES (?,?,?,?,?,?,?,?,?,?,?)`, [tid, v.title, v.notes, v.due_date, v.priority, v.category, v.assignee_user_id, actor.name, now(), actor.name, now()]);

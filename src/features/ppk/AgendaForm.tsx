@@ -16,7 +16,7 @@ const duration = (a: string, b: string) => {
   return m > 0 ? ` (${[Math.floor(m / 60) && `${Math.floor(m / 60)} jam`, m % 60 && `${m % 60} menit`].filter(Boolean).join(' ')})` : '';
 };
 
-/** Formulir agenda (baru dari surat undangan, atau ubah). Penanggung jawab dipilih dari pengguna yang punya peran PPK. */
+/** Formulir agenda (baru dari surat undangan, atau ubah). PIC dipilih dari pengguna yang punya peran PPK. */
 export function AgendaForm({ initial, existing, parsed, onSaved }: { initial: AgendaInput; existing?: Agenda; parsed?: AgendaMessage | null; onSaved: (a: Agenda) => void }) {
   const { toast } = useFeedback();
   const people = useAsync(() => api.ppk.agendas.people(), []);
@@ -60,11 +60,18 @@ export function AgendaForm({ initial, existing, parsed, onSaved }: { initial: Ag
         <Field label="Lokasi"><Input value={v.location} onChange={set('location')} /></Field>
         <Field label="Tautan Zoom/Teams/Google Meet"><Input value={v.meeting_url} onChange={set('meeting_url')} placeholder="https://" /></Field>
         <Field label="Penyelenggara"><Input value={v.organizer} onChange={set('organizer')} /></Field>
-        <Field label="Penanggung jawab utama">
+        <Field label="PIC">
           <Select value={v.pic_user_id ?? ''} onChange={(e) => setV({ ...v, pic_user_id: e.target.value || null, support_user_ids: v.support_user_ids.filter((x) => x !== e.target.value) })}>
             <option value="">— Belum ditentukan —</option>{people.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </Select>
         </Field>
+        <div className="md:col-span-2">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Staf lain yang ikut rapat / Zoom (centang)</div>
+          <div className="flex flex-wrap gap-3">{people.data?.filter((p) => p.id !== v.pic_user_id).map((p) => (
+            <label key={p.id} className="flex items-center gap-1"><input type="checkbox" checked={v.support_user_ids.includes(p.id)} onChange={() => toggle(p.id)} /> {p.name}</label>))}
+            {people.data && people.data.length < 2 && <span className="text-xs text-slate-500">Tambahkan pengguna dan peran PPK di Pengaturan PPK → Peran Pengguna.</span>}
+          </div>
+        </div>
         <Field label="Program terkait">
           <Select value={v.program_id ?? ''} onChange={(e) => setV({ ...v, program_id: e.target.value || null })}>
             <option value="">— Tidak ada —</option>{programs.data?.map((p) => <option key={p.id} value={p.id}>{String(p.code ?? '')} {String(p.name ?? '')}</option>)}
@@ -75,13 +82,6 @@ export function AgendaForm({ initial, existing, parsed, onSaved }: { initial: Ag
         </div>}
         <Field label="Peserta yang diundang" className="md:col-span-2"><Textarea rows={2} value={v.participants ?? ''} onChange={(e) => setV({ ...v, participants: e.target.value })} /></Field>
         <Field label="Agenda rapat" className="md:col-span-2"><Textarea rows={3} value={v.agenda_text} onChange={set('agenda_text')} /></Field>
-        <div className="md:col-span-2">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Staf pendukung</div>
-          <div className="flex flex-wrap gap-3">{people.data?.filter((p) => p.id !== v.pic_user_id).map((p) => (
-            <label key={p.id} className="flex items-center gap-1"><input type="checkbox" checked={v.support_user_ids.includes(p.id)} onChange={() => toggle(p.id)} /> {p.name}</label>))}
-            {people.data && people.data.length < 2 && <span className="text-xs text-slate-500">Tambahkan pengguna dan peran PPK di Pengaturan PPK → Peran Pengguna.</span>}
-          </div>
-        </div>
         <Field label="Catatan" className="md:col-span-2"><Textarea rows={2} value={v.notes} onChange={set('notes')} /></Field>
       </div>
     </DialogContent>

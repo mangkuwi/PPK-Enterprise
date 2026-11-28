@@ -16,6 +16,7 @@ Berjalan sepenuhnya **offline**, tanpa akun, tanpa iklan; data tersimpan lokal (
 ```bash
 npm install            # memasang dependensi + rebuild better-sqlite3 untuk ABI Electron (postinstall)
 npm run dev            # mode pengembangan (Vite + Electron)
+npm start              # jalankan hasil build (npm run build); akses dari HP: docs/AKSES-WEB.md
 npm run typecheck      # TypeScript (renderer + electron + test)
 npm run lint           # ESLint
 npm test               # unit test: placeholder engine, render, DOCX, mesin OOXML + analyzer (9 fixture)

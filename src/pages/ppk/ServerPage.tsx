@@ -7,6 +7,7 @@ import { errMsg, useFeedback } from '@/components/ui/feedback';
 import { useAsync } from '@/hooks/useAsync';
 import { formatBytes } from '@/lib/utils';
 import { ServerLogin } from '@/features/ppk/ServerLogin';
+import { WebAccessCard } from '@/features/ppk/WebAccessCard';
 import { notifyPpkSession, usePpkAccess } from '@/features/ppk/usePpkAccess';
 import { api, type PpkServerConf } from '@/services/api';
 
@@ -31,6 +32,7 @@ export default function ServerPage() {
   return (
     <Page>
       <PageHeader title="Server PPK" subtitle="Pakai satu database PPK bersama untuk beberapa komputer di jaringan kantor (LAN). Dokumen dan penomoran tetap di komputer masing-masing." />
+      <WebAccessCard />
       {s && (
         <Card className="mb-4 p-4 text-sm">
           <div className="flex flex-wrap items-center gap-2">

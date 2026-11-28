@@ -5,6 +5,7 @@ import { registerNumberingHandlers } from './numbering';
 import { registerPpkHandlers } from './ppk';
 import { registerSettingsHandlers } from './settings';
 import { registerWhatsAppHandlers } from './whatsapp';
+import { registerWebHandlers } from './web';
 
 export function registerIpc() {
   registerDataHandlers();
@@ -14,4 +15,5 @@ export function registerIpc() {
   registerNumberingHandlers();
   registerPpkHandlers();
   registerWhatsAppHandlers();
+  registerWebHandlers(); // terakhir: memakai semua handler yang sudah terdaftar
 }
