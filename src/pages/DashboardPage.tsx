@@ -7,19 +7,16 @@ import { Badge, Card, Empty, STATUS_LABEL, STATUS_TONE } from '@/components/ui/c
 import { PpkGate } from '@/features/ppk/PpkGate';
 import { usePpkAccess } from '@/features/ppk/usePpkAccess';
 import { AgendaCalendar, shortDate, timeText } from '@/features/ppk/AgendaViews';
-import { useActor } from '@/features/numbering/NumberingContext';
 import { TodoList } from '@/features/ppk/TodoList';
-import { PPK_ROLE_LABEL } from '@shared/ppk/access';
 import { useAsync } from '@/hooks/useAsync';
 import { api } from '@/services/api';
 import { cn, formatDateTime } from '@/lib/utils';
-import { addDays, formatDateID, isoWeek, jakartaToday } from '@shared/date';
+import { addDays, formatDateID, jakartaToday } from '@shared/date';
 import { dashboardYear, monitoredPrograms, programProgress } from '@shared/dashboard';
 import { calendarDays, dayName, focusAgenda, joinButton, liveState, meetingMode, startsInText, type Agenda, type AgendaHome } from '@shared/ppk/agenda';
 import { taskStats } from '@shared/ppk/tasks';
 import { timeAgo, type ActivityKind } from '@shared/ppk/activity';
 import { formatRupiah } from '@shared/ppk/money';
-import banner from '@/assets/branding/banner-satelit-indonesia.svg';
 import networkAccent from '@/assets/branding/aksen-jaringan-indonesia.svg';
 
 /** Jam WIB 'HH:MM', diperbarui tiap 30 detik. */
@@ -224,8 +221,6 @@ function usePpkOverview(enabled: boolean) {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { actor, serverUser } = useActor();
-  const userName = serverUser ?? actor?.name;
   const { access } = usePpkAccess();
   const ppk = !!access?.perms.includes('read');
   const o = usePpkOverview(ppk);
@@ -242,21 +237,6 @@ export default function DashboardPage() {
 
   return (
     <Page>
-      <section className="relative mb-5 overflow-hidden rounded-2xl bg-[#0b1d4a] text-white shadow-md">
-        <img src={banner} alt="" aria-hidden decoding="async" className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-left" />
-        <div className="relative flex flex-wrap items-center gap-4 px-4 py-4 sm:px-6">
-          <div className="min-w-0 flex-1 basis-60">
-            <h1 className="text-xl font-bold drop-shadow sm:text-2xl">Selamat Datang{userName ? `, ${userName}` : ''} 👋</h1>
-            <p className="text-sm text-blue-100">Dashboard PPK Management{access?.role ? ` · ${PPK_ROLE_LABEL[access.role]}` : ''}</p>
-            <p className="mt-1 text-sm font-semibold md:hidden">{dayName(today)}, {formatDateID(today)}</p>
-          </div>
-          <div className="flex items-center gap-3 rounded-xl bg-white max-md:hidden px-4 py-2.5 text-navy-900 shadow-lg">
-            <CalendarDays size={26} className="text-navy-700" />
-            <div className="leading-tight"><b className="block">{dayName(today)}, {formatDateID(today)}</b><span className="text-xs text-slate-600">Minggu ke-{isoWeek(today)} | Tahun Anggaran {today.slice(0, 4)}</span></div>
-          </div>
-        </div>
-      </section>
-
       {/* HP: agenda hari ini langsung di bawah sapaan, tombol Join besar selebar layar. */}
       {ppk && <div className="mb-5 md:hidden"><TodayAgendaPanel list={todayList} focus={focus} today={today} now={now} me={access?.user_id} /></div>}
 
