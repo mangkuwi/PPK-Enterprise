@@ -45,10 +45,10 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
         </div>
       </div>
       {s && s.tabs.length > 0 && (
-        <nav className="flex gap-1 overflow-x-auto border-b border-slate-200 bg-white px-3 md:px-6" aria-label={`Bagian ${s.label}`}>
+        <nav className="flex gap-1.5 overflow-x-auto border-b border-slate-300 bg-white px-3 py-2 shadow-sm md:px-6" aria-label={`Bagian ${s.label}`}>
           {s.tabs.map((t) => (
             <Link key={t.to} to={t.to} aria-current={tab === t.to ? 'page' : undefined}
-              className={cn('whitespace-nowrap border-b-2 px-3 py-2 text-sm', tab === t.to ? 'border-blue-600 font-semibold text-blue-700' : 'border-transparent text-slate-500 hover:text-navy-900')}>{t.label}</Link>
+              className={cn('whitespace-nowrap rounded-lg border px-3.5 py-1.5 text-sm font-semibold transition', tab === t.to ? 'border-blue-700 bg-blue-600 text-white shadow-sm' : 'border-slate-300 bg-slate-50 text-slate-800 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-800')}>{t.label}</Link>
           ))}
         </nav>
       )}
