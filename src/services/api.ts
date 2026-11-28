@@ -32,6 +32,7 @@ import type {
   AvailableQuery, BatchPreview, MigrationReview, NumberBatch, NumberEvent, NumberRecord, NumberRef, NumberingContext, RecordPage, RecordQuery, Register, RegisterSummary, Role, TemplateMapRow
 } from '@shared/numbering';
 
+export type WebStatus = { enabled: boolean; running: boolean; port: number; urls: string[]; error: string | null; sessions: number; needs_password: boolean };
 export type GatewaySync = { at: string; ok: boolean; added: number; error: string };
 export type GatewayState = { url: string; has_key: boolean; last: GatewaySync | null };
 
@@ -40,6 +41,21 @@ declare global {
     api: { invoke(channel: string, payload?: unknown): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> };
   }
 }
+
+// Dibuka dari browser (mode web): panggilan yang sama dikirim ke komputer server lewat HTTP.
+if (typeof window !== 'undefined' && !window.api && location.protocol.startsWith('http') && !import.meta.env.DEV) {
+  window.api = {
+    invoke: async (channel, payload) => {
+      try {
+        const r = await fetch('/api/invoke', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-PPK': '1' }, body: JSON.stringify({ channel, payload }) });
+        return await r.json();
+      } catch { return { ok: false, error: 'Tidak terhubung ke komputer server PPK. Pastikan satu jaringan dan aplikasi di server menyala.' }; }
+    }
+  };
+}
+
+/** true bila halaman dibuka dari browser (HP/laptop lain), bukan dari aplikasi desktop. */
+export const isWeb = () => location.protocol.startsWith('http') && !import.meta.env.DEV;
 
 async function call<T>(channel: Channel, payload?: unknown): Promise<T> {
   if (!window.api) throw new Error('Jembatan IPC tidak tersedia. Jalankan aplikasi melalui Electron.');
@@ -51,6 +67,10 @@ async function call<T>(channel: Channel, payload?: unknown): Promise<T> {
 export interface SaveResult { canceled: boolean; path?: string }
 
 export const api = {
+  web: {
+    status: () => call<WebStatus>('web:status'),
+    set: (enabled: boolean, port: number) => call<WebStatus>('web:set', { enabled, port })
+  },
   info: () => call<{ name: string; version: string; platform: string; dbPath: string; userData: string }>('app:info'),
   showInFolder: (path: string) => call<boolean>('app:showInFolder', { path }),
   stats: () => call<Stats>('stats:get'),

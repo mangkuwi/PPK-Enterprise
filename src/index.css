@@ -39,3 +39,11 @@ body { @apply bg-slate-100 text-slate-900 antialiased; font-family: Inter, 'Sego
 .ph-unfilled { background: #fef08a; border-bottom: 2px solid #eab308; border-radius: 2px; }
 .search-match { background: #bfdbfe; }
 .search-current { background: #fb923c; }
+
+/* ---------- Layar HP (<768 px) ---------- */
+/* Tabel dengan 4+ kolom tidak diperas: diberi lebar minimum dan digeser ke samping di dalam wadahnya. */
+@media (max-width: 767px) {
+  main table:has(tr > :nth-child(4)) { min-width: 40rem; }
+  main table:has(tr > :nth-child(6)) { min-width: 60rem; }
+  main :has(> table) { overflow-x: auto; }
+}

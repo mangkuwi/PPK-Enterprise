@@ -82,3 +82,22 @@ describe('akun staf', () => {
     expect(acts).toEqual(['ppk.account.create', 'ppk.account.active', 'ppk.account.active', 'ppk.account.reset_password', 'ppk.account.change_password']);
   });
 });
+
+describe('sesi browser (mode web)', () => {
+  it('login di browser wajib kata sandi, terpisah per browser, dan tidak mengubah pengguna desktop', async () => {
+    const { webStore } = await import('../electron/main/webContext');
+    const { logout } = await import('../electron/main/numbering/session');
+    await asPpk();
+    expect(login(db, admin.id, 'rahasia-admin').id).toBe(admin.id); // desktop
+    const hp = { actor: null, server: null }; const laptop = { actor: null, server: null };
+    expect(() => webStore.run(hp, () => currentActor(db))).toThrow(/Masuk/); // tidak masuk otomatis
+    expect(() => webStore.run(hp, () => login(db, ppk.id))).toThrow(/Kata sandi salah/);
+    expect(webStore.run(hp, () => login(db, ppk.id, 'rahasia-ppk')).id).toBe(ppk.id);
+    expect(webStore.run(hp, () => currentActor(db)).id).toBe(ppk.id);
+    expect(() => webStore.run(laptop, () => currentActor(db))).toThrow(/Masuk/);
+    expect(currentActor(db).id).toBe(admin.id);
+    webStore.run(hp, () => logout());
+    expect(() => webStore.run(hp, () => currentActor(db))).toThrow(/Masuk/);
+    expect(currentActor(db).id).toBe(admin.id);
+  });
+});

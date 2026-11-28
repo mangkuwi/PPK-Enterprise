@@ -11,6 +11,7 @@ import type { Actor } from '@shared/numbering';
 import type { DB } from '../db';
 import { getRawSetting, setSettings } from '../repo';
 import { currentActor } from '../numbering/session';
+import { webCtx } from '../webContext';
 import { sqliteStore, type PpkStore } from './store';
 import { PpkError, requirePpk } from './access';
 import { createPool, dumpServer, pgStatus, pgStore, PG_SCHEMA_VERSION, PG_TABLES, type PgConfig, type PgStatus } from './pg';
@@ -68,12 +69,14 @@ export const ppkStore = (db: DB): PpkStore => (dbMode(db) === 'server' ? pgStore
 /** Pengguna PPK aktif: di mode server = pengguna yang masuk ke server dengan PIN. */
 export function ppkActor(db: DB): Actor {
   if (dbMode(db) === 'lokal') return currentActor(db);
-  if (!session) throw new PpkError('LOGIN_REQUIRED', 'Masuk ke server PPK dengan PIN terlebih dahulu.');
-  return session;
+  const a = serverSession();
+  if (!a) throw new PpkError('LOGIN_REQUIRED', 'Masuk ke server PPK dengan PIN terlebih dahulu.');
+  return a;
 }
 export function peekPpkActor(db: DB): Actor | null { try { return ppkActor(db); } catch { return null; } }
-export const setServerSession = (a: Actor | null) => { session = a; };
-export const serverSession = () => session;
+// Browser (mode web) menyimpan sesi server PPK-nya sendiri.
+export const setServerSession = (a: Actor | null) => { const w = webCtx(); if (w) w.server = a; else session = a; };
+export const serverSession = () => { const w = webCtx(); return w ? w.server : session; };
 
 /** Pengaturan server hanya oleh administrator lokal ber-PIN (sama dengan restore backup). */
 export async function requireLocalAdmin(db: DB): Promise<Actor> {

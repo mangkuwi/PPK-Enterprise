@@ -3,6 +3,7 @@ import type { Actor } from '@shared/numbering';
 import { NumberingError } from './errors';
 import { authenticate, toActor } from './users';
 import { getRawSetting, setSettings } from '../repo';
+import { webCtx } from '../webContext';
 
 let current: Actor | null = null;
 
@@ -14,11 +15,16 @@ const autoAllowed = (db: DB) => getRawSetting(db, 'ppk_db_mode') === 'server' ||
 
 /** Pengguna aktif. Mode lokal: wajib masuk dengan kata sandi, kecuali saat belum ada kata sandi sama sekali. */
 export function currentActor(db: DB): Actor {
-  if (current) {
-    const r = db.prepare('SELECT id, name, role, is_active FROM app_users WHERE id=?').get(current.id) as any;
-    if (r && r.is_active) { current = toActor(r); return current; }
-    current = null;
+  const w = webCtx(); // browser: sesi per browser, bukan pengguna yang sedang memakai laptop server
+  const me = w ? w.actor : current;
+  const keep = (a: Actor | null) => { if (w) w.actor = a; else current = a; return a; };
+  if (me) {
+    const r = db.prepare('SELECT id, name, role, is_active FROM app_users WHERE id=?').get(me.id) as any;
+    if (r && r.is_active) return keep(toActor(r))!;
+    keep(null);
   }
+  // Browser tidak pernah masuk otomatis, kecuali mode server setelah masuk ke akun server PPK (sama seperti desktop).
+  if (w && !(getRawSetting(db, 'ppk_db_mode') === 'server' && w.server)) throw new NumberingError('LOGIN_REQUIRED', 'Masuk dengan akun Anda terlebih dahulu.');
   if (!autoAllowed(db)) throw new NumberingError('LOGIN_REQUIRED', 'Masuk dengan akun Anda terlebih dahulu.');
   const last = getRawSetting(db, 'active_user_id');
   // Saat pertama kali, selalu administrator agar dialah yang membuat kata sandi pertama.
@@ -26,16 +32,17 @@ export function currentActor(db: DB): Actor {
   const rows = db.prepare(`SELECT id, name, role, pin_hash FROM app_users WHERE is_active=1 ORDER BY ${order}, name`).all(last ?? '') as any[];
   const open = rows.find((r) => !r.pin_hash);
   if (!open) throw new NumberingError('LOGIN_REQUIRED', 'Masuk sebagai pengguna terlebih dahulu (PIN diperlukan).');
-  current = toActor(open);
-  return current;
+  return keep(toActor(open))!;
 }
 
 export function peekActor(db: DB): Actor | null { try { return currentActor(db); } catch { return null; } }
 
 export function login(db: DB, userId: string, pin?: string | null): Actor {
+  const w = webCtx();
+  if (w) return (w.actor = authenticate(db, userId, pin, false)); // browser: kata sandi selalu wajib
   current = authenticate(db, userId, pin, autoAllowed(db));
   setSettings(db, { active_user_id: current.id });
   return current;
 }
-export function logout() { current = null; }
+export function logout() { const w = webCtx(); if (w) w.actor = null; else current = null; }
 export function resetSessionForTests() { current = null; }

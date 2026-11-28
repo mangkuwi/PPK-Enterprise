@@ -241,9 +241,9 @@ export default function DashboardPage() {
     <Page>
       <section className="relative mb-5 overflow-hidden rounded-2xl bg-[#0b1d4a] text-white shadow-md">
         <img src={banner} alt="" aria-hidden decoding="async" className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-left" />
-        <div className="relative flex flex-wrap items-center gap-4 px-6 py-5">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold drop-shadow">Selamat Datang{userName ? `, ${userName}` : ''} 👋</h1>
+        <div className="relative flex flex-wrap items-center gap-4 px-4 py-5 sm:px-6">
+          <div className="min-w-0 flex-1 basis-60">
+            <h1 className="text-xl font-bold drop-shadow sm:text-2xl">Selamat Datang{userName ? `, ${userName}` : ''} 👋</h1>
             <p className="text-sm text-blue-100">Dashboard PPK Management{access?.role ? ` · ${PPK_ROLE_LABEL[access.role]}` : ''}</p>
           </div>
           <div className="flex items-center gap-3 rounded-xl bg-white px-4 py-2.5 text-navy-900 shadow-lg">

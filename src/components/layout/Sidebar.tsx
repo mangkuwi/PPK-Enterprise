@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { BarChart3, Building2, CalendarDays, Database, ChevronDown, ChevronsLeft, ChevronsRight, FilePlus2, FileSignature, Files, FileText, Hash, LayoutDashboard, Layers, Library, Receipt, Settings, Wallet, type LucideIcon } from 'lucide-react';
+import { BarChart3, Building2, CalendarDays, Database, ChevronDown, ChevronsLeft, ChevronsRight, FilePlus2, FileSignature, Files, FileText, Hash, LayoutDashboard, Layers, Library, Receipt, Settings, Wallet, X, type LucideIcon } from 'lucide-react';
 import { GROUPS, sectionByKey, sectionFor } from '@shared/nav';
 import { useActor } from '@/features/numbering/NumberingContext';
 import { cn } from '@/lib/utils';
@@ -19,12 +19,19 @@ const OPEN_KEY = 'nd.sidebar.open';
 const read = () => { try { const v = localStorage.getItem(KEY); return v === null ? window.innerWidth < 1100 : v === '1'; } catch { return false; } };
 const readOpen = (): Record<string, boolean> => { try { return JSON.parse(localStorage.getItem(OPEN_KEY) ?? '{}') as Record<string, boolean>; } catch { return {}; } };
 
-export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(read);
+const PHONE = '(max-width: 767px)';
+const usePhone = () => useSyncExternalStore((cb) => { const m = matchMedia(PHONE); m.addEventListener('change', cb); return () => m.removeEventListener('change', cb); }, () => matchMedia(PHONE).matches);
+
+/** Desktop: sidebar tetap (bisa diciutkan). HP (<768 px): laci menu yang dibuka dari tombol di TopBar. */
+export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => void }) {
+  const phone = usePhone();
+  const [saved, setCollapsed] = useState(read);
+  const collapsed = saved && !phone;
   const [open, setOpen] = useState(readOpen);
   const loc = useLocation();
   const { serverUser } = useActor();
   const current = sectionFor(loc.pathname)?.key;
+  useEffect(() => { onClose(); }, [loc.pathname, loc.search]); // eslint-disable-line react-hooks/exhaustive-deps -- tutup laci setelah pindah halaman
   useEffect(() => { try { localStorage.setItem(KEY, collapsed ? '1' : '0'); localStorage.setItem(OPEN_KEY, JSON.stringify(open)); } catch { /* penyimpanan tidak tersedia */ } }, [collapsed, open]);
 
   const link = (key: string, sub: boolean) => {
@@ -43,11 +50,14 @@ export function Sidebar() {
       {collapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
     </button>);
 
-  return (
-    <aside className={cn('flex shrink-0 flex-col bg-gradient-to-b from-[#0b1d4a] to-[#0a2a6b] text-slate-200 transition-[width] duration-150', collapsed ? 'w-16' : 'w-64')} aria-label="Navigasi utama">
+  return (<>
+    {phone && mobileOpen && <div className="fixed inset-0 z-40 bg-slate-900/50" onClick={onClose} aria-hidden />}
+    <aside className={cn('flex shrink-0 flex-col bg-gradient-to-b from-[#0b1d4a] to-[#0a2a6b] text-slate-200 transition-[width,transform] duration-150', collapsed ? 'w-16' : 'w-64',
+      phone && 'fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] shadow-2xl', phone && !mobileOpen && 'invisible -translate-x-full')} aria-label="Navigasi utama">
       <div className={cn('flex items-center gap-1 py-4', collapsed ? 'flex-col px-2' : 'px-3')}>
         <BrandLogos compact={collapsed} />
         {collapsed && toggle}
+        {phone && <button onClick={onClose} className="ml-auto rounded p-1.5 text-slate-300 hover:bg-white/10 hover:text-white" aria-label="Tutup menu"><X size={20} /></button>}
       </div>
       <nav className="flex-1 space-y-1 overflow-auto px-2 pb-3">
         {GROUPS.map((g, i) => {
@@ -70,7 +80,7 @@ export function Sidebar() {
       </nav>
       {/* Ilustrasi dekoratif; hanya bila layar cukup tinggi agar tidak menyempitkan menu. */}
       {!collapsed && <img src={satelliteArt} alt="" aria-hidden loading="lazy" decoding="async" className="pointer-events-none -mt-6 hidden w-full shrink-0 select-none [@media(min-height:780px)]:block" />}
-      {!collapsed && <div className="flex items-center justify-between border-t border-white/10 py-1 pl-5 pr-2 text-[11px] text-slate-400">{serverUser ? 'Terhubung ke server PPK' : 'Data tersimpan lokal · offline'}{toggle}</div>}
+      {!collapsed && <div className="flex items-center justify-between border-t border-white/10 py-1 pl-5 pr-2 text-[11px] text-slate-400">{serverUser ? 'Terhubung ke server PPK' : 'Data tersimpan lokal · offline'}{!phone && toggle}</div>}
     </aside>
-  );
+  </>);
 }
