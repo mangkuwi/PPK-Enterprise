@@ -17,6 +17,7 @@ import type { BudgetAmountInput, BudgetLine, BudgetLineInput, BudgetVersion, Pla
 import type { AddendumInput, AllocationRow, Contract, ContractDetail, ContractFilter, ContractInput, ContractStatus, ScheduleRow, YearValueRow } from '@shared/ppk/contracts';
 import type { Vendor, VendorFilter, VendorInput, VendorStatus } from '@shared/ppk/vendors';
 import type { Task, TaskInput } from '@shared/ppk/tasks';
+import type { ActivityItem } from '@shared/ppk/activity';
 import type { Agenda, AssignStatus, AgendaConflict, AgendaFilter, AgendaHistoryRow, AgendaHome, AgendaInput, InboxCategory, InvitationDetail, InvitationFile, InvitationRow, InvitationStatus } from '@shared/ppk/agenda';
 import type { DeliveryLog, Recipient } from '@shared/whatsapp';
 
@@ -254,6 +255,7 @@ export const api = {
       setDone: (id: string, done: boolean) => call<Task>('ppk:tasks:setDone', { id, done }),
       archive: (id: string) => call<boolean>('ppk:tasks:archive', { id })
     },
+    activity: () => call<ActivityItem[]>('ppk:activity', {}),
     agendas: {
       list: (f: AgendaFilter & { include_cancelled?: boolean } = {}) => call<Agenda[]>('ppk:agendas:list', f),
       get: (id: string) => call<Agenda>('ppk:agendas:get', { id }),

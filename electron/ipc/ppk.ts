@@ -17,6 +17,7 @@ import { agendaConflicts, agendaHistory, agendaPeople, createAgenda, deleteAgend
 import { MAX_FILE, agendaReports, fileContent, getInvitation, invitationFiles, markInvitation, uploadInvitation, uploadReport } from '../main/ppk/inbox';
 import { relatedDocuments } from '../main/ppk/documents';
 import { archiveTask, listTasks, saveTask, setTaskDone } from '../main/ppk/tasks';
+import { recentActivity } from '../main/ppk/activity';
 import { TASK_PRIORITIES } from '@shared/ppk/tasks';
 import { agendaHome, invitationCounts, listInvitations } from '../main/ppk/agendaHome';
 import { sqliteStore } from '../main/ppk/store';
@@ -234,6 +235,7 @@ export function registerPpkHandlers() {
   handle('ppk:tasks:setDone', z.object({ id: S.id, done: z.boolean() }), ({ id, done }) => setTaskDone(st(), actor(), id, done));
   handle('ppk:tasks:archive', z.object({ id: S.id }), async ({ id }) => { await archiveTask(st(), actor(), id); return true; });
   handle('ppk:agendas:home', S.empty, () => agendaHome(st(), actor()));
+  handle('ppk:activity', S.empty, () => recentActivity(st(), actor()));
   handle('ppk:invitations:list', z.object({ status: z.enum(['baru', 'diproses', 'menunggu_verifikasi', 'dikonversi', 'gagal', 'ditolak', 'diarsipkan']).optional(),
     category: z.enum(['baru', 'belum', 'sudah', 'arsip', 'gagal']).optional() }), (f) => listInvitations(st(), actor(), f));
   handle('ppk:invitations:counts', S.empty, () => invitationCounts(st(), actor()));

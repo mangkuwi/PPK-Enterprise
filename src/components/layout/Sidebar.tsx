@@ -4,6 +4,8 @@ import { BarChart3, Building2, CalendarDays, Database, ChevronDown, ChevronsLeft
 import { GROUPS, sectionByKey, sectionFor } from '@shared/nav';
 import { useActor } from '@/features/numbering/NumberingContext';
 import { cn } from '@/lib/utils';
+import { BrandLogos } from './Brand';
+import satelliteArt from '@/assets/branding/ilustrasi-satelit-sidebar.svg';
 
 const ICON: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard, agenda: CalendarDays, buat: FilePlus2, dokumen: Files, template: FileText, bank: Hash, register: Library,
@@ -36,14 +38,16 @@ export function Sidebar() {
     );
   };
 
+  const toggle = (
+    <button onClick={() => setCollapsed(!collapsed)} className="shrink-0 rounded p-1.5 text-slate-300 hover:bg-white/10 hover:text-white" aria-label={collapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'} title={collapsed ? 'Perluas' : 'Ciutkan'}>
+      {collapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
+    </button>);
+
   return (
     <aside className={cn('flex shrink-0 flex-col bg-gradient-to-b from-[#0b1d4a] to-[#0a2a6b] text-slate-200 transition-[width] duration-150', collapsed ? 'w-16' : 'w-64')} aria-label="Navigasi utama">
-      <div className="flex items-center justify-between px-3 py-4">
-        {!collapsed && <div className="flex items-center gap-2 px-1"><div className="grid h-9 w-9 place-items-center rounded-lg bg-blue-600 text-lg font-extrabold text-white">P</div>
-          <div className="whitespace-nowrap"><div className="text-base font-bold leading-tight text-white">PPK Management</div><div className="text-[11px] text-slate-400">Administrasi &amp; monitoring</div></div></div>}
-        <button onClick={() => setCollapsed(!collapsed)} className={cn('rounded p-2 text-slate-300 hover:bg-white/10 hover:text-white', collapsed && 'mx-auto')} aria-label={collapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'} title={collapsed ? 'Perluas' : 'Ciutkan'}>
-          {collapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
-        </button>
+      <div className={cn('flex items-center gap-1 py-4', collapsed ? 'flex-col px-2' : 'px-3')}>
+        <BrandLogos compact={collapsed} />
+        {collapsed && toggle}
       </div>
       <nav className="flex-1 space-y-1 overflow-auto px-2 pb-3">
         {GROUPS.map((g, i) => {
@@ -64,7 +68,9 @@ export function Sidebar() {
           );
         })}
       </nav>
-      {!collapsed && <div className="border-t border-white/10 px-5 py-2 text-[11px] text-slate-400">{serverUser ? 'Terhubung ke server PPK' : 'Data tersimpan lokal · offline'}</div>}
+      {/* Ilustrasi dekoratif; hanya bila layar cukup tinggi agar tidak menyempitkan menu. */}
+      {!collapsed && <img src={satelliteArt} alt="" aria-hidden loading="lazy" decoding="async" className="pointer-events-none -mt-6 hidden w-full shrink-0 select-none [@media(min-height:780px)]:block" />}
+      {!collapsed && <div className="flex items-center justify-between border-t border-white/10 py-1 pl-5 pr-2 text-[11px] text-slate-400">{serverUser ? 'Terhubung ke server PPK' : 'Data tersimpan lokal · offline'}{toggle}</div>}
     </aside>
   );
 }
