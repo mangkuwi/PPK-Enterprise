@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Activity, ArrowRight, BarChart3, CalendarCheck, CalendarClock, CalendarDays, CheckCircle2, ChevronRight, Clock, CloudUpload, FilePlus2, FileSignature, FileText, Gauge, Globe, Hash, Layers, ListTodo, Mail, MapPin, MessageCircle, Network, Plus, Receipt, RefreshCw, Satellite, Star, TrendingUp, Users, Video, Wallet, Wifi, Zap } from 'lucide-react';
+import { Activity, ArrowRight, BarChart3, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, CloudUpload, FilePlus2, FileSignature, FileText, Gauge, Globe, Hash, Layers, ListTodo, Mail, MapPin, MessageCircle, Network, Plus, Receipt, RefreshCw, Satellite, Star, TrendingUp, Users, Video, Wallet, Wifi, Zap } from 'lucide-react';
 import { Page } from '@/components/layout/Page';
 import { Button } from '@/components/ui/button';
 import { Badge, Card, Empty, STATUS_LABEL, STATUS_TONE } from '@/components/ui/card';
@@ -13,10 +13,11 @@ import { api } from '@/services/api';
 import { cn, formatDateTime } from '@/lib/utils';
 import { addDays, formatDateID, jakartaToday } from '@shared/date';
 import { dashboardYear, monitoredPrograms, programProgress } from '@shared/dashboard';
-import { calendarDays, dayName, focusAgenda, joinButton, liveState, meetingMode, startsInText, type Agenda, type AgendaHome } from '@shared/ppk/agenda';
+import { calendarDays, dayName, focusAgenda, joinButton, liveState, meetingMode, shiftCursor, startsInText, type Agenda, type AgendaHome } from '@shared/ppk/agenda';
 import { taskStats } from '@shared/ppk/tasks';
 import { timeAgo, type ActivityKind } from '@shared/ppk/activity';
 import { formatRupiah } from '@shared/ppk/money';
+import { MONTH_LABEL } from '@shared/ppk/forecast';
 import networkAccent from '@/assets/branding/aksen-jaringan-indonesia.svg';
 
 /** Jam WIB 'HH:MM', diperbarui tiap 30 detik. */
@@ -30,8 +31,7 @@ function useJakartaClock() {
 /** Kartu ringkasan berwarna (komponen bersama untuk empat angka utama). */
 function StatCard({ to, icon: Icon, label, value, hint, color }: { to?: string; icon: typeof Hash; label: string; value: ReactNode; hint: ReactNode; color: string }) {
   const body = <>
-    {/* Laptop (lima kartu sempit): ikon disembunyikan agar judul tidak terpotong. */}
-    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/20 ring-4 ring-white/10 lg:max-[1440px]:hidden"><Icon size={21} /></div>
+    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/20 ring-4 ring-white/10"><Icon size={21} /></div>
     <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium opacity-95" title={label}>{label}</div><div className="text-2xl font-bold leading-tight">{value}</div>
       <div className="truncate text-xs opacity-90" title={typeof hint === 'string' ? hint : undefined}>{hint}</div></div>
   </>;
@@ -98,37 +98,39 @@ function InboxActionsPanel({ h }: { h: AgendaHome }) {
 
 const MODE_TONE = { Online: 'text-blue-700', Offline: 'text-slate-600', Hybrid: 'text-violet-700' } as const;
 
-/** Agenda hari ini: jam, kegiatan, lokasi, jenis rapat, dan tombol Join bila tautan rapat valid. */
-/** Baris agenda: jam, kegiatan, jenis rapat, lokasi, PIC/ikut, tombol Join bila tautan valid. Dipakai panel HP dan Agenda & Kalender. */
+/** Baris agenda: jam | garis | judul, jenis rapat, aplikasi, PIC | tombol Join (hanya bila tautan valid).
+ *  Judul memakai sisa lebar dan baris terbungkus bila kolom sempit, agar judul tidak pecah per kata. */
 function AgendaItems({ list, today, now, me }: { list: Agenda[]; today: string; now: string; me?: string }) {
   return (
-    <ul className="relative space-y-1">{list.map((a) => {
+    <ul className="space-y-2">{list.map((a) => {
       const live = liveState(a, today, now); const past = a.agenda_date < today || (a.agenda_date === today && !!a.end_time && a.end_time <= now); // HH:MM sebanding sebagai teks
       const mode = meetingMode(a); const join = a.meeting_url ? joinButton(a.meeting_url) : null;
       const mine = a.pic?.id === me ? 'Anda PIC' : a.support.some((p) => p.id === me) ? 'Anda ikut' : null;
       return (
-        <li key={a.id} className={cn('flex flex-wrap items-center gap-3 rounded-xl p-2 md:flex-nowrap', live === 'berlangsung' ? 'bg-green-50 ring-1 ring-green-300' : past ? 'opacity-60' : mine && 'bg-blue-50/60')}>
-          <div className="w-[104px] shrink-0 text-sm font-bold leading-tight text-navy-900">{a.agenda_date !== today && <div className="text-[11px] font-semibold text-blue-700">{shortDate(a.agenda_date)}</div>}{timeText(a)}
-            {live === 'berlangsung' ? <div className="text-[11px] font-semibold text-green-700">● Berlangsung</div> : <div className="text-[11px] font-normal leading-tight text-slate-500">{startsInText(a, today, now) ?? ''}</div>}</div>
-          <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', live === 'berlangsung' ? 'bg-green-500' : 'bg-blue-600')} aria-hidden />
-          <Link to={`/ppk/agenda/${a.id}`} className="min-w-0 flex-1">
-            <div className="text-sm font-semibold leading-snug text-navy-900 hover:underline">{a.title}</div>
-            <div className="flex flex-wrap items-center gap-x-2 text-xs">
+        <li key={a.id} className={cn('flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-slate-50 p-3', live === 'berlangsung' ? 'bg-green-50 ring-1 ring-green-300' : past && 'opacity-60')}>
+          <div className="w-[6.5rem] shrink-0 text-[15px] font-bold leading-tight text-navy-900">{a.agenda_date !== today && <div className="text-[11px] font-semibold text-blue-700">{shortDate(a.agenda_date)}</div>}{timeText(a)}
+            {live === 'berlangsung' ? <div className="text-[11px] font-semibold text-green-700">● Berlangsung</div> : <div className="text-[11px] font-normal text-slate-500">{startsInText(a, today, now) ?? ''}</div>}</div>
+          <span className={cn('w-1 self-stretch rounded-full', live === 'berlangsung' ? 'bg-green-500' : mode === 'Hybrid' ? 'bg-violet-600' : 'bg-blue-600')} aria-hidden />
+          <Link to={`/ppk/agenda/${a.id}`} className="min-w-[11rem] flex-1">
+            <div className="text-[15px] font-semibold leading-snug text-navy-900 hover:underline">{a.title}</div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-600">
               <span className={cn('inline-flex items-center gap-1 font-medium', MODE_TONE[mode])}>{mode === 'Offline' ? <MapPin size={12} /> : <Video size={12} />}{mode}</span>
-              {a.location && <span className="truncate text-slate-600">{a.location}</span>}
+              {join && <><span className="text-slate-300">|</span><span className="font-medium text-blue-700">{join.startsWith('Join ') ? join.slice(5) : 'Tautan rapat'}</span></>}
+              {a.location && <><span className="text-slate-300">|</span><span className="truncate">{a.location}</span></>}
+              {a.pic && <><span className="text-slate-300">|</span><span>PIC: {a.pic.name}</span></>}
               {mine && <Badge tone="navy">{mine}</Badge>}
             </div>
-            {(a.pic || a.support.length > 0) && <div className="line-clamp-2 text-xs text-slate-500">{[a.pic && `PIC: ${a.pic.name}`, a.support.length > 0 && `Ikut: ${a.support.map((x) => x.name).join(', ')}`].filter(Boolean).join(' · ')}</div>}</Link>
-          {join && <a href={a.meeting_url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 max-md:w-full max-md:py-3 max-md:text-base"><Video size={14} /> {join}</a>}
+            {a.support.length > 0 && <div className="line-clamp-1 text-xs text-slate-500">Ikut: {a.support.map((x) => x.name).join(', ')}</div>}</Link>
+          {join && <a href={a.meeting_url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 max-md:w-full max-md:py-3 max-md:text-base"><Video size={15} /> {join}</a>}
         </li>);
     })}</ul>
   );
 }
 
-/** HP: agenda hari ini paling atas dengan tombol Join selebar layar. */
+/** Agenda Hari Ini: panel tersendiri di kolom kanan (dan paling atas di HP). */
 function TodayAgendaPanel({ list, focus, today, now, me }: { list: Agenda[]; focus: Agenda | null; today: string; now: string; me?: string }) {
   return (
-    <Panel icon={CalendarDays} title="Agenda Hari Ini" to="/ppk/agenda">
+    <Panel icon={CalendarDays} title="Agenda Hari Ini" action={<span className="hidden text-sm font-medium text-navy-900 sm:inline">{dayName(today)}, {formatDateID(today)}</span>}>
       {!list.length && <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">Tidak ada agenda hari ini.
         {focus && <> Berikutnya: <Link className="font-semibold text-blue-700 hover:underline" to={`/ppk/agenda/${focus.id}`}>{focus.title}</Link> · {shortDate(focus.agenda_date)} {timeText(focus)}.</>}</div>}
       <AgendaItems list={list} today={today} now={now} me={me} />
@@ -136,57 +138,44 @@ function TodayAgendaPanel({ list, focus, today, now, me }: { list: Agenda[]; foc
   );
 }
 
-type AgendaTab = 'hari' | 'besok' | 'minggu';
-const AGENDA_TABS: Array<[AgendaTab, string]> = [['hari', 'Hari Ini'], ['besok', 'Besok'], ['minggu', 'Minggu Ini']];
-
-/** Agenda & Kalender: daftar per tab (atau tanggal yang diklik di kalender) di kiri, kalender bulan ringkas di kanan. */
-function AgendaKalenderPanel({ h, today, now, me, canAdd }: { h: AgendaHome; today: string; now: string; me?: string; canAdd: boolean }) {
-  const [tab, setTab] = useState<AgendaTab>('hari');
+/** Kalender & Agenda Mendatang: kalender bulan ringkas di kiri, daftar mendatang (atau agenda tanggal yang diklik) di kanan. */
+function KalenderMendatangPanel({ upcoming, today, canAdd }: { upcoming: Agenda[]; today: string; canAdd: boolean }) {
   const [sel, setSel] = useState<string | null>(null);
   const [cursor, setCursor] = useState(today);
   const days = calendarDays('bulan', cursor);
   const cal = useAsync(() => api.ppk.agendas.list({ from: days[0], to: days.at(-1)!, status: 'aktif' }), [days[0], days.at(-1)]);
-  const all = [...h.today_agendas, ...h.upcoming].filter((a) => a.status !== 'dibatalkan');
-  const list = sel ? (cal.data ?? []).filter((a) => !a.archived_at && a.agenda_date === sel)
-    : all.filter((a) => (tab === 'hari' ? a.agenda_date === today : tab === 'besok' ? a.agenda_date === addDays(today, 1) : a.agenda_date <= addDays(today, 6)));
-  const heading = sel ? `${dayName(sel)}, ${formatDateID(sel)}` : tab === 'hari' ? `Agenda Hari Ini · ${dayName(today)}, ${formatDateID(today)}` : tab === 'besok' ? `Agenda Besok · ${formatDateID(addDays(today, 1))}` : 'Agenda 7 hari ke depan';
+  const month = (cal.data ?? []).filter((a) => !a.archived_at);
+  const list = sel ? month.filter((a) => a.agenda_date === sel) : upcoming.filter((a) => a.status === 'terjadwal').slice(0, 4);
   return (
-    <Panel icon={CalendarDays} title="Agenda & Kalender" action={canAdd && <Link to="/ppk/agenda?baru=1" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"><Plus size={15} /> Tambah Agenda</Link>}>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+    <Panel icon={CalendarDays} title="Kalender & Agenda Mendatang" action={canAdd && <Link to="/ppk/agenda?baru=1" aria-label="Tambah Agenda" title="Tambah Agenda" className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"><Plus size={15} /><span className="max-sm:hidden">Tambah</span></Link>}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 text-sm">
-            {AGENDA_TABS.map(([k, l]) => <button key={k} onClick={() => { setTab(k); setSel(null); }} aria-pressed={!sel && tab === k}
-              className={cn('flex-1 whitespace-nowrap rounded-md px-2 py-1', !sel && tab === k ? 'bg-navy-900 font-semibold text-white' : 'text-slate-600 hover:bg-white')}>{l}</button>)}
-            <Link to="/ppk/agenda" className="flex-1 whitespace-nowrap rounded-md px-2 py-1 text-center text-slate-600 hover:bg-white">Semua Agenda</Link>
+          <div className="mb-2 flex items-center gap-1">
+            <button className="rounded p-1 text-slate-600 hover:bg-slate-100" aria-label="Bulan sebelumnya" onClick={() => setCursor(shiftCursor('bulan', cursor, -1))}><ChevronLeft size={18} /></button>
+            <button className="rounded p-1 text-slate-600 hover:bg-slate-100" aria-label="Bulan berikutnya" onClick={() => setCursor(shiftCursor('bulan', cursor, 1))}><ChevronRight size={18} /></button>
+            <span className="ml-1 text-sm font-bold text-navy-900">{formatDateID(`${cursor.slice(0, 8)}01`).replace(/^\d+\s/, '')}</span>
+            {cursor.slice(0, 7) !== today.slice(0, 7) && <button className="ml-auto text-xs font-semibold text-blue-700 hover:underline" onClick={() => { setCursor(today); setSel(null); }}>Hari ini</button>}
           </div>
-          <div className="mb-1 text-sm font-bold text-navy-900">{heading}</div>
-          {!list.length && <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Tidak ada agenda.</p>}
-          <AgendaItems list={list} today={today} now={now} me={me} />
-        </div>
-        <div className="min-w-0">
-          <AgendaCalendar view="bulan" setView={() => undefined} cursor={cursor} setCursor={setCursor} today={today} agendas={(cal.data ?? []).filter((a) => !a.archived_at)} selected={sel} onSelect={setSel} onOpen={() => undefined} compact />
+          <AgendaCalendar view="bulan" setView={() => undefined} cursor={cursor} setCursor={setCursor} today={today} agendas={month} selected={sel} onSelect={setSel} onOpen={() => undefined} compact hideHeader />
           {cal.error && <p className="mt-2 text-sm text-red-700">{cal.error}</p>}
         </div>
+        <div className="min-w-0">
+          <div className="mb-2 flex items-center justify-between gap-2"><b className="text-sm text-navy-900">{sel ? `${dayName(sel)}, ${formatDateID(sel)}` : 'Agenda Mendatang'}</b>
+            {sel ? <button className="text-xs font-semibold text-blue-700 hover:underline" onClick={() => setSel(null)}>Tutup</button>
+              : <Link to="/ppk/agenda" className="flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-blue-700 hover:underline">Lihat Semua <ArrowRight size={13} /></Link>}</div>
+          {!list.length && <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">{sel ? 'Tidak ada agenda pada tanggal ini.' : 'Tidak ada agenda dalam 7 hari ke depan.'}</p>}
+          <ul className="divide-y divide-slate-100">{list.map((a) => {
+            const mode = meetingMode(a);
+            return (
+              <li key={a.id}><Link to={`/ppk/agenda/${a.id}`} className="flex items-center gap-3 py-2 hover:bg-slate-50">
+                <div className="w-12 shrink-0 rounded-lg bg-slate-100 py-1 text-center leading-tight text-navy-900"><div className="text-xs">{dayName(a.agenda_date).slice(0, 3)}</div><b className="text-sm">{Number(a.agenda_date.slice(8))}</b><div className="text-[10px]">{MONTH_LABEL[Number(a.agenda_date.slice(5, 7)) - 1]}</div></div>
+                <div className="min-w-0 flex-1"><div className="line-clamp-2 text-sm font-semibold leading-snug text-navy-900">{a.title}</div>
+                  <div className="flex flex-wrap gap-x-3 text-xs text-slate-600"><span className="inline-flex items-center gap-1"><Clock size={12} />{timeText(a)}</span><span className={cn('inline-flex items-center gap-1 font-medium', MODE_TONE[mode])}>{mode === 'Offline' ? <MapPin size={12} /> : <Video size={12} />}{mode}</span></div></div>
+                <ChevronRight size={16} className="shrink-0 text-blue-600" />
+              </Link></li>);
+          })}</ul>
+        </div>
       </div>
-    </Panel>
-  );
-}
-
-/** Agenda Mendatang (setelah hari ini, 7 hari): blok tanggal, judul, jam, jenis rapat. */
-function UpcomingPanel({ list }: { list: Agenda[] }) {
-  const shown = list.filter((a) => a.status === 'terjadwal').slice(0, 5);
-  return (
-    <Panel icon={CalendarClock} title="Agenda Mendatang" to="/ppk/agenda">
-      {!shown.length && <Empty>Tidak ada agenda dalam 7 hari ke depan.</Empty>}
-      <ul className="divide-y divide-slate-100">{shown.map((a) => {
-        const mode = meetingMode(a);
-        return (
-          <li key={a.id}><Link to={`/ppk/agenda/${a.id}`} className="flex items-center gap-3 py-2 hover:bg-slate-50">
-            <div className="w-14 shrink-0 rounded-lg bg-slate-100 py-1 text-center leading-tight text-navy-900"><div className="text-xs">{dayName(a.agenda_date).slice(0, 3)}</div><b className="text-sm">{shortDate(a.agenda_date).replace(/^\D+,?\s*/, '')}</b></div>
-            <div className="min-w-0"><div className="line-clamp-2 text-sm font-semibold text-navy-900">{a.title}</div>
-              <div className="flex flex-wrap gap-x-3 text-xs text-slate-600"><span className="inline-flex items-center gap-1"><Clock size={12} />{timeText(a)}</span><span className={cn('inline-flex items-center gap-1 font-medium', MODE_TONE[mode])}>{mode === 'Offline' ? <MapPin size={12} /> : <Video size={12} />}{mode}</span></div></div>
-          </Link></li>);
-      })}</ul>
     </Panel>
   );
 }
@@ -287,7 +276,6 @@ export default function DashboardPage() {
   const now = useJakartaClock();
 
   const h = o.home.data;
-  const week = new Set([...(h?.today_agendas ?? []), ...(h?.upcoming ?? [])].filter((a) => a.status !== 'dibatalkan' && a.agenda_date <= addDays(today, 6)).map((a) => a.id)).size;
   const { focus } = focusAgenda(h?.today_agendas ?? [], h?.upcoming ?? [], today, now);
   const todayList = (h?.today_agendas ?? []).filter((a) => a.status !== 'dibatalkan');
   const t = o.tasks.data ? taskStats(o.tasks.data, today) : null;
@@ -301,13 +289,12 @@ export default function DashboardPage() {
 
       <PpkGate>
         {o.error && <div className="mb-3 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800" role="alert">{o.error}</div>}
-        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard icon={CheckCircle2} color="bg-gradient-to-br from-blue-600 to-blue-800" label="Tugas Saya" value={mine ? mine.length : '–'}
             hint={t ? (t.near ? `${t.near} mendekati deadline${t.late ? ` · ${t.late} terlambat` : ''}` : 'Perlu ditindaklanjuti') : 'Memuat…'} />
-          <StatCard to="/ppk/agenda" icon={CalendarDays} color="bg-gradient-to-br from-violet-600 to-purple-800" label="Agenda Minggu Ini" value={h ? week : '–'}
-            hint={focus ? focus.title : 'Tidak ada agenda berikutnya'} />
-          <StatCard to="/ppk/agenda" icon={CalendarCheck} color="bg-gradient-to-br from-green-600 to-green-800" label="Agenda Hari Ini" value={h ? todayList.length : '–'}
-            hint={todayList[0]?.title ?? 'Tidak ada agenda hari ini'} />
+          {/* Semua angka dari agendaHome (query ppk_invitations); belum_pdf dan belum_teks tidak beririsan. */}
+          <StatCard to="/ppk/kotak-masuk" icon={MessageCircle} color="bg-gradient-to-br from-violet-600 to-purple-800" label="Pesan WhatsApp" value={h ? h.inbox.belum_pdf + h.inbox.belum_teks + h.inbox.gagal : '–'}
+            hint={h ? `${h.inbox.baru} baru · ${h.inbox.belum_pdf} PDF · ${h.inbox.belum_teks} teks${h.inbox.gagal ? ` · ${h.inbox.gagal} gagal` : ''}` : 'Memuat…'} />
           <StatCard to="/archive?status=draft" icon={FileText} color="bg-gradient-to-br from-orange-500 to-orange-700" label="Dokumen Proses" value={s ? s.activeDrafts + s.inReview : '–'}
             hint={s ? `${s.inReview} verifikasi · ${s.activeDrafts} draf` : 'Memuat…'} />
           <StatCard to="/ppk/kontrak" icon={Layers} color="bg-gradient-to-br from-teal-600 to-cyan-800" label="Kontrak Aktif" value={o.contracts.data ? o.contracts.data.length : '–'}
@@ -315,10 +302,10 @@ export default function DashboardPage() {
         </div>
       </PpkGate>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <div className="min-w-0 space-y-5">
           {ppk && <Card className="rounded-2xl border-slate-200/80 p-4 shadow-sm shadow-slate-200/60"><TodoList today={today} tasks={o.tasks} title={<h2 className="flex items-center gap-2 text-lg font-bold text-navy-900"><ListTodo size={20} className="text-blue-600" /> To Do List</h2>} /></Card>}
-          {ppk && h && <AgendaKalenderPanel h={h} today={today} now={now} me={access?.user_id} canAdd={!!access?.perms.includes('write')} />}
+          {ppk && h && <InboxActionsPanel h={h} />}
           {ppk && <MonitoringPanel o={o} today={today} />}
           <Panel icon={FilePlus2} title="Dokumen Terbaru" to="/archive">
             {s?.recentDocuments.length ? <ul className="divide-y divide-slate-100">{s.recentDocuments.map((d) => (
@@ -334,8 +321,8 @@ export default function DashboardPage() {
         </div>
 
         <div className="min-w-0 space-y-5">
-          {ppk && h && <InboxActionsPanel h={h} />}
-          {ppk && h && <UpcomingPanel list={h.upcoming} />}
+          {ppk && <div className="max-md:hidden"><TodayAgendaPanel list={todayList} focus={focus} today={today} now={now} me={access?.user_id} /></div>}
+          {ppk && h && <KalenderMendatangPanel upcoming={h.upcoming} today={today} canAdd={!!access?.perms.includes('write')} />}
           <Panel icon={Zap} title="Quick Access">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-4">
               {([['/generator?cat=ND', FileText, 'Buat Nota Dinas', 'bg-blue-50 text-blue-700'], ['/generator', Mail, 'Buat Surat', 'bg-violet-50 text-violet-700'],
