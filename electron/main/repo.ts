@@ -313,6 +313,7 @@ export function getStats(db: DB): Stats {
     totalDocuments: one('SELECT COUNT(*) n FROM documents'),
     totalTemplates: one('SELECT COUNT(*) n FROM templates'),
     activeDrafts: one("SELECT COUNT(*) n FROM documents WHERE status='draft'"),
+    inReview: one("SELECT COUNT(*) n FROM documents WHERE status='review'"),
     documentsThisMonth: one("SELECT COUNT(*) n FROM documents WHERE strftime('%Y-%m', created_at, 'localtime') = ?", ym),
     lastDocument: recent[0] ?? null,
     recentDocuments: recent,
