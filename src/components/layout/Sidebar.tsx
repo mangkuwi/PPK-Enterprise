@@ -52,14 +52,14 @@ export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose:
 
   return (<>
     {phone && mobileOpen && <div className="fixed inset-0 z-40 bg-slate-900/50" onClick={onClose} aria-hidden />}
-    <aside className={cn('flex shrink-0 flex-col bg-gradient-to-b from-[#0b1d4a] to-[#0a2a6b] text-slate-200 transition-[width,transform] duration-150', collapsed ? 'w-16' : 'w-64',
+    <aside className={cn('flex shrink-0 flex-col bg-gradient-to-b from-[#0b1d4a] to-[#0a2a6b] text-slate-200 transition-[width,transform] duration-150', collapsed ? 'w-16' : 'w-64', !phone && 'relative',
       phone && 'fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] shadow-2xl', phone && !mobileOpen && 'invisible -translate-x-full')} aria-label="Navigasi utama">
-      <div className={cn('flex items-center gap-1 py-4', collapsed ? 'flex-col px-2' : 'px-3')}>
+      <div className={cn('relative z-10 flex items-center gap-1 py-4', collapsed ? 'flex-col px-2' : 'px-3')}>
         <BrandLogos compact={collapsed} />
         {collapsed && toggle}
         {phone && <button onClick={onClose} className="ml-auto rounded p-1.5 text-slate-300 hover:bg-white/10 hover:text-white" aria-label="Tutup menu"><X size={20} /></button>}
       </div>
-      <nav className="flex-1 space-y-1 overflow-auto px-2 pb-3">
+      <nav className="relative z-10 flex-1 space-y-1 overflow-auto px-2 pb-3">
         {GROUPS.map((g, i) => {
           if (!g.label) return <div key={i} className="space-y-1">{g.sections.map((k) => link(k, false))}</div>;
           const label = g.label;
@@ -78,9 +78,9 @@ export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose:
           );
         })}
       </nav>
-      {/* Ilustrasi dekoratif; hanya bila layar cukup tinggi agar tidak menyempitkan menu. */}
-      {!collapsed && <img src={satelliteArt} alt="" aria-hidden loading="lazy" decoding="async" className="pointer-events-none -mt-6 hidden w-full shrink-0 select-none [@media(min-height:780px)]:block" />}
-      {!collapsed && <div className="flex items-center justify-between border-t border-white/10 py-1 pl-5 pr-2 text-[11px] text-slate-400">{serverUser ? 'Terhubung ke server PPK' : 'Data tersimpan lokal · offline'}{!phone && toggle}</div>}
+      {/* Ilustrasi dekoratif di belakang menu (tidak memakan tempat), jadi tetap tampil di layar laptop yang pendek. */}
+      {!collapsed && <img src={satelliteArt} alt="" aria-hidden decoding="async" className="pointer-events-none absolute inset-x-0 bottom-8 z-0 w-full select-none [@media(max-height:620px)]:opacity-40" />}
+      {!collapsed && <div className="relative z-10 flex items-center justify-between border-t border-white/10 py-1 pl-5 pr-2 text-[11px] text-slate-400">{serverUser ? 'Terhubung ke server PPK' : 'Data tersimpan lokal · offline'}{!phone && toggle}</div>}
     </aside>
   </>);
 }
