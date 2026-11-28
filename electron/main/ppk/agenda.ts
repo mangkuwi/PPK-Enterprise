@@ -31,7 +31,7 @@ function clean(i: AgendaInput) {
 
 async function setAssignees(t: PpkStore, id: string, pic: string | null, support: string[]) {
   const ids = [...(pic ? [pic] : []), ...support];
-  for (const u of ids) if (!(await t.get('SELECT 1 FROM app_users WHERE id = ? AND is_active = 1', [u]))) throw new PpkError('INVALID', 'Penanggung jawab atau staf pendukung tidak ditemukan atau nonaktif.');
+  for (const u of ids) if (!(await t.get('SELECT 1 FROM app_users WHERE id = ? AND is_active = 1', [u]))) throw new PpkError('INVALID', 'PIC atau staf yang ikut tidak ditemukan atau nonaktif.');
   // Tugas dan status orang yang tetap ditugaskan tidak hilang saat agenda diubah.
   const was = new Set((await t.all<{ user_id: string }>('SELECT user_id FROM ppk_agenda_assignees WHERE agenda_id = ?', [id])).map((r) => r.user_id));
   for (const u of was) if (!ids.includes(u)) await t.run('DELETE FROM ppk_agenda_assignees WHERE agenda_id = ? AND user_id = ?', [id, u]);

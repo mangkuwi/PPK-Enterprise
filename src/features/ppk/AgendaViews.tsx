@@ -110,7 +110,7 @@ export function AgendaRow({ a, onOpen, onEdit, onDelete, showDate, today, now }:
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-navy-900 hover:underline">{a.title}</div>
           <div className="text-sm text-slate-600">{[a.organizer, a.location, a.meeting_url && !a.location && 'Rapat daring'].filter(Boolean).join(' · ') || '—'}</div>
-          <div className="text-xs text-slate-500">{a.pic ? `PJ: ${a.pic.name}` : 'Belum ada penanggung jawab'}{a.support.length > 0 && ` · +${a.support.length} staf`}</div>
+          <div className="text-xs text-slate-500">{a.pic ? `PIC: ${a.pic.name}` : 'Belum ada PIC'}{a.support.length > 0 && ` · +${a.support.length} staf`}</div>
         </div>
       </button>
       <div className="flex shrink-0 flex-col items-end gap-2">
@@ -134,7 +134,7 @@ export function AgendaDetail({ a, canEdit, onEdit }: { a: Agenda; canEdit: boole
     ['Tanggal', `${dayName(a.agenda_date)}, ${formatDateID(a.agenda_date)} · ${timeText(a)}`],
     ['Penyelenggara', a.organizer], ['Nomor surat', a.letter_number], ['Lokasi', a.location],
     ['Tautan rapat', a.meeting_url && <a href={a.meeting_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-navy-700 underline">{a.meeting_url}<ExternalLink size={12} /></a>],
-    ['Penanggung jawab', a.pic?.name ?? 'Belum ditentukan'], ['Staf pendukung', a.support.map((x) => x.name).join(', ')],
+    ['PIC', a.pic?.name ?? 'Belum ditentukan'], ['Staf yang ikut', a.support.map((x) => x.name).join(', ')],
     ['Agenda', a.agenda_text && <span className="whitespace-pre-line">{a.agenda_text}</span>], ['Catatan', a.notes],
     ['Alasan batal', a.cancel_reason], ['Dibuat oleh', a.created_by]
   ];
@@ -154,7 +154,7 @@ const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((
 
 /** Kartu agenda di grid jam: ikon, judul, jam, peserta, tombol gabung. */
 function GridCard({ a, onOpen, live, narrow }: { a: Agenda; onOpen: (a: Agenda) => void; live: ReturnType<typeof liveState>; narrow?: boolean }) {
-  const people = [...(a.pic ? [{ ...a.pic, role: 'PJ' }] : []), ...a.support.map((s) => ({ ...s, role: 'Pendukung' }))];
+  const people = [...(a.pic ? [{ ...a.pic, role: 'PIC' }] : []), ...a.support.map((s) => ({ ...s, role: 'Ikut' }))];
   const online = !!a.meeting_url && a.status === 'terjadwal';
   return (
     <div className={cn('flex h-full flex-col overflow-hidden rounded-lg border bg-white p-2 text-left shadow-sm', live === 'berlangsung' ? 'border-green-400 ring-1 ring-green-300' : 'border-slate-200',
@@ -167,10 +167,10 @@ function GridCard({ a, onOpen, live, narrow }: { a: Agenda; onOpen: (a: Agenda) 
         </span>
       </button>
       {people.length > 0 && <div className="mt-1.5 flex items-center gap-1" title={people.map((p) => `${p.name} (${p.role})`).join(', ')}>
-        {people.slice(0, narrow ? 2 : 4).map((p) => <span key={p.id} className={cn('grid h-6 w-6 place-items-center rounded-full text-[10px] font-bold', p.role === 'PJ' ? 'bg-navy-700 text-white' : 'bg-slate-200 text-slate-700')}>{initials(p.name)}</span>)}
+        {people.slice(0, narrow ? 2 : 4).map((p) => <span key={p.id} className={cn('grid h-6 w-6 place-items-center rounded-full text-[10px] font-bold', p.role === 'PIC' ? 'bg-navy-700 text-white' : 'bg-slate-200 text-slate-700')}>{initials(p.name)}</span>)}
         {!narrow && <span className="truncate text-[11px] text-slate-500">{people[0].name}{people.length > 1 && ` +${people.length - 1}`}</span>}
       </div>}
-      {!people.length && <div className="mt-1 text-[11px] text-amber-700">{narrow ? 'Belum ada PJ' : 'Belum ada penanggung jawab'}</div>}
+      {!people.length && <div className="mt-1 text-[11px] text-amber-700">{narrow ? 'Belum ada PIC' : 'Belum ada PIC'}</div>}
       {online && <a href={a.meeting_url} target="_blank" rel="noreferrer" aria-label={`${joinLabel(a.meeting_url)}: ${a.title}`}
         className={cn('mt-auto flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-white', live ? 'bg-green-700 hover:bg-green-800' : 'bg-violet-700 hover:bg-violet-800')}>
         {narrow ? 'Gabung' : joinLabel(a.meeting_url)} <ArrowRight size={12} /></a>}
@@ -239,7 +239,7 @@ export function WeekColumns({ days, agendas, today, now, onOpen }: { days: strin
                     <span className="line-clamp-2 font-semibold text-navy-900 hover:underline">{a.title}</span>
                     <span className="block truncate text-slate-500">{a.start_time || 'Tanpa jam'}{online ? ' · daring' : a.location && ` · ${a.location}`}</span>
                   </button>
-                  {!a.pic && a.status === 'terjadwal' && <span className="text-[11px] text-amber-700">Belum ada PJ</span>}
+                  {!a.pic && a.status === 'terjadwal' && <span className="text-[11px] text-amber-700">Belum ada PIC</span>}
                 </li>);
             })}</ul>
           </div>);

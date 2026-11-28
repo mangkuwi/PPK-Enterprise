@@ -37,12 +37,12 @@ function Assignments({ a, reload }: { a: Agenda; reload: () => void }) {
   return (
     <Card className="p-4">
       <div className="mb-2 font-semibold text-navy-900">Penugasan</div>
-      {!people.length ? <p className="text-sm text-slate-500">Belum ada yang ditugaskan. Pilih penanggung jawab dan staf pendukung lewat Ubah agenda.</p>
+      {!people.length ? <p className="text-sm text-slate-500">Belum ada yang ditugaskan. Pilih PIC dan staf yang ikut lewat Ubah agenda.</p>
         : <ul className="divide-y divide-slate-100 text-sm">{people.map((p) => {
           const st = p.status ?? 'ditugaskan';
           return (
             <li key={p.id} className="grid items-center gap-2 py-2 sm:grid-cols-[180px_1fr_150px]">
-              <div><div className="font-medium text-navy-900">{p.name}</div><div className="text-xs text-slate-500">{p.utama ? 'Penanggung jawab utama' : 'Staf pendukung'}</div></div>
+              <div><div className="font-medium text-navy-900">{p.name}</div><div className="text-xs text-slate-500">{p.utama ? 'PIC' : 'Ikut rapat'}</div></div>
               {can('write') && editable
                 ? <Input aria-label={`Tugas ${p.name}`} defaultValue={p.duty ?? ''} placeholder="Tugas, mis. menyiapkan bahan paparan" maxLength={300}
                   onBlur={(e) => { if (e.target.value.trim() !== (p.duty ?? '')) void save(p.id, st, e.target.value); }} />
@@ -104,7 +104,7 @@ function Detail({ a, reload }: { a: Agenda; reload: () => void }) {
     ['Penyelenggara', a.organizer], ['Nomor surat', a.letter_number], ['Tanggal surat', a.letter_date && formatDateID(a.letter_date)],
     ['Lokasi', a.location], ['Tautan rapat', a.meeting_url && <a href={a.meeting_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 break-all text-navy-700 underline">{a.meeting_url}<ExternalLink size={12} /></a>],
     ['Program', program && `${program.code ?? ''} ${program.name ?? ''}`],
-    ['Penanggung jawab', a.pic?.name ?? 'Belum ditentukan'], ['Staf pendukung', a.support.map((x) => x.name).join(', ')],
+    ['PIC', a.pic?.name ?? 'Belum ditentukan'], ['Staf yang ikut', a.support.map((x) => x.name).join(', ')],
     ['Peserta diundang', a.participants && <span className="whitespace-pre-line">{a.participants}</span>],
     ['Agenda rapat', a.agenda_text && <span className="whitespace-pre-line">{a.agenda_text}</span>], ['Catatan', a.notes],
     ['Alasan batal', a.cancel_reason], ['Diverifikasi', a.verified_by && `${a.verified_by} · ${formatDateTime(a.verified_at!)}`],
